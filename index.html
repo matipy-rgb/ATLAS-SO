@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>ATLAS SO</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+</head>
+
+<body>
+    <main class="dashboard">
+        <header>
+            <span class="brand">ATLAS SO</span>
+            <h1>Buen día, Matías.</h1>
+            <p id="currentDate" class="date"></p>
+        </header>
+
+        <section class="status-card">
+            <div class="status-heading">
+                <h2>Progreso de hoy</h2>
+                <span id="progressText">0%</span>
+            </div>
+
+            <div class="progress-track">
+                <div id="progressBar" class="progress-bar"></div>
+            </div>
+
+            <p id="statusMessage">
+                Todavía no completaste ninguna tarea.
+            </p>
+
+            <button id="completeButton">
+                Completar una tarea
+            </button>
+        </section>
+
+        <p class="quote">
+            “Lo que no se mide, no se mejora.”
+        </p>
+    </main>
+</body>
+</html>

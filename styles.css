@@ -1,0 +1,128 @@
+:root {
+    --background: #07111f;
+    --card: #101d30;
+    --primary: #3b82f6;
+    --secondary: #22d3ee;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+    background: var(--background);
+    color: var(--text);
+}
+
+.dashboard {
+    width: min(900px, calc(100% - 32px));
+    margin: auto;
+    padding: 70px 0;
+}
+
+.brand {
+    color: var(--secondary);
+    font-weight: bold;
+    letter-spacing: 3px;
+}
+
+h1 {
+    margin: 14px 0 8px;
+    font-size: 48px;
+}
+
+.date {
+    margin-bottom: 40px;
+    color: var(--muted);
+}
+
+.status-card {
+    padding: 30px;
+    background: var(--card);
+    border: 1px solid #20314a;
+    border-radius: 20px;
+}
+
+.status-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.status-heading h2 {
+    margin: 0;
+}
+
+#progressText {
+    color: var(--secondary);
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.progress-track {
+    height: 14px;
+    margin: 25px 0;
+    overflow: hidden;
+    background: #263449;
+    border-radius: 20px;
+}
+
+.progress-bar {
+    width: 0;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        var(--primary),
+        var(--secondary)
+    );
+    transition: width 0.4s ease;
+}
+
+#statusMessage {
+    color: var(--muted);
+}
+
+button {
+    margin-top: 12px;
+    padding: 13px 20px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary);
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #2563eb;
+    transform: translateY(-2px);
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+}
+
+.quote {
+    margin-top: 35px;
+    color: var(--muted);
+    text-align: center;
+    font-style: italic;
+}
+
+@media (max-width: 600px) {
+    h1 {
+        font-size: 36px;
+    }
+
+    .dashboard {
+        padding: 40px 0;
+    }
+}
