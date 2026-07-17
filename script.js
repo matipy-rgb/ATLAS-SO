@@ -11,7 +11,7 @@ currentDate.textContent = new Intl.DateTimeFormat("es-PY", {
 }).format(new Date());
 
 completeButton.addEventListener("click", function () {
-    progress = Math.min(progress + 25, 100);
+    progress = Math.min(progress + 20, 100);
 
     progressText.textContent = `${progress}%`;
     progressBar.style.width = `${progress}%`;
