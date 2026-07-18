@@ -932,3 +932,142 @@ h1 {
         justify-self: start;
     }
 }
+.health-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.health-summary-card {
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+}
+
+.health-summary-card span {
+    display: block;
+    min-height: 38px;
+    margin-bottom: 10px;
+    color: var(--muted);
+}
+
+.health-summary-card strong {
+    color: var(--secondary);
+    font-size: 22px;
+}
+
+.health-form {
+    display: grid;
+    grid-template-columns:
+        150px
+        repeat(3, 1fr)
+        170px
+        auto;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.health-form input,
+.health-form select {
+    width: 100%;
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1px solid #334863;
+    border-radius: 10px;
+    outline: none;
+    background: var(--surface-dark);
+    color: var(--text);
+}
+
+.health-form input:focus,
+.health-form select:focus {
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+}
+
+.health-history-card {
+    margin-top: 22px;
+}
+
+#healthRecordList {
+    display: grid;
+    gap: 10px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.health-record {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 15px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-dark);
+}
+
+.health-record-content {
+    min-width: 0;
+}
+
+.health-record-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 9px;
+}
+
+.health-badge {
+    padding: 4px 8px;
+    border-radius: 20px;
+    background: #26384f;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.workout-done {
+    background: #14532d;
+    color: #bbf7d0;
+}
+
+.workout-missed {
+    background: #4c1d1d;
+    color: #fecaca;
+}
+
+@media (max-width: 950px) {
+    .health-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .health-form {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .health-form .primary-button {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 560px) {
+    .health-summary,
+    .health-form {
+        grid-template-columns: 1fr;
+    }
+
+    .health-form .primary-button {
+        grid-column: auto;
+    }
+
+    .health-record {
+        grid-template-columns: 1fr;
+    }
+
+    .health-record .delete-task {
+        justify-self: start;
+    }
+}
