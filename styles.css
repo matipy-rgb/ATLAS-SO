@@ -1457,3 +1457,151 @@ h1 {
         justify-self: start;
     }
 }
+.habit-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.habit-summary-card {
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+}
+
+.habit-summary-card span {
+    display: block;
+    min-height: 38px;
+    margin-bottom: 10px;
+    color: var(--muted);
+}
+
+.habit-summary-card strong {
+    color: var(--secondary);
+    font-size: 24px;
+}
+
+#habitProgressLabel {
+    color: var(--secondary);
+    font-weight: 700;
+}
+
+.habit-form-card,
+.habit-list-card {
+    margin-top: 22px;
+}
+
+.habit-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.habit-form input {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1px solid #334863;
+    border-radius: 10px;
+    outline: none;
+    background: var(--surface-dark);
+    color: var(--text);
+}
+
+.habit-form input:focus {
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+}
+
+#habitList {
+    display: grid;
+    gap: 10px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.habit-item {
+    display: grid;
+    grid-template-columns:
+        auto
+        minmax(0, 1fr)
+        auto;
+    align-items: center;
+    gap: 14px;
+    padding: 15px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-dark);
+}
+
+.habit-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--secondary);
+}
+
+.habit-content {
+    min-width: 0;
+}
+
+.habit-name {
+    overflow-wrap: anywhere;
+}
+
+.habit-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 8px;
+}
+
+.habit-badge {
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+
+.habit-done {
+    background: #14532d;
+    color: #bbf7d0;
+}
+
+.habit-pending {
+    background: #713f12;
+    color: #fde68a;
+}
+
+.streak-badge {
+    background: #26384f;
+    color: var(--muted);
+}
+
+.habit-item.completed .habit-name {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+@media (max-width: 850px) {
+    .habit-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 560px) {
+    .habit-summary,
+    .habit-form {
+        grid-template-columns: 1fr;
+    }
+
+    .habit-item {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .habit-item .delete-task {
+        grid-column: 2;
+        justify-self: start;
+    }
+}

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Personal | ATLAS SO</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="personal.js" defer></script>
+</head>
+
+<body>
+    <main class="dashboard">
+        <header class="page-header">
+            <a class="back-link" href="index.html">
+                ← Volver al panel
+            </a>
+
+            <span class="brand">ATLAS SO</span>
+
+            <h1>Hábitos personales</h1>
+
+            <p class="page-description">
+                La constancia convierte acciones pequeñas
+                en resultados grandes.
+            </p>
+        </header>
+
+        <section class="habit-summary">
+            <article class="habit-summary-card">
+                <span>Hábitos activos</span>
+                <strong id="totalHabits">0</strong>
+            </article>
+
+            <article class="habit-summary-card">
+                <span>Completados hoy</span>
+                <strong id="completedToday">0</strong>
+            </article>
+
+            <article class="habit-summary-card">
+                <span>Mejor racha</span>
+                <strong id="bestStreak">0 días</strong>
+            </article>
+
+            <article class="habit-summary-card">
+                <span>Progreso diario</span>
+                <strong id="habitProgressText">0%</strong>
+            </article>
+        </section>
+
+        <section class="status-card habit-progress-card">
+            <div class="status-heading">
+                <h2>Progreso de hoy</h2>
+                <span id="habitProgressLabel">0 de 0</span>
+            </div>
+
+            <div class="progress-track">
+                <div
+                    id="habitProgressBar"
+                    class="progress-bar"
+                ></div>
+            </div>
+        </section>
+
+        <section class="status-card habit-form-card">
+            <h2>Agregar hábito</h2>
+
+            <form id="habitForm" class="habit-form">
+                <input
+                    id="habitName"
+                    type="text"
+                    placeholder="Ejemplo: Entrenar"
+                    autocomplete="off"
+                    required
+                >
+
+                <button
+                    class="primary-button"
+                    type="submit"
+                >
+                    Agregar
+                </button>
+            </form>
+        </section>
+
+        <section class="status-card habit-list-card">
+            <div class="section-heading">
+                <h2>Hábitos diarios</h2>
+
+                <p>
+                    Marcá cada hábito cuando lo completes hoy.
+                </p>
+            </div>
+
+            <ul id="habitList"></ul>
+        </section>
+    </main>
+</body>
+</html>
