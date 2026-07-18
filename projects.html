@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Proyectos | ATLAS SO</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="projects.js" defer></script>
+</head>
+
+<body>
+    <main class="dashboard">
+        <header class="page-header">
+            <a class="back-link" href="index.html">
+                ← Volver al panel
+            </a>
+
+            <span class="brand">ATLAS SO</span>
+
+            <h1>Proyectos</h1>
+
+            <p class="page-description">
+                Convertí tus ideas en avances medibles.
+            </p>
+        </header>
+
+        <section class="project-summary">
+            <article class="project-summary-card">
+                <span>Total</span>
+                <strong id="totalProjects">0</strong>
+            </article>
+
+            <article class="project-summary-card">
+                <span>Activos</span>
+                <strong id="activeProjects">0</strong>
+            </article>
+
+            <article class="project-summary-card">
+                <span>Completados</span>
+                <strong id="completedProjects">0</strong>
+            </article>
+
+            <article class="project-summary-card">
+                <span>Progreso general</span>
+                <strong id="averageProgress">0%</strong>
+            </article>
+        </section>
+
+        <section
+            id="projectFormSection"
+            class="status-card project-form-card"
+        >
+            <h2>Registrar proyecto</h2>
+
+            <form id="projectForm" class="project-form">
+                <input
+                    id="projectName"
+                    type="text"
+                    placeholder="Nombre del proyecto"
+                    autocomplete="off"
+                    required
+                >
+
+                <input
+                    id="projectNextStep"
+                    type="text"
+                    placeholder="Próximo paso"
+                    autocomplete="off"
+                    required
+                >
+
+                <input
+                    id="projectProgress"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="0"
+                    aria-label="Porcentaje de progreso"
+                    required
+                >
+
+                <select
+                    id="projectStatus"
+                    aria-label="Estado del proyecto"
+                >
+                    <option value="active">
+                        Activo
+                    </option>
+
+                    <option value="paused">
+                        Pausado
+                    </option>
+
+                    <option value="completed">
+                        Completado
+                    </option>
+                </select>
+
+                <div class="project-form-actions">
+                    <button
+                        id="projectSubmitButton"
+                        class="primary-button"
+                        type="submit"
+                    >
+                        Agregar
+                    </button>
+
+                    <button
+                        id="cancelProjectEdit"
+                        class="secondary-button"
+                        type="button"
+                        hidden
+                    >
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="status-card project-list-card">
+            <div class="section-heading">
+                <h2>Mis proyectos</h2>
+
+                <p>
+                    Actualizá el porcentaje cada vez que avances.
+                </p>
+            </div>
+
+            <ul id="projectList"></ul>
+        </section>
+    </main>
+</body>
+</html>
