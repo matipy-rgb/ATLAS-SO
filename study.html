@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Estudios | ATLAS SO</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="study.js" defer></script>
+</head>
+
+<body>
+    <main class="dashboard">
+        <header class="page-header">
+            <a class="back-link" href="index.html">
+                ← Volver al panel
+            </a>
+
+            <span class="brand">ATLAS SO</span>
+
+            <h1>Estudios</h1>
+
+            <p class="page-description">
+                Organizá exámenes, trabajos y fechas importantes.
+            </p>
+        </header>
+
+        <section class="study-summary">
+            <article class="study-summary-card">
+                <span>Pendientes</span>
+                <strong id="studyPending">0</strong>
+            </article>
+
+            <article class="study-summary-card">
+                <span>Completados</span>
+                <strong id="studyCompleted">0</strong>
+            </article>
+
+            <article class="study-summary-card next-event-card">
+                <span>Próximo evento</span>
+                <strong id="nextStudyEvent">
+                    Sin eventos
+                </strong>
+            </article>
+        </section>
+
+        <section class="status-card study-form-card">
+            <h2>Agregar evento académico</h2>
+
+            <form id="studyForm" class="study-form">
+                <input
+                    id="studySubject"
+                    type="text"
+                    placeholder="Materia"
+                    autocomplete="off"
+                    required
+                >
+
+                <input
+                    id="studyTitle"
+                    type="text"
+                    placeholder="Examen, tarea o actividad"
+                    autocomplete="off"
+                    required
+                >
+
+                <input
+                    id="studyDate"
+                    type="date"
+                    required
+                >
+
+                <select
+                    id="studyType"
+                    aria-label="Tipo de evento"
+                >
+                    <option value="exam">
+                        Examen
+                    </option>
+
+                    <option value="assignment">
+                        Trabajo práctico
+                    </option>
+
+                    <option value="class">
+                        Clase
+                    </option>
+
+                    <option value="other">
+                        Otro
+                    </option>
+                </select>
+
+                <button
+                    class="primary-button"
+                    type="submit"
+                >
+                    Agregar
+                </button>
+            </form>
+        </section>
+
+        <section class="status-card study-events-card">
+            <div class="section-heading">
+                <h2>Agenda académica</h2>
+
+                <p>
+                    Los eventos más próximos aparecen primero.
+                </p>
+            </div>
+
+            <ul id="studyEventList"></ul>
+        </section>
+    </main>
+</body>
+</html>
