@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Finanzas | ATLAS SO</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="finance.js" defer></script>
+</head>
+
+<body>
+    <main class="dashboard">
+        <header class="page-header">
+            <a class="back-link" href="index.html">
+                ← Volver al panel
+            </a>
+
+            <span class="brand">ATLAS SO</span>
+
+            <h1>Finanzas</h1>
+
+            <p class="page-description">
+                Registrá tus ingresos y gastos para conocer
+                exactamente dónde estás parado.
+            </p>
+        </header>
+
+        <section class="finance-summary">
+            <article class="finance-summary-card balance-card">
+                <span>Saldo actual</span>
+                <strong id="balanceAmount">₲ 0</strong>
+            </article>
+
+            <article class="finance-summary-card income-card">
+                <span>Ingresos</span>
+                <strong id="incomeAmount">₲ 0</strong>
+            </article>
+
+            <article class="finance-summary-card expense-card">
+                <span>Gastos</span>
+                <strong id="expenseAmount">₲ 0</strong>
+            </article>
+        </section>
+
+        <section class="status-card finance-form-card">
+            <h2>Registrar movimiento</h2>
+
+            <form
+                id="transactionForm"
+                class="transaction-form"
+            >
+                <input
+                    id="transactionDescription"
+                    type="text"
+                    placeholder="Descripción"
+                    autocomplete="off"
+                    required
+                >
+
+                <input
+                    id="transactionAmount"
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Monto"
+                    inputmode="numeric"
+                    required
+                >
+
+                <select
+                    id="transactionType"
+                    aria-label="Tipo de movimiento"
+                >
+                    <option value="expense">
+                        Gasto
+                    </option>
+
+                    <option value="income">
+                        Ingreso
+                    </option>
+                </select>
+
+                <button
+                    class="primary-button"
+                    type="submit"
+                >
+                    Registrar
+                </button>
+            </form>
+        </section>
+
+        <section class="status-card transactions-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Movimientos</h2>
+
+                    <p>
+                        Historial de ingresos y gastos.
+                    </p>
+                </div>
+            </div>
+
+            <ul id="transactionList"></ul>
+        </section>
+    </main>
+</body>
+</html>
