@@ -1272,3 +1272,188 @@ h1 {
         grid-column: auto;
     }
 }
+.work-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.work-summary-card {
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+}
+
+.work-summary-card span {
+    display: block;
+    min-height: 38px;
+    margin-bottom: 10px;
+    color: var(--muted);
+}
+
+.work-summary-card strong {
+    color: var(--secondary);
+    font-size: 23px;
+}
+
+.net-work-card strong {
+    color: #4ade80;
+}
+
+.work-form {
+    display: grid;
+    grid-template-columns:
+        150px
+        minmax(0, 1fr)
+        110px
+        160px
+        130px
+        auto;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.work-form input {
+    width: 100%;
+    min-width: 0;
+    padding: 13px 14px;
+    border: 1px solid #334863;
+    border-radius: 10px;
+    outline: none;
+    background: var(--surface-dark);
+    color: var(--text);
+}
+
+.work-form input:focus {
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+}
+
+.calculation-warning {
+    margin: 16px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.work-history-card {
+    margin-top: 22px;
+}
+
+.work-history-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.month-filter {
+    padding: 10px 12px;
+    border: 1px solid #334863;
+    border-radius: 9px;
+    outline: none;
+    background: var(--surface-dark);
+    color: var(--text);
+}
+
+#workRecordList {
+    display: grid;
+    gap: 10px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.work-record {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        auto
+        auto;
+    align-items: center;
+    gap: 18px;
+    padding: 15px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-dark);
+}
+
+.work-record-content {
+    min-width: 0;
+}
+
+.work-record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 9px;
+}
+
+.work-badge {
+    padding: 4px 8px;
+    border-radius: 20px;
+    background: #26384f;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.work-record-amounts {
+    display: grid;
+    gap: 5px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.work-record-amounts span {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.work-record-amounts strong {
+    color: #4ade80;
+}
+
+@media (max-width: 1050px) {
+    .work-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .work-form {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .work-form input:nth-child(2),
+    .work-form .primary-button {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 650px) {
+    .work-summary,
+    .work-form {
+        grid-template-columns: 1fr;
+    }
+
+    .work-form input:nth-child(2),
+    .work-form .primary-button {
+        grid-column: auto;
+    }
+
+    .work-history-heading {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .work-record {
+        grid-template-columns: 1fr;
+    }
+
+    .work-record-amounts {
+        text-align: left;
+    }
+
+    .work-record .delete-task {
+        justify-self: start;
+    }
+}

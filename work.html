@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Trabajo | ATLAS SO</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="work.js" defer></script>
+</head>
+
+<body>
+    <main class="dashboard">
+        <header class="page-header">
+            <a class="back-link" href="index.html">
+                ← Volver al panel
+            </a>
+
+            <span class="brand">ATLAS SO</span>
+
+            <h1>Trabajo</h1>
+
+            <p class="page-description">
+                Registrá tus jornadas y calculá una estimación
+                de tus ingresos.
+            </p>
+        </header>
+
+        <section class="work-summary">
+            <article class="work-summary-card">
+                <span>Horas registradas</span>
+                <strong id="totalWorkHours">0 h</strong>
+            </article>
+
+            <article class="work-summary-card">
+                <span>Total bruto</span>
+                <strong id="totalGross">₲ 0</strong>
+            </article>
+
+            <article class="work-summary-card">
+                <span>Descuentos</span>
+                <strong id="totalDiscount">₲ 0</strong>
+            </article>
+
+            <article class="work-summary-card net-work-card">
+                <span>Total neto estimado</span>
+                <strong id="totalNet">₲ 0</strong>
+            </article>
+        </section>
+
+        <section class="status-card work-form-card">
+            <h2>Registrar jornada</h2>
+
+            <form id="workForm" class="work-form">
+                <input
+                    id="workDate"
+                    type="date"
+                    required
+                >
+
+                <input
+                    id="workDescription"
+                    type="text"
+                    placeholder="Detalle de la jornada"
+                    autocomplete="off"
+                    required
+                >
+
+                <input
+                    id="workHours"
+                    type="number"
+                    min="0.5"
+                    max="24"
+                    step="0.5"
+                    placeholder="Horas"
+                    required
+                >
+
+                <input
+                    id="hourlyRate"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value="14635"
+                    placeholder="Pago por hora"
+                    required
+                >
+
+                <input
+                    id="discountPercent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value="9"
+                    placeholder="Descuento %"
+                    required
+                >
+
+                <button
+                    class="primary-button"
+                    type="submit"
+                >
+                    Registrar
+                </button>
+            </form>
+
+            <p class="calculation-warning">
+                Los valores son estimaciones y deben compararse
+                con la liquidación oficial.
+            </p>
+        </section>
+
+        <section class="status-card work-history-card">
+            <div class="work-history-heading">
+                <div class="section-heading">
+                    <h2>Jornadas registradas</h2>
+
+                    <p>
+                        El resumen utiliza el mes seleccionado.
+                    </p>
+                </div>
+
+                <input
+                    id="workMonthFilter"
+                    class="month-filter"
+                    type="month"
+                    aria-label="Filtrar por mes"
+                >
+            </div>
+
+            <ul id="workRecordList"></ul>
+        </section>
+    </main>
+</body>
+</html>
