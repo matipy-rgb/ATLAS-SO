@@ -62,7 +62,20 @@ function updateProgress() {
             `${completedTasks} de ${totalTasks} tareas completadas.`;
     }
 }
+function updateModuleCounts() {
+    const counters =
+        document.querySelectorAll("[data-category-count]");
 
+    counters.forEach(function (counter) {
+        const category = counter.dataset.categoryCount;
+
+        const pendingTasks = tasks.filter(function (task) {
+            return task.category === category && !task.completed;
+        }).length;
+
+        counter.textContent = pendingTasks;
+    });
+}
 function renderTasks() {
     taskList.innerHTML = "";
 
@@ -101,6 +114,7 @@ function renderTasks() {
     });
 
     updateProgress();
+updateModuleCounts();
 }
 
 function addTask() {
