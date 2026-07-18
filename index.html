@@ -42,16 +42,44 @@
     <h2>Tareas de hoy</h2>
 
     <div class="task-form">
-        <input
-            id="taskInput"
-            type="text"
-            placeholder="Escribí una tarea"
-        >
+    <input
+        id="taskInput"
+        type="text"
+        placeholder="Escribí una tarea"
+    >
 
-        <button id="addTaskButton" type="button">
-            Agregar
-        </button>
-    </div>
+    <select id="taskCategory" aria-label="Categoría">
+        <option value="work">💼 Trabajo</option>
+        <option value="study">🎓 Estudios</option>
+        <option value="finance">💰 Finanzas</option>
+        <option value="health">💪 Salud</option>
+        <option value="projects">🛠️ Proyectos</option>
+        <option value="personal">👤 Personal</option>
+    </select>
+
+    <select id="taskPriority" aria-label="Prioridad">
+        <option value="normal">Prioridad normal</option>
+        <option value="high">Prioridad alta</option>
+    </select>
+
+    <button id="addTaskButton" type="button">
+        Agregar
+    </button>
+</div>
+
+<div class="task-filters">
+    <button class="filter-button active" data-filter="all">
+        Todas
+    </button>
+
+    <button class="filter-button" data-filter="pending">
+        Pendientes
+    </button>
+
+    <button class="filter-button" data-filter="completed">
+        Completadas
+    </button>
+</div>
 
     <ul id="taskList"></ul>
 </section>
