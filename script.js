@@ -71,19 +71,72 @@ let currentFilter = "all";
 currentDate.textContent = new Intl.DateTimeFormat("es-PY", {
     dateStyle: "full"
 }).format(new Date());
+function getStoredArray(storageKey) {
+    try {
+        const storedData = JSON.parse(
+            localStorage.getItem(storageKey)
+        );
+
+        return Array.isArray(storedData)
+            ? storedData
+            : [];
+    } catch (error) {
+        console.error(
+            `No se pudo leer ${storageKey}:`,
+            error
+        );
+
+        return [];
+    }
+}
+
 function exportData() {
     const backup = {
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        tasks: tasks,
-        notes: quickNotes.value
+        version: 2,
+
+        exportedAt:
+            new Date().toISOString(),
+
+        data: {
+            tasks: tasks,
+
+            notes:
+                quickNotes.value,
+
+            transactions:
+                getStoredArray(
+                    "atlasTransactions"
+                ),
+
+            studyEvents:
+                getStoredArray(
+                    "atlasStudyEvents"
+                ),
+
+            healthRecords:
+                getStoredArray(
+                    "atlasHealthRecords"
+                ),
+
+            projects:
+                getStoredArray(
+                    "atlasProjects"
+                ),
+
+            workRecords:
+                getStoredArray(
+                    "atlasWorkRecords"
+                ),
+
+            habits:
+                getStoredArray(
+                    "atlasHabits"
+                )
+        }
     };
 
-    const backupContent = JSON.stringify(
-        backup,
-        null,
-        2
-    );
+    const backupContent =
+        JSON.stringify(backup, null, 2);
 
     const backupFile = new Blob(
         [backupContent],
@@ -104,7 +157,7 @@ function exportData() {
     downloadLink.href = downloadUrl;
 
     downloadLink.download =
-        `atlas-so-backup-${currentDay}.json`;
+        `atlas-so-full-backup-${currentDay}.json`;
 
     document.body.appendChild(downloadLink);
 
@@ -114,13 +167,23 @@ function exportData() {
     URL.revokeObjectURL(downloadUrl);
 
     backupStatus.textContent =
-        "Copia de seguridad exportada.";
+        "Copia completa exportada correctamente.";
 }
 
 async function importData(event) {
-    const selectedFile = event.target.files[0];
+    const selectedFile =
+        event.target.files[0];
 
     if (!selectedFile) {
+        return;
+    }
+
+    const confirmed = window.confirm(
+        "La importación reemplazará los datos actuales. ¿Querés continuar?"
+    );
+
+    if (!confirmed) {
+        importFile.value = "";
         return;
     }
 
@@ -128,18 +191,25 @@ async function importData(event) {
         const fileContent =
             await selectedFile.text();
 
-        const backup = JSON.parse(fileContent);
+        const backup =
+            JSON.parse(fileContent);
 
-        if (!Array.isArray(backup.tasks)) {
+        const backupData =
+            backup.data || backup;
+
+        if (!Array.isArray(backupData.tasks)) {
             throw new Error(
                 "El archivo no contiene tareas válidas."
             );
         }
 
-        tasks = backup.tasks
+        tasks = backupData.tasks
             .map(function (task) {
                 return {
-                    text: String(task.text || "").trim(),
+                    text:
+                        String(
+                            task.text || ""
+                        ).trim(),
 
                     completed:
                         Boolean(task.completed),
@@ -160,8 +230,8 @@ async function importData(event) {
             });
 
         quickNotes.value =
-            typeof backup.notes === "string"
-                ? backup.notes
+            typeof backupData.notes === "string"
+                ? backupData.notes
                 : "";
 
         saveTasks();
@@ -171,16 +241,57 @@ async function importData(event) {
             quickNotes.value
         );
 
-        notesStatus.textContent = "Guardado";
+        const moduleStorage = [
+            {
+                property: "transactions",
+                key: "atlasTransactions"
+            },
+            {
+                property: "studyEvents",
+                key: "atlasStudyEvents"
+            },
+            {
+                property: "healthRecords",
+                key: "atlasHealthRecords"
+            },
+            {
+                property: "projects",
+                key: "atlasProjects"
+            },
+            {
+                property: "workRecords",
+                key: "atlasWorkRecords"
+            },
+            {
+                property: "habits",
+                key: "atlasHabits"
+            }
+        ];
+
+        moduleStorage.forEach(function (module) {
+            const moduleData =
+                backupData[module.property];
+
+            if (Array.isArray(moduleData)) {
+                localStorage.setItem(
+                    module.key,
+                    JSON.stringify(moduleData)
+                );
+            }
+        });
+
+        notesStatus.textContent =
+            "Guardado";
+
         backupStatus.textContent =
-            "Copia restaurada correctamente.";
+            "Todos los datos fueron restaurados.";
 
         renderTasks();
     } catch (error) {
         console.error(error);
 
         backupStatus.textContent =
-            "No se pudo importar el archivo.";
+            "El archivo no es una copia válida de ATLAS SO.";
     }
 
     importFile.value = "";
