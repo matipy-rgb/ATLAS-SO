@@ -455,3 +455,53 @@ h1 {
         justify-self: start;
     }
 }
+.notes-card {
+    margin-top: 22px;
+}
+
+.notes-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.notes-heading h2 {
+    margin: 0 0 6px;
+}
+
+.notes-heading p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+#notesStatus {
+    color: var(--secondary);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#quickNotes {
+    width: 100%;
+    min-height: 150px;
+    margin-top: 20px;
+    padding: 16px;
+    resize: vertical;
+    border: 1px solid #334863;
+    border-radius: 12px;
+    outline: none;
+    background: var(--surface-dark);
+    color: var(--text);
+    font: inherit;
+    line-height: 1.6;
+}
+
+#quickNotes::placeholder {
+    color: #71839b;
+}
+
+#quickNotes:focus {
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+}

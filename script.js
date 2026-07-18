@@ -41,7 +41,8 @@ const categories = {
         icon: "👤"
     }
 };
-
+const quickNotes = document.querySelector("#quickNotes");
+const notesStatus = document.querySelector("#notesStatus");
 function loadTasks() {
     try {
         const storedTasks =
@@ -86,7 +87,25 @@ function updateClock() {
         second: "2-digit"
     }).format(now);
 }
+let notesSaveTimer;
 
+quickNotes.value =
+    localStorage.getItem("atlasQuickNotes") || "";
+
+quickNotes.addEventListener("input", function () {
+    notesStatus.textContent = "Guardando...";
+
+    clearTimeout(notesSaveTimer);
+
+    notesSaveTimer = setTimeout(function () {
+        localStorage.setItem(
+            "atlasQuickNotes",
+            quickNotes.value
+        );
+
+        notesStatus.textContent = "Guardado";
+    }, 400);
+});
 function saveTasks() {
     localStorage.setItem(
         "atlasTasks",
