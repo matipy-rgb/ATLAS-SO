@@ -130,3 +130,48 @@ button:disabled {
     color: #22d3ee;
     font-size: 18px;
 }
+.tasks-card {
+    margin-top: 24px;
+}
+
+.task-form {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.task-form input {
+    flex: 1;
+    min-width: 0;
+    padding: 13px 16px;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    background: var(--background);
+    color: var(--text);
+    font-size: 16px;
+}
+
+.task-form input:focus {
+    border-color: var(--secondary);
+    outline: none;
+}
+
+.task-form button {
+    margin-top: 0;
+}
+
+#taskList {
+    display: grid;
+    gap: 10px;
+    margin: 24px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+#taskList li {
+    padding: 14px 16px;
+    border: 1px solid #20314a;
+    border-radius: 10px;
+    background: var(--background);
+    color: var(--text);
+}

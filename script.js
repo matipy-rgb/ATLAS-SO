@@ -24,3 +24,30 @@ completeButton.addEventListener("click", function () {
         statusMessage.textContent = "Buen trabajo. Sigamos avanzando.";
     }
 });
+const taskInput = document.querySelector("#taskInput");
+const addTaskButton = document.querySelector("#addTaskButton");
+const taskList = document.querySelector("#taskList");
+
+function addTask() {
+    const taskText = taskInput.value.trim();
+
+    if (taskText === "") {
+        return;
+    }
+
+    const taskItem = document.createElement("li");
+
+    taskItem.textContent = taskText;
+    taskList.appendChild(taskItem);
+
+    taskInput.value = "";
+    taskInput.focus();
+}
+
+addTaskButton.addEventListener("click", addTask);
+
+taskInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+        addTask();
+    }
+});
