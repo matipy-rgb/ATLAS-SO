@@ -175,3 +175,33 @@ button:disabled {
     background: var(--background);
     color: var(--text);
 }
+.task-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.task-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--secondary);
+}
+
+.task-item.completed span {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.delete-task {
+    margin: 0;
+    padding: 8px 12px;
+    background: #7f1d1d;
+    font-size: 14px;
+}
+
+.delete-task:hover {
+    background: #991b1b;
+    transform: none;
+}
