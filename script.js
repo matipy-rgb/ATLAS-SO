@@ -6,12 +6,35 @@ const statusMessage = document.querySelector("#statusMessage");
 const taskInput = document.querySelector("#taskInput");
 const addTaskButton = document.querySelector("#addTaskButton");
 const taskList = document.querySelector("#taskList");
+const greeting = document.querySelector("#greeting");
+const currentTime = document.querySelector("#currentTime");
 
 let tasks = JSON.parse(localStorage.getItem("atlasTasks")) || [];
 
 currentDate.textContent = new Intl.DateTimeFormat("es-PY", {
     dateStyle: "full"
 }).format(new Date());
+function updateClock() {
+    const now = new Date();
+    const hour = now.getHours();
+
+    if (hour < 12) {
+        greeting.textContent = "Buen día";
+    } else if (hour < 19) {
+        greeting.textContent = "Buenas tardes";
+    } else {
+        greeting.textContent = "Buenas noches";
+    }
+
+    currentTime.textContent = new Intl.DateTimeFormat("es-PY", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+    }).format(now);
+}
+
+updateClock();
+setInterval(updateClock, 1000);
 
 function saveTasks() {
     localStorage.setItem("atlasTasks", JSON.stringify(tasks));
