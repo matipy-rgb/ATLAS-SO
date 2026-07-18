@@ -257,6 +257,44 @@
         placeholder="Escribí algo que no querés olvidar..."
     ></textarea>
 </section>
+<section class="status-card backup-card">
+    <div class="backup-heading">
+        <div>
+            <h2>Copias de seguridad</h2>
+
+            <p>
+                Exportá o restaurá los datos de ATLAS SO.
+            </p>
+        </div>
+
+        <div class="backup-actions">
+            <button
+                id="exportButton"
+                class="export-button"
+                type="button"
+            >
+                Exportar
+            </button>
+
+            <button
+                id="importButton"
+                class="import-button"
+                type="button"
+            >
+                Importar
+            </button>
+
+            <input
+                id="importFile"
+                type="file"
+                accept=".json,application/json"
+                hidden
+            >
+        </div>
+    </div>
+
+    <p id="backupStatus" role="status"></p>
+</section>
         <footer>
             <p class="quote">
                 “Lo que no se mide, no se mejora.”

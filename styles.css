@@ -505,3 +505,72 @@ h1 {
     border-color: var(--secondary);
     box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
 }
+.backup-card {
+    margin-top: 22px;
+}
+
+.backup-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.backup-heading h2 {
+    margin: 0 0 6px;
+}
+
+.backup-heading p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.backup-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.export-button,
+.import-button {
+    padding: 11px 16px;
+    border: none;
+    border-radius: 9px;
+    color: white;
+    font-weight: 700;
+}
+
+.export-button {
+    background: var(--primary);
+}
+
+.import-button {
+    background: #334863;
+}
+
+.export-button:hover {
+    background: var(--primary-hover);
+}
+
+.import-button:hover {
+    background: #405a78;
+}
+
+#backupStatus {
+    min-height: 20px;
+    margin: 16px 0 0;
+    color: var(--secondary);
+    font-size: 14px;
+}
+
+@media (max-width: 560px) {
+    .backup-heading {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .backup-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}

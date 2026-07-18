@@ -11,7 +11,10 @@ const taskCategory = document.querySelector("#taskCategory");
 const taskPriority = document.querySelector("#taskPriority");
 const addTaskButton = document.querySelector("#addTaskButton");
 const taskList = document.querySelector("#taskList");
-
+const exportButton = document.querySelector("#exportButton");
+const importButton = document.querySelector("#importButton");
+const importFile = document.querySelector("#importFile");
+const backupStatus = document.querySelector("#backupStatus");
 const filterButtons =
     document.querySelectorAll(".filter-button");
 
@@ -68,7 +71,128 @@ let currentFilter = "all";
 currentDate.textContent = new Intl.DateTimeFormat("es-PY", {
     dateStyle: "full"
 }).format(new Date());
+function exportData() {
+    const backup = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        tasks: tasks,
+        notes: quickNotes.value
+    };
 
+    const backupContent = JSON.stringify(
+        backup,
+        null,
+        2
+    );
+
+    const backupFile = new Blob(
+        [backupContent],
+        {
+            type: "application/json"
+        }
+    );
+
+    const downloadUrl =
+        URL.createObjectURL(backupFile);
+
+    const downloadLink =
+        document.createElement("a");
+
+    const currentDay =
+        new Date().toISOString().slice(0, 10);
+
+    downloadLink.href = downloadUrl;
+
+    downloadLink.download =
+        `atlas-so-backup-${currentDay}.json`;
+
+    document.body.appendChild(downloadLink);
+
+    downloadLink.click();
+    downloadLink.remove();
+
+    URL.revokeObjectURL(downloadUrl);
+
+    backupStatus.textContent =
+        "Copia de seguridad exportada.";
+}
+
+async function importData(event) {
+    const selectedFile = event.target.files[0];
+
+    if (!selectedFile) {
+        return;
+    }
+
+    try {
+        const fileContent =
+            await selectedFile.text();
+
+        const backup = JSON.parse(fileContent);
+
+        if (!Array.isArray(backup.tasks)) {
+            throw new Error(
+                "El archivo no contiene tareas válidas."
+            );
+        }
+
+        tasks = backup.tasks
+            .map(function (task) {
+                return {
+                    text: String(task.text || "").trim(),
+
+                    completed:
+                        Boolean(task.completed),
+
+                    category:
+                        categories[task.category]
+                            ? task.category
+                            : "personal",
+
+                    priority:
+                        task.priority === "high"
+                            ? "high"
+                            : "normal"
+                };
+            })
+            .filter(function (task) {
+                return task.text !== "";
+            });
+
+        quickNotes.value =
+            typeof backup.notes === "string"
+                ? backup.notes
+                : "";
+
+        saveTasks();
+
+        localStorage.setItem(
+            "atlasQuickNotes",
+            quickNotes.value
+        );
+
+        notesStatus.textContent = "Guardado";
+        backupStatus.textContent =
+            "Copia restaurada correctamente.";
+
+        renderTasks();
+    } catch (error) {
+        console.error(error);
+
+        backupStatus.textContent =
+            "No se pudo importar el archivo.";
+    }
+
+    importFile.value = "";
+}
+
+exportButton.addEventListener("click", exportData);
+
+importButton.addEventListener("click", function () {
+    importFile.click();
+});
+
+importFile.addEventListener("change", importData);
 function updateClock() {
     const now = new Date();
     const hour = now.getHours();
