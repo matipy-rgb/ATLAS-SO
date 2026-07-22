@@ -58,13 +58,7 @@ function reloadStoredData() {
 }
 
 function loadArray(key) {
-    try {
-        const value = JSON.parse(localStorage.getItem(key));
-        return Array.isArray(value) ? value : [];
-    } catch (error) {
-        console.error(`No se pudo leer ${key}:`, error);
-        return [];
-    }
+    return window.Atlas?.readArray(key) || [];
 }
 
 function openReceiptDatabase() {
@@ -94,7 +88,7 @@ function openReceiptDatabase() {
 async function saveReceipt(paymentId, file) {
     const database = await openReceiptDatabase();
 
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
         const transaction = database.transaction(RECEIPT_STORE_NAME, "readwrite");
         const store = transaction.objectStore(RECEIPT_STORE_NAME);
 
@@ -117,9 +111,40 @@ async function saveReceipt(paymentId, file) {
             reject(transaction.error);
         };
     });
+
+    const storage = window.AtlasAuth?.client?.storage;
+    const workspaceId = window.AtlasStore?.workspaceId;
+    if (!storage || !workspaceId) return "";
+
+    const safeName = file.name.replace(/[^a-z0-9._-]+/gi, "-").slice(-100) || "comprobante";
+    const path = `${workspaceId}/${paymentId}/${safeName}`;
+    const { error } = await storage.from("atlas-files").upload(path, file, {
+        upsert: true,
+        contentType: file.type || "application/octet-stream"
+    });
+    if (error) {
+        console.warn("El comprobante quedó solo en este dispositivo:", error.message);
+        return "";
+    }
+    return path;
 }
 
-async function getReceipt(paymentId) {
+async function getReceipt(paymentId, cloudPath = "") {
+    if (cloudPath && window.AtlasAuth?.client?.storage) {
+        const { data, error } = await window.AtlasAuth.client.storage
+            .from("atlas-files")
+            .download(cloudPath);
+        if (!error && data) {
+            const payment = obligations.flatMap(item => item.payments || []).find(item => Number(item.id) === Number(paymentId));
+            return {
+                paymentId,
+                name: payment?.receipt?.name || cloudPath.split("/").pop() || "comprobante",
+                type: payment?.receipt?.type || data.type || "application/octet-stream",
+                size: data.size,
+                file: data
+            };
+        }
+    }
     const database = await openReceiptDatabase();
 
     return new Promise((resolve, reject) => {
@@ -132,7 +157,11 @@ async function getReceipt(paymentId) {
     });
 }
 
-async function deleteReceipt(paymentId) {
+async function deleteReceipt(paymentId, cloudPath = "") {
+    if (cloudPath && window.AtlasAuth?.client?.storage) {
+        const { error } = await window.AtlasAuth.client.storage.from("atlas-files").remove([cloudPath]);
+        if (error) console.warn("No se borró la copia en la nube:", error.message);
+    }
     const database = await openReceiptDatabase();
 
     return new Promise((resolve, reject) => {
@@ -187,8 +216,8 @@ function normalizeObligation(obligation) {
 }
 
 function saveData() {
-    localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
-    localStorage.setItem(OBLIGATIONS_KEY, JSON.stringify(obligations));
+    window.Atlas?.writeJSON(TRANSACTIONS_KEY, transactions);
+    window.Atlas?.writeJSON(OBLIGATIONS_KEY, obligations);
 
     window.dispatchEvent(new CustomEvent("atlas:data-changed", {
         detail: { key: OBLIGATIONS_KEY }
@@ -616,7 +645,7 @@ async function undoLastPayment(obligationId) {
 
     if (lastPayment.receipt) {
         try {
-            await deleteReceipt(lastPayment.id);
+            await deleteReceipt(lastPayment.id, lastPayment.receipt?.path || "");
         } catch (error) {
             console.error("No se pudo borrar el comprobante:", error);
         }
@@ -646,7 +675,8 @@ async function viewReceipt(paymentId) {
     }
 
     try {
-        const receipt = await getReceipt(paymentId);
+        const payment = obligations.flatMap(item => item.payments || []).find(item => Number(item.id) === Number(paymentId));
+        const receipt = await getReceipt(paymentId, payment?.receipt?.path || "");
 
         if (!receipt?.file) {
             alert("El comprobante no está disponible en este dispositivo.");
@@ -833,7 +863,7 @@ paymentForm.addEventListener("submit", async (event) => {
 
     if (receiptFile) {
         try {
-            await saveReceipt(payment.id, receiptFile);
+            payment.receipt.path = await saveReceipt(payment.id, receiptFile);
         } catch (error) {
             console.error("No se pudo guardar el comprobante:", error);
             alert("No se pudo guardar el archivo. El pago todavía no fue registrado.");

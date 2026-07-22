@@ -84,17 +84,11 @@ function normalizeStudyEvent(event) {
 }
 
 function loadStudyEvents() {
-    try {
-        const stored = JSON.parse(localStorage.getItem(STUDY_EVENTS_KEY));
-        return Array.isArray(stored) ? stored.map(normalizeStudyEvent) : [];
-    } catch (error) {
-        console.error("No se pudieron cargar las actividades académicas:", error);
-        return [];
-    }
+    return (window.Atlas?.readArray(STUDY_EVENTS_KEY) || []).map(normalizeStudyEvent);
 }
 
 function saveStudyEvents() {
-    localStorage.setItem(STUDY_EVENTS_KEY, JSON.stringify(studyEvents));
+    window.Atlas?.writeJSON(STUDY_EVENTS_KEY, studyEvents);
 
     window.dispatchEvent(new CustomEvent("atlas:data-changed", {
         detail: { key: STUDY_EVENTS_KEY }

@@ -2,14 +2,19 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
     <title>Salud | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="module.css">
-    <script src="atlas.js" defer></script>
-    <script src="health.js" defer></script>
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
 </head>
-<body data-page="health" data-context="Seguimiento diario sin humo ni estimaciones">
+<body data-page="health" data-script="health.js" data-context="Seguimiento diario sin humo ni estimaciones" data-protected>
     <div class="app-frame"><div class="app-workspace">
         <main class="page-content">
             <section class="page-hero">

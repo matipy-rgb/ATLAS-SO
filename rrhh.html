@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
+    <title>Recursos Humanos | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="module.css">
+    <link rel="stylesheet" href="rrhh.css">
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
+</head>
+<body data-page="rrhh" data-script="rrhh.js" data-context="Ausencias, reintegros y seguimiento del personal" data-protected>
+    <div class="app-frame"><div class="app-workspace">
+        <main class="page-content">
+            <section class="page-hero">
+                <div>
+                    <p class="page-eyebrow">RECURSOS HUMANOS</p>
+                    <h1>Control de ausencias</h1>
+                    <p>Vacaciones, reposos y maternidad con días restantes, fecha de reintegro y alertas que cambian solas.</p>
+                </div>
+                <div class="page-hero-actions">
+                    <button id="openAbsenceDialog" class="primary-button" type="button">＋ Registrar ausencia</button>
+                    <button id="openEmployeeDialog" class="secondary-button" type="button">＋ Funcionario</button>
+                </div>
+            </section>
+
+            <section class="summary-grid" aria-label="Resumen de Recursos Humanos">
+                <article class="summary-item"><span>Funcionarios activos</span><strong id="hrPeopleCount">0</strong><small id="hrPeopleCaption">Sin funcionarios</small></article>
+                <article class="summary-item warning"><span>Ausentes hoy</span><strong id="hrActiveCount">0</strong><small id="hrActiveCaption">Sin ausencias activas</small></article>
+                <article class="summary-item purple"><span>Reintegros · 7 días</span><strong id="hrWeekReturns">0</strong><small id="hrNextReturn">Agenda despejada</small></article>
+                <article class="summary-item negative"><span>Reintegros pendientes</span><strong id="hrOverdueCount">0</strong><small>Requieren confirmación</small></article>
+            </section>
+
+            <section id="hrAttention" class="info-callout hr-attention" hidden></section>
+
+            <section class="hr-layout">
+                <article class="panel hr-main-panel">
+                    <header class="panel-header">
+                        <div>
+                            <p class="section-kicker">SEGUIMIENTO DIARIO</p>
+                            <h2>Ausencias y reintegros</h2>
+                            <p id="hrListCaption">0 registros</p>
+                        </div>
+                        <div class="hr-filter-row">
+                            <input id="hrSearch" type="search" placeholder="Buscar nombre, CI o cliente" aria-label="Buscar registros">
+                            <select id="hrStatusFilter" aria-label="Filtrar por estado">
+                                <option value="open">Abiertas</option>
+                                <option value="all">Todas</option>
+                                <option value="active">Ausentes hoy</option>
+                                <option value="upcoming">Programadas</option>
+                                <option value="return">Reintegros</option>
+                                <option value="completed">Finalizadas</option>
+                            </select>
+                            <select id="hrTypeFilter" aria-label="Filtrar por tipo">
+                                <option value="all">Todos los tipos</option>
+                                <option value="vacation">Vacaciones</option>
+                                <option value="medical">Reposo médico</option>
+                                <option value="maternity">Maternidad</option>
+                                <option value="permission">Permiso</option>
+                                <option value="suspension">Suspensión</option>
+                                <option value="other">Otro</option>
+                            </select>
+                        </div>
+                    </header>
+                    <div id="hrAbsenceList" class="hr-absence-list"></div>
+                </article>
+
+                <aside class="panel hr-directory-panel">
+                    <header class="panel-header">
+                        <div>
+                            <p class="section-kicker">DIRECTORIO</p>
+                            <h2>Funcionarios</h2>
+                            <p>Datos mínimos para identificar cada novedad.</p>
+                        </div>
+                    </header>
+                    <div id="hrEmployeeList" class="hr-employee-list"></div>
+                </aside>
+            </section>
+        </main>
+    </div></div>
+
+    <dialog id="employeeDialog">
+        <form id="employeeForm">
+            <input id="employeeId" type="hidden">
+            <div class="dialog-heading">
+                <div><p class="section-kicker">LEGAJO BÁSICO</p><h2 id="employeeDialogTitle">Nuevo funcionario</h2><p>Guardá solo lo necesario para el seguimiento.</p></div>
+                <button id="closeEmployeeDialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <div class="form-grid">
+                <label class="field span-4"><span>Cédula</span><input id="employeeCI" type="text" inputmode="numeric" maxlength="20" placeholder="Sin puntos" required></label>
+                <label class="field span-8"><span>Nombre y apellido</span><input id="employeeName" type="text" maxlength="100" required></label>
+                <label class="field span-6"><span>Cliente / área</span><input id="employeeClient" type="text" maxlength="80" placeholder="Ej: BDP CDE"></label>
+                <label class="field span-6"><span>Cargo</span><input id="employeePosition" type="text" maxlength="80"></label>
+                <fieldset class="field span-12 workday-fieldset">
+                    <legend>Días habituales de trabajo</legend>
+                    <div class="workday-options">
+                        <label><input type="checkbox" name="workday" value="1" checked><span>Lun</span></label>
+                        <label><input type="checkbox" name="workday" value="2" checked><span>Mar</span></label>
+                        <label><input type="checkbox" name="workday" value="3" checked><span>Mié</span></label>
+                        <label><input type="checkbox" name="workday" value="4" checked><span>Jue</span></label>
+                        <label><input type="checkbox" name="workday" value="5" checked><span>Vie</span></label>
+                        <label><input type="checkbox" name="workday" value="6" checked><span>Sáb</span></label>
+                        <label><input type="checkbox" name="workday" value="0"><span>Dom</span></label>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="dialog-actions"><button id="cancelEmployee" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar funcionario</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="absenceDialog">
+        <form id="absenceForm">
+            <input id="absenceId" type="hidden">
+            <div class="dialog-heading">
+                <div><p class="section-kicker">NOVEDAD DEL PERSONAL</p><h2 id="absenceDialogTitle">Registrar ausencia</h2><p>El último día es inclusivo; el reintegro se calcula según su jornada.</p></div>
+                <button id="closeAbsenceDialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <div class="form-grid">
+                <label class="field span-7"><span>Funcionario</span><select id="absenceEmployee" required></select></label>
+                <label class="field span-5"><span>Tipo</span><select id="absenceType" required><option value="vacation">Vacaciones</option><option value="medical">Reposo médico</option><option value="maternity">Reposo por maternidad</option><option value="permission">Permiso</option><option value="suspension">Suspensión</option><option value="other">Otro</option></select></label>
+                <label class="field span-4"><span>Desde</span><input id="absenceStart" type="date" required></label>
+                <label class="field span-4"><span>Hasta inclusive</span><input id="absenceEnd" type="date" required></label>
+                <label class="field span-4"><span>Debe presentarse</span><input id="absenceReturn" type="date" required></label>
+                <label class="field span-12"><span>Observación administrativa</span><textarea id="absenceNote" rows="3" maxlength="350" placeholder="Ej: certificado recibido, ID de permiso o dato operativo. Evitá diagnósticos médicos."></textarea></label>
+            </div>
+            <div id="absencePreview" class="absence-preview">Elegí las fechas para calcular la duración.</div>
+            <div class="dialog-actions"><button id="cancelAbsence" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar ausencia</button></div>
+        </form>
+    </dialog>
+</body>
+</html>

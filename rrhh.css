@@ -1,0 +1,101 @@
+.hr-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(320px, .65fr);
+    gap: 22px;
+    margin-top: 22px;
+}
+
+.hr-main-panel,
+.hr-directory-panel { min-width: 0; overflow: hidden; }
+.hr-filter-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.hr-filter-row input,
+.hr-filter-row select {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    outline: none;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+}
+.hr-filter-row input { width: min(250px, 100%); }
+.hr-filter-row input:focus,
+.hr-filter-row select:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(37, 99, 235, .1); }
+
+.hr-attention { margin-top: 22px; }
+.hr-attention-list { display: grid; gap: 6px; margin: 10px 0 0; padding-left: 18px; }
+
+.hr-absence-list,
+.hr-employee-list { display: grid; gap: 10px; padding: 18px; }
+.hr-absence-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    padding: 17px;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: var(--surface-soft);
+}
+.hr-absence-card[data-state="overdue"] { border-color: #fecaca; background: var(--red-soft); }
+.hr-absence-card[data-state="return-today"] { border-color: #fed7aa; background: var(--amber-soft); }
+.hr-absence-card h3 { margin: 7px 0 5px; font-size: 17px; }
+.hr-context { display: flex; flex-wrap: wrap; gap: 7px; color: var(--muted); font-size: 11px; }
+.hr-context span:not(:last-child)::after { content: "·"; margin-left: 7px; }
+.hr-type-badge,
+.hr-status-badge {
+    display: inline-flex;
+    padding: 4px 8px;
+    border-radius: 99px;
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+    font-size: 10px;
+    font-weight: 800;
+}
+.hr-status-badge.active { background: var(--amber-soft); color: var(--amber); }
+.hr-status-badge.overdue { background: var(--red-soft); color: var(--red); }
+.hr-status-badge.completed { background: var(--green-soft); color: var(--green); }
+.hr-status-badge.upcoming { background: #f1edff; color: var(--purple); }
+.hr-date-line { margin: 9px 0 0; color: var(--text-soft); font-size: 12px; }
+.hr-note { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.hr-absence-side { display: grid; min-width: 175px; align-content: space-between; justify-items: end; gap: 18px; }
+.hr-day-counter { text-align: right; }
+.hr-day-counter strong { display: block; color: var(--primary-strong); font-size: 25px; }
+.hr-day-counter span { color: var(--muted); font-size: 10px; }
+.hr-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.hr-card-actions button { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text-soft); font-size: 10px; font-weight: 750; }
+.hr-card-actions .confirm-return { border-color: #bbf7d0; background: var(--green-soft); color: var(--green); }
+.hr-card-actions .delete-absence { color: var(--red); }
+
+.hr-employee-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; }
+.hr-employee-card.inactive { opacity: .58; }
+.hr-employee-avatar { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 10px; background: var(--primary-soft); color: var(--primary-strong); font-weight: 900; }
+.hr-employee-copy { min-width: 0; }
+.hr-employee-copy strong,
+.hr-employee-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-employee-copy strong { font-size: 12px; }
+.hr-employee-copy span { color: var(--muted); font-size: 10px; }
+.hr-employee-menu { display: flex; gap: 3px; }
+.hr-employee-menu button { width: 29px; height: 29px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text-soft); }
+
+.workday-fieldset { margin: 0; padding: 0; border: 0; }
+.workday-fieldset legend { margin-bottom: 8px; color: var(--text-soft); font-size: 12px; font-weight: 750; }
+.workday-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.workday-options label { position: relative; }
+.workday-options input { position: absolute; opacity: 0; pointer-events: none; }
+.workday-options span { display: block; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); color: var(--muted); font-size: 11px; font-weight: 750; cursor: pointer; }
+.workday-options input:checked + span { border-color: #93c5fd; background: var(--primary-soft); color: var(--primary-strong); }
+.absence-preview { margin-top: 16px; padding: 12px 14px; border-radius: 11px; background: var(--primary-soft); color: var(--primary-strong); font-size: 12px; font-weight: 700; }
+
+@media (max-width: 1180px) {
+    .hr-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+    .hr-filter-row { width: 100%; }
+    .hr-filter-row > * { width: 100% !important; }
+    .hr-absence-card { grid-template-columns: 1fr; }
+    .hr-absence-side { min-width: 0; justify-items: start; }
+    .hr-day-counter { text-align: left; }
+    .hr-card-actions { justify-content: flex-start; }
+}

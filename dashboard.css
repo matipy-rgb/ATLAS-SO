@@ -183,7 +183,7 @@
 
 .module-overview {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
 }
 
@@ -223,6 +223,7 @@
 
 .module-card[data-module="finance"] .module-card-icon { background: #e9f8ef; color: #15803d; }
 .module-card[data-module="study"] .module-card-icon { background: #f1ebff; color: #7c3aed; }
+.module-card[data-module="rrhh"] .module-card-icon { background: #eaf1ff; color: #1d4ed8; }
 .module-card[data-module="health"] .module-card-icon { background: #fff0ee; color: #c2413a; }
 .module-card[data-module="projects"] .module-card-icon { background: #fff5df; color: #b45309; }
 .module-card[data-module="personal"] .module-card-icon { background: #e7f8fb; color: #0e7490; }

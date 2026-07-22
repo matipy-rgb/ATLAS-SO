@@ -2,15 +2,20 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
     <title>Personal | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="module.css">
     <link rel="stylesheet" href="personal.css">
-    <script src="atlas.js" defer></script>
-    <script src="personal.js" defer></script>
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
 </head>
-<body data-page="personal" data-context="Hábitos diarios, rachas y consistencia semanal">
+<body data-page="personal" data-script="personal.js" data-context="Hábitos diarios, rachas y consistencia semanal" data-protected>
     <div class="app-frame"><div class="app-workspace">
         <main class="page-content">
             <section class="page-hero">

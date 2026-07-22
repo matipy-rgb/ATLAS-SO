@@ -51,6 +51,24 @@ body {
     line-height: 1.5;
 }
 
+body[data-protected]:not(.auth-ready) .app-frame {
+    visibility: hidden;
+}
+
+body[data-protected]:not(.auth-ready)::before {
+    content: "ATLAS SO";
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: grid;
+    place-items: center;
+    background: var(--sidebar);
+    color: #fff;
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: .18em;
+}
+
 button,
 input,
 select,
@@ -218,6 +236,86 @@ strong {
     flex: 1;
     min-height: 28px;
 }
+
+.sidebar-user-card {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 30px;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 12px;
+    padding: 10px;
+    border: 1px solid rgba(148, 163, 184, .12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .035);
+}
+
+.sidebar-avatar {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 10px;
+    background: #1d4ed8;
+    color: #fff;
+    font-weight: 850;
+}
+
+.sidebar-user-copy { min-width: 0; }
+.sidebar-user-copy strong,
+.sidebar-user-copy small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sidebar-user-copy strong { color: #fff; font-size: 12px; }
+.sidebar-user-copy small { color: #7e8ca3; font-size: 9px; }
+.sidebar-logout {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .05);
+    color: #91a0b7;
+}
+.sidebar-logout:hover { background: rgba(239, 68, 68, .15); color: #fca5a5; }
+
+.sync-status {
+    padding: 5px 9px;
+    border-radius: 99px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-size: 10px;
+    font-weight: 750;
+}
+.sync-status[data-state="syncing"] { background: var(--primary-soft); color: var(--primary); }
+.sync-status[data-state="offline"] { background: var(--amber-soft); color: var(--amber); }
+.install-control {
+    padding: 7px 11px;
+    border: 1px solid #bfd0ea;
+    border-radius: 9px;
+    background: #fff;
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.mobile-bottom-nav { display: none; }
+
+.boot-error {
+    width: min(560px, calc(100vw - 32px));
+    margin: 12vh auto;
+    padding: 28px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: var(--shadow);
+}
+.boot-error strong { font-size: 21px; }
+.boot-error p { color: var(--text-soft); }
+.boot-error a { color: var(--primary); font-weight: 800; }
 
 .sidebar-system-card {
     padding: 15px;
@@ -798,8 +896,38 @@ dialog > form {
     }
     body.sidebar-open .mobile-overlay { display: block; }
     .app-topbar { padding-inline: 18px; }
-    .page-content { padding: 24px 18px 44px; }
+    .page-content { padding: 24px 18px calc(94px + env(safe-area-inset-bottom)); }
     .topbar-date > span { display: none; }
+    .sync-status { display: none; }
+    .mobile-bottom-nav {
+        position: fixed;
+        inset: auto 10px calc(10px + env(safe-area-inset-bottom)) 10px;
+        z-index: 40;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        min-height: 62px;
+        padding: 6px;
+        border: 1px solid rgba(148, 163, 184, .24);
+        border-radius: 18px;
+        background: rgba(11, 18, 32, .96);
+        box-shadow: 0 18px 44px rgba(15, 23, 42, .3);
+        backdrop-filter: blur(16px);
+    }
+    .mobile-bottom-nav a,
+    .mobile-bottom-nav button {
+        display: grid;
+        place-items: center;
+        gap: 1px;
+        padding: 4px;
+        border: 0;
+        border-radius: 12px;
+        background: transparent;
+        color: #91a0b7;
+        font-size: 9px;
+        font-weight: 750;
+    }
+    .mobile-bottom-nav span { font-size: 17px; line-height: 1; }
+    .mobile-bottom-nav a.active { background: rgba(37, 99, 235, .25); color: #fff; }
 }
 
 @media (max-width: 640px) {
@@ -811,6 +939,7 @@ dialog > form {
     .form-grid > * { grid-column: auto !important; }
     .panel-header, .section-heading { align-items: stretch; flex-direction: column; }
     .topbar-date { display: none; }
+    .install-control { padding-inline: 9px; }
     .dialog-actions { flex-direction: column-reverse; }
     .dialog-actions > * { width: 100%; }
 }

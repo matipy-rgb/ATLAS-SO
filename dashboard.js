@@ -2,6 +2,7 @@
     const A = window.Atlas;
     const categoryLabels = {
         work: "Trabajo",
+        hr: "RRHH",
         study: "Estudios",
         finance: "Finanzas",
         health: "Salud",
@@ -53,7 +54,8 @@
     function setGreeting() {
         const hour = new Date().getHours();
         const salutation = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
-        greeting.textContent = `${salutation}, Matías.`;
+        const firstName = A.getUserName().split(/\s+/)[0];
+        greeting.textContent = `${salutation}, ${firstName}.`;
     }
 
     function getData() {
@@ -64,6 +66,8 @@
             health: A.readArray("atlasHealthRecords"),
             projects: A.readArray("atlasProjects"),
             work: A.readArray("atlasWorkRecords"),
+            hrPeople: A.readArray("atlasHRPeople"),
+            hrAbsences: A.readArray("atlasHRAbsences"),
             habits: A.readArray("atlasHabits")
         };
     }
@@ -121,6 +125,27 @@
                 detail: days < 0 ? `Plazo vencido · ${Number(item.progress || 0)}% avanzado` : `${days === 0 ? "vence hoy" : `faltan ${days} día(s)`} · ${Number(item.progress || 0)}% avanzado`,
                 href: "projects.html",
                 className: days < 0 ? "critical" : "warning"
+            });
+        });
+
+        const employeeNames = new Map(data.hrPeople.map(item => [String(item.id), item.fullName || item.name || "Funcionario"]));
+        data.hrAbsences.filter(item => !item.actualReturnDate && !item.cancelled).forEach(item => {
+            const returnDate = item.returnDate || item.endDate;
+            const untilReturn = A.daysUntil(returnDate);
+            const untilStart = A.daysUntil(item.startDate);
+            if (untilStart > 7 || untilReturn > 7) return;
+            const employee = employeeNames.get(String(item.employeeId)) || "Funcionario";
+            attention.push({
+                severity: untilReturn < 0 ? 0 : untilReturn === 0 ? 1 : 2,
+                icon: "R",
+                title: untilReturn < 0 ? `Reintegro pendiente · ${employee}` : `Reintegro de ${employee}`,
+                detail: untilReturn < 0
+                    ? `Debía presentarse hace ${Math.abs(untilReturn)} día(s)`
+                    : untilReturn === 0
+                        ? "Debe presentarse hoy"
+                        : `Se presenta en ${untilReturn} día(s)`,
+                href: "rrhh.html",
+                className: untilReturn < 0 ? "critical" : "warning"
             });
         });
 
@@ -194,11 +219,18 @@
             : 0;
         const today = A.localDate();
         const completedHabits = data.habits.filter(item => Array.isArray(item.history) && item.history.includes(today)).length;
+        const openAbsences = data.hrAbsences.filter(item => !item.actualReturnDate && !item.cancelled);
+        const activeAbsences = openAbsences.filter(item => A.daysUntil(item.startDate) <= 0 && A.daysUntil(item.endDate) >= 0);
+        const nextReturn = [...openAbsences]
+            .filter(item => A.daysUntil(item.returnDate || item.endDate) >= 0)
+            .sort((a, b) => String(a.returnDate || a.endDate).localeCompare(String(b.returnDate || b.endDate)))[0];
+        const hrNames = new Map(data.hrPeople.map(item => [String(item.id), item.fullName || item.name || "Funcionario"]));
 
         const cards = [
             { key: "finance", icon: "₲", label: "Finanzas", value: pendingObligations.length ? A.formatMoney(pendingAmount) : "Al día", detail: pendingObligations.length ? `${pendingObligations.length} cuenta(s) por pagar` : "Sin pagos pendientes", href: "finance.html" },
             { key: "study", icon: "E", label: "Estudios", value: pendingStudies.length ? `${pendingStudies.length} pendiente(s)` : "Agenda limpia", detail: pendingStudies[0] ? `${pendingStudies[0].title} · ${A.formatDate(pendingStudies[0].date)}` : "No hay entregas abiertas", href: "study.html" },
             { key: "work", icon: "T", label: "Trabajo", value: A.formatMoney(workNet), detail: `${monthWork.reduce((sum, item) => sum + Number(item.hours || 0), 0)} h registradas este mes`, href: "work.html" },
+            { key: "rrhh", icon: "R", label: "Recursos Humanos", value: activeAbsences.length ? `${activeAbsences.length} ausencia(s)` : "Sin ausencias", detail: nextReturn ? `Próximo reintegro: ${hrNames.get(String(nextReturn.employeeId)) || "Funcionario"} · ${A.formatDate(nextReturn.returnDate || nextReturn.endDate)}` : `${data.hrPeople.length} funcionario(s) registrados`, href: "rrhh.html" },
             { key: "health", icon: "+", label: "Salud", value: latestHealth?.weight ? `${latestHealth.weight} kg` : "Sin registro", detail: latestHealth ? `${latestHealth.sleep || 0} h sueño · ${latestHealth.water || 0} L agua` : "Medí tu punto de partida", href: "health.html" },
             { key: "projects", icon: "P", label: "Proyectos", value: activeProjects.length ? `${activeProjects.length} activo(s)` : "Sin activos", detail: activeProjects.length ? `${projectProgress}% de avance promedio` : "Creá el próximo proyecto", href: "projects.html" },
             { key: "personal", icon: "H", label: "Personal", value: data.habits.length ? `${completedHabits}/${data.habits.length} hoy` : "Sin hábitos", detail: data.habits.length ? `${Math.round(completedHabits / data.habits.length * 100)}% completado` : "Definí tu sistema diario", href: "personal.html" }
@@ -286,6 +318,8 @@
         data.studies.filter(item => item.completed).forEach(item => events.push({ date: item.completedAt || item.completedDate || item.date, title: item.title, detail: "Actividad académica completada" }));
         data.health.forEach(item => events.push({ date: item.date, title: "Registro de salud", detail: `${item.weight || "—"} kg · ${item.sleep || "—"} h de sueño` }));
         data.work.forEach(item => events.push({ date: item.date, title: item.description || item.client || "Jornada registrada", detail: `${item.hours || 0} h trabajadas` }));
+        const employeeNames = new Map(data.hrPeople.map(item => [String(item.id), item.fullName || item.name || "Funcionario"]));
+        data.hrAbsences.forEach(item => events.push({ date: item.createdAt || item.startDate, title: employeeNames.get(String(item.employeeId)) || "Funcionario", detail: `Ausencia registrada · ${item.type || "otro"}` }));
         events.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
 
         if (!events.length) {
@@ -373,12 +407,12 @@
         document.querySelector(`#${button.dataset.closeDialog}`)?.close();
     }));
 
-    quickNotes.value = localStorage.getItem("atlasQuickNotes") || "";
+    quickNotes.value = A.readJSON("atlasQuickNotes", "") || "";
     quickNotes.addEventListener("input", () => {
         notesStatus.textContent = "Guardando…";
         clearTimeout(notesTimer);
         notesTimer = setTimeout(() => {
-            localStorage.setItem("atlasQuickNotes", quickNotes.value);
+            A.writeJSON("atlasQuickNotes", quickNotes.value);
             notesStatus.textContent = "Guardado";
         }, 350);
     });
@@ -444,6 +478,8 @@
                     healthRecords: A.readArray("atlasHealthRecords"),
                     projects: A.readArray("atlasProjects"),
                     workRecords: A.readArray("atlasWorkRecords"),
+                    hrPeople: A.readArray("atlasHRPeople"),
+                    hrAbsences: A.readArray("atlasHRAbsences"),
                     habits: A.readArray("atlasHabits"),
                     workSettings: A.readJSON("atlasWorkSettings", {}),
                     receipts
@@ -515,17 +551,19 @@
                 healthRecords: "atlasHealthRecords",
                 projects: "atlasProjects",
                 workRecords: "atlasWorkRecords",
+                hrPeople: "atlasHRPeople",
+                hrAbsences: "atlasHRAbsences",
                 habits: "atlasHabits"
             };
             Object.entries(mapping).forEach(([property, key]) => {
-                if (Array.isArray(data[property])) localStorage.setItem(key, JSON.stringify(data[property]));
+                if (Array.isArray(data[property])) A.writeJSON(key, data[property]);
             });
-            if (typeof data.notes === "string") localStorage.setItem("atlasQuickNotes", data.notes);
+            if (typeof data.notes === "string") A.writeJSON("atlasQuickNotes", data.notes);
             if (data.workSettings && typeof data.workSettings === "object") {
-                localStorage.setItem("atlasWorkSettings", JSON.stringify(data.workSettings));
+                A.writeJSON("atlasWorkSettings", data.workSettings);
             }
             await restoreReceipts(data.receipts);
-            quickNotes.value = localStorage.getItem("atlasQuickNotes") || "";
+            quickNotes.value = A.readJSON("atlasQuickNotes", "") || "";
             backupStatus.textContent = "Copia restaurada correctamente.";
             renderAll();
             A.notify("Todos los módulos fueron restaurados.");
