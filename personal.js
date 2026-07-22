@@ -1,361 +1,112 @@
-const habitForm =
-    document.querySelector("#habitForm");
+(function () {
+    const A = window.Atlas;
+    const KEY = "atlasHabits";
+    const areaLabels = { health: "Salud", study: "Estudios", finance: "Finanzas", personal: "Personal", work: "Trabajo" };
+    let habits = A.readArray(KEY).map(item => ({
+        ...item,
+        id: item.id || A.createId(),
+        name: item.name || item.title || "Hábito",
+        area: item.area || item.category || "personal",
+        history: Array.isArray(item.history) ? [...new Set(item.history.map(String))] : []
+    }));
 
-const habitName =
-    document.querySelector("#habitName");
+    const list = document.querySelector("#habitList");
+    const dialog = document.querySelector("#habitDialog");
+    const form = document.querySelector("#habitForm");
 
-const habitList =
-    document.querySelector("#habitList");
+    function save() { A.writeJSON(KEY, habits); }
 
-const totalHabits =
-    document.querySelector("#totalHabits");
-
-const completedToday =
-    document.querySelector("#completedToday");
-
-const bestStreak =
-    document.querySelector("#bestStreak");
-
-const habitProgressText =
-    document.querySelector("#habitProgressText");
-
-const habitProgressLabel =
-    document.querySelector("#habitProgressLabel");
-
-const habitProgressBar =
-    document.querySelector("#habitProgressBar");
-
-function getLocalDateValue(date = new Date()) {
-    const localDate = new Date(
-        date.getTime() -
-        date.getTimezoneOffset() * 60000
-    );
-
-    return localDate.toISOString().slice(0, 10);
-}
-
-function changeDate(dateValue, numberOfDays) {
-    const parts = dateValue
-        .split("-")
-        .map(Number);
-
-    const date = new Date(
-        parts[0],
-        parts[1] - 1,
-        parts[2]
-    );
-
-    date.setDate(
-        date.getDate() + numberOfDays
-    );
-
-    return getLocalDateValue(date);
-}
-
-function loadHabits() {
-    try {
-        const storedHabits = JSON.parse(
-            localStorage.getItem("atlasHabits")
-        ) || [];
-
-        return storedHabits.map(function (habit) {
-            return {
-                id: habit.id,
-                name: habit.name,
-                createdAt: habit.createdAt,
-                history: Array.isArray(habit.history)
-                    ? habit.history
-                    : []
-            };
-        });
-    } catch (error) {
-        console.error(
-            "No se cargaron los hábitos:",
-            error
-        );
-
-        return [];
-    }
-}
-
-let habits = loadHabits();
-
-function saveHabits() {
-    localStorage.setItem(
-        "atlasHabits",
-        JSON.stringify(habits)
-    );
-}
-
-function calculateStreak(habit) {
-    const completedDates =
-        new Set(habit.history);
-
-    let currentDate = getLocalDateValue();
-
-    if (!completedDates.has(currentDate)) {
-        currentDate = changeDate(
-            currentDate,
-            -1
-        );
+    function dateOffset(days) {
+        const date = new Date();
+        date.setDate(date.getDate() + days);
+        return A.localDate(date);
     }
 
-    let streak = 0;
-
-    while (completedDates.has(currentDate)) {
-        streak += 1;
-
-        currentDate = changeDate(
-            currentDate,
-            -1
-        );
+    function streak(habit) {
+        const history = new Set(habit.history);
+        let date = A.localDate();
+        if (!history.has(date)) date = dateOffset(-1);
+        let count = 0;
+        while (history.has(date)) {
+            count += 1;
+            const parsed = A.parseDate(date);
+            parsed.setDate(parsed.getDate() - 1);
+            date = A.localDate(parsed);
+        }
+        return count;
     }
 
-    return streak;
-}
+    function render() {
+        const today = A.localDate();
+        const done = habits.filter(item => item.history.includes(today)).length;
+        const progress = habits.length ? Math.round(done / habits.length * 100) : 0;
+        const best = habits.length ? Math.max(...habits.map(streak)) : 0;
+        const dates = Array.from({ length: 7 }, (_, index) => dateOffset(index - 6));
+        const possible = habits.length * 7;
+        const weeklyDone = habits.reduce((sum, habit) => sum + dates.filter(date => habit.history.includes(date)).length, 0);
+        const weekRate = possible ? Math.round(weeklyDone / possible * 100) : 0;
 
-function updateHabitSummary() {
-    const today = getLocalDateValue();
+        document.querySelector("#habitCount").textContent = habits.length;
+        document.querySelector("#habitDoneToday").textContent = done;
+        document.querySelector("#habitTodayCaption").textContent = habits.length ? `${progress}% del día` : "Sin hábitos";
+        document.querySelector("#habitBestStreak").textContent = `${best} día${best === 1 ? "" : "s"}`;
+        document.querySelector("#habitWeekRate").textContent = `${weekRate}%`;
+        document.querySelector("#habitProgressLabel").textContent = `${done}/${habits.length}`;
+        document.querySelector("#habitProgressBar").style.width = `${progress}%`;
 
-    const completedCount = habits.filter(
-        function (habit) {
-            return habit.history.includes(today);
-        }
-    ).length;
-
-    const streaks = habits.map(
-        function (habit) {
-            return calculateStreak(habit);
-        }
-    );
-
-    const highestStreak =
-        streaks.length === 0
-            ? 0
-            : Math.max(...streaks);
-
-    const progress = habits.length === 0
-        ? 0
-        : Math.round(
-            (completedCount / habits.length) * 100
-        );
-
-    totalHabits.textContent =
-        habits.length;
-
-    completedToday.textContent =
-        completedCount;
-
-    bestStreak.textContent =
-        `${highestStreak} día(s)`;
-
-    habitProgressText.textContent =
-        `${progress}%`;
-
-    habitProgressLabel.textContent =
-        `${completedCount} de ${habits.length}`;
-
-    habitProgressBar.style.width =
-        `${progress}%`;
-}
-
-function toggleHabit(habitId, completed) {
-    const today = getLocalDateValue();
-
-    habits = habits.map(function (habit) {
-        if (habit.id !== habitId) {
-            return habit;
-        }
-
-        const history = new Set(
-            habit.history
-        );
-
-        if (completed) {
-            history.add(today);
+        if (!habits.length) {
+            list.innerHTML = '<div class="empty-state">Todavía no definiste hábitos. Empezá con tres que realmente puedas sostener.</div>';
         } else {
-            history.delete(today);
+            list.innerHTML = habits.map(item => {
+                const isDone = item.history.includes(today);
+                return `<article class="habit-item ${isDone ? "done" : ""}">
+                    <button class="habit-check" data-action="toggle" data-id="${item.id}" type="button" aria-label="${isDone ? "Desmarcar" : "Completar"}">✓</button>
+                    <div class="habit-copy"><strong>${A.escapeHTML(item.name)}</strong><span>${areaLabels[item.area] || item.area} · racha ${streak(item)} día(s)</span></div>
+                    <div class="record-actions"><button class="danger-button" data-action="delete" data-id="${item.id}" type="button">Eliminar</button></div>
+                </article>`;
+            }).join("");
         }
 
-        return {
-            ...habit,
-            history: Array.from(history)
-        };
-    });
-
-    saveHabits();
-    renderHabits();
-}
-
-function deleteHabit(habitId) {
-    const confirmed = window.confirm(
-        "¿Querés eliminar este hábito?"
-    );
-
-    if (!confirmed) {
-        return;
+        const dayLabels = dates.map(date => new Intl.DateTimeFormat("es-PY", { weekday: "narrow" }).format(A.parseDate(date)));
+        document.querySelector("#habitWeek").innerHTML = habits.length ? `
+            <div class="habit-week-row habit-week-header"><strong>Hábito</strong>${dayLabels.map(label => `<span>${label}</span>`).join("")}</div>
+            ${habits.map(item => `<div class="habit-week-row"><strong>${A.escapeHTML(item.name)}</strong>${dates.map(date => `<span class="habit-dot ${item.history.includes(date) ? "done" : ""}">${item.history.includes(date) ? "✓" : "·"}</span>`).join("")}</div>`).join("")}
+        ` : '<div class="empty-state">La matriz semanal aparecerá cuando agregues hábitos.</div>';
+        A.updateNavCounts();
     }
 
-    habits = habits.filter(
-        function (habit) {
-            return habit.id !== habitId;
-        }
-    );
-
-    saveHabits();
-    renderHabits();
-}
-
-function renderHabits() {
-    habitList.innerHTML = "";
-
-    const today = getLocalDateValue();
-
-    if (habits.length === 0) {
-        const emptyMessage =
-            document.createElement("li");
-
-        emptyMessage.className =
-            "empty-state";
-
-        emptyMessage.textContent =
-            "Todavía no agregaste hábitos.";
-
-        habitList.appendChild(emptyMessage);
-    }
-
-    habits.forEach(function (habit) {
-        const habitItem =
-            document.createElement("li");
-
-        const checkbox =
-            document.createElement("input");
-
-        const habitContent =
-            document.createElement("div");
-
-        const name =
-            document.createElement("strong");
-
-        const habitMeta =
-            document.createElement("div");
-
-        const todayBadge =
-            document.createElement("span");
-
-        const streakBadge =
-            document.createElement("span");
-
-        const deleteButton =
-            document.createElement("button");
-
-        const isCompleted =
-            habit.history.includes(today);
-
-        const streak =
-            calculateStreak(habit);
-
-        habitItem.className = isCompleted
-            ? "habit-item completed"
-            : "habit-item";
-
-        checkbox.type = "checkbox";
-        checkbox.checked = isCompleted;
-
-        habitContent.className =
-            "habit-content";
-
-        name.className = "habit-name";
-        name.textContent = habit.name;
-
-        habitMeta.className = "habit-meta";
-
-        todayBadge.className = isCompleted
-            ? "habit-badge habit-done"
-            : "habit-badge habit-pending";
-
-        todayBadge.textContent = isCompleted
-            ? "✓ Completado hoy"
-            : "Pendiente hoy";
-
-        streakBadge.className =
-            "habit-badge streak-badge";
-
-        streakBadge.textContent =
-            `🔥 Racha: ${streak} día(s)`;
-
-        deleteButton.className =
-            "delete-task";
-
-        deleteButton.type = "button";
-        deleteButton.textContent =
-            "Eliminar";
-
-        checkbox.addEventListener(
-            "change",
-            function () {
-                toggleHabit(
-                    habit.id,
-                    checkbox.checked
-                );
-            }
-        );
-
-        deleteButton.addEventListener(
-            "click",
-            function () {
-                deleteHabit(habit.id);
-            }
-        );
-
-        habitMeta.append(
-            todayBadge,
-            streakBadge
-        );
-
-        habitContent.append(
-            name,
-            habitMeta
-        );
-
-        habitItem.append(
-            checkbox,
-            habitContent,
-            deleteButton
-        );
-
-        habitList.appendChild(habitItem);
-    });
-
-    updateHabitSummary();
-}
-
-habitForm.addEventListener(
-    "submit",
-    function (event) {
+    form.addEventListener("submit", event => {
         event.preventDefault();
+        const name = document.querySelector("#habitName").value.trim();
+        if (!name) return;
+        habits.push({ id: A.createId(), name, area: document.querySelector("#habitArea").value, history: [], createdAt: new Date().toISOString() });
+        save();
+        form.reset();
+        dialog.close();
+        render();
+        A.notify("Hábito agregado.");
+    });
 
-        const name =
-            habitName.value.trim();
-
-        if (name === "") {
-            return;
+    list.addEventListener("click", event => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const habit = habits.find(item => String(item.id) === button.dataset.id);
+        if (!habit) return;
+        if (button.dataset.action === "toggle") {
+            const today = A.localDate();
+            if (habit.history.includes(today)) habit.history = habit.history.filter(date => date !== today);
+            else habit.history.push(today);
         }
+        if (button.dataset.action === "delete") {
+            if (!confirm(`¿Eliminar “${habit.name}” y todo su historial?`)) return;
+            habits = habits.filter(item => item !== habit);
+        }
+        save();
+        render();
+    });
 
-        habits.push({
-            id: Date.now(),
-            name: name,
-            createdAt:
-                new Date().toISOString(),
-            history: []
-        });
-
-        saveHabits();
-        renderHabits();
-
-        habitForm.reset();
-        habitName.focus();
-    }
-);
-
-renderHabits();
+    document.querySelector("#openHabitDialog").addEventListener("click", () => { dialog.showModal(); document.querySelector("#habitName").focus(); });
+    document.querySelector("#closeHabitDialog").addEventListener("click", () => dialog.close());
+    document.querySelector("#cancelHabitDialog").addEventListener("click", () => dialog.close());
+    render();
+})();

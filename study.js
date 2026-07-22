@@ -95,6 +95,10 @@ function loadStudyEvents() {
 
 function saveStudyEvents() {
     localStorage.setItem(STUDY_EVENTS_KEY, JSON.stringify(studyEvents));
+
+    window.dispatchEvent(new CustomEvent("atlas:data-changed", {
+        detail: { key: STUDY_EVENTS_KEY }
+    }));
 }
 
 function reloadStudyEvents() {
@@ -400,6 +404,7 @@ function renderStudyPage() {
     renderStudySummary();
     renderStudyAttention();
     renderStudyEvents();
+    window.Atlas?.updateNavCounts();
 }
 
 function resetStudyForm() {
@@ -605,3 +610,11 @@ document.addEventListener("visibilitychange", () => {
 
 resetStudyForm();
 renderStudyPage();
+
+document.querySelector("#focusStudyForm")?.addEventListener("click", () => {
+    studyInstitution.focus();
+    studyEventForm.closest(".study-card")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+});

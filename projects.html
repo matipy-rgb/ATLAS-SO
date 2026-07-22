@@ -2,139 +2,54 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proyectos | ATLAS SO</title>
-
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="module.css">
+    <link rel="stylesheet" href="projects.css">
+    <script src="atlas.js" defer></script>
     <script src="projects.js" defer></script>
 </head>
+<body data-page="projects" data-context="Objetivos convertidos en próximos pasos">
+    <div class="app-frame"><div class="app-workspace">
+        <main class="page-content">
+            <section class="page-hero">
+                <div><p class="page-eyebrow">PROYECTOS</p><h1>Tablero de avance</h1><p>Cada proyecto debe tener una fecha, un porcentaje y una siguiente acción concreta.</p></div>
+                <div class="page-hero-actions"><button id="openProjectDialog" class="primary-button" type="button">＋ Nuevo proyecto</button></div>
+            </section>
 
-<body>
-    <main class="dashboard">
-        <header class="page-header">
-            <a class="back-link" href="index.html">
-                ← Volver al panel
-            </a>
+            <section class="summary-grid">
+                <article class="summary-item"><span>Proyectos activos</span><strong id="activeProjectCount">0</strong><small id="projectCountCaption">Sin proyectos</small></article>
+                <article class="summary-item warning"><span>Vencidos</span><strong id="overdueProjectCount">0</strong><small>Plazo superado</small></article>
+                <article class="summary-item purple"><span>Avance promedio</span><strong id="averageProjectProgress">0%</strong><small>Solo proyectos activos</small></article>
+                <article class="summary-item positive"><span>Completados</span><strong id="completedProjectCount">0</strong><small>Histórico total</small></article>
+            </section>
 
-            <span class="brand">ATLAS SO</span>
+            <section class="panel">
+                <header class="panel-header">
+                    <div><p class="section-kicker">PORTAFOLIO PERSONAL</p><h2>Proyectos</h2><p id="projectListCaption">0 proyectos</p></div>
+                    <div class="filter-row"><input id="projectSearch" type="search" placeholder="Buscar proyecto"><select id="projectStatusFilter"><option value="active">Activos</option><option value="attention">Requieren atención</option><option value="completed">Completados</option><option value="all">Todos</option></select></div>
+                </header>
+                <div id="projectBoard" class="project-board"></div>
+            </section>
+        </main>
+    </div></div>
 
-            <h1>Proyectos</h1>
-
-            <p class="page-description">
-                Convertí tus ideas en avances medibles.
-            </p>
-        </header>
-
-        <section class="project-summary">
-            <article class="project-summary-card">
-                <span>Total</span>
-                <strong id="totalProjects">0</strong>
-            </article>
-
-            <article class="project-summary-card">
-                <span>Activos</span>
-                <strong id="activeProjects">0</strong>
-            </article>
-
-            <article class="project-summary-card">
-                <span>Completados</span>
-                <strong id="completedProjects">0</strong>
-            </article>
-
-            <article class="project-summary-card">
-                <span>Progreso general</span>
-                <strong id="averageProgress">0%</strong>
-            </article>
-        </section>
-
-        <section
-            id="projectFormSection"
-            class="status-card project-form-card"
-        >
-            <h2>Registrar proyecto</h2>
-
-            <form id="projectForm" class="project-form">
-                <input
-                    id="projectName"
-                    type="text"
-                    placeholder="Nombre del proyecto"
-                    autocomplete="off"
-                    required
-                >
-
-                <input
-                    id="projectNextStep"
-                    type="text"
-                    placeholder="Próximo paso"
-                    autocomplete="off"
-                    required
-                >
-
-                <input
-                    id="projectProgress"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value="0"
-                    aria-label="Porcentaje de progreso"
-                    required
-                >
-
-                <select
-                    id="projectStatus"
-                    aria-label="Estado del proyecto"
-                >
-                    <option value="active">
-                        Activo
-                    </option>
-
-                    <option value="paused">
-                        Pausado
-                    </option>
-
-                    <option value="completed">
-                        Completado
-                    </option>
-                </select>
-
-                <div class="project-form-actions">
-                    <button
-                        id="projectSubmitButton"
-                        class="primary-button"
-                        type="submit"
-                    >
-                        Agregar
-                    </button>
-
-                    <button
-                        id="cancelProjectEdit"
-                        class="secondary-button"
-                        type="button"
-                        hidden
-                    >
-                        Cancelar
-                    </button>
-                </div>
-            </form>
-        </section>
-
-        <section class="status-card project-list-card">
-            <div class="section-heading">
-                <h2>Mis proyectos</h2>
-
-                <p>
-                    Actualizá el porcentaje cada vez que avances.
-                </p>
+    <dialog id="projectDialog">
+        <form id="projectForm">
+            <input id="projectId" type="hidden">
+            <div class="dialog-heading"><div><p class="section-kicker">PLAN DE EJECUCIÓN</p><h2 id="projectDialogTitle">Nuevo proyecto</h2><p>Definí lo que sigue para que el proyecto no quede decorando la lista.</p></div><button class="icon-button" id="closeProjectDialog" type="button">×</button></div>
+            <div class="form-grid">
+                <label class="field span-8"><span>Nombre</span><input id="projectName" type="text" maxlength="100" placeholder="Ej: Terminar ATLAS SO para escritorio" required></label>
+                <label class="field span-4"><span>Área</span><select id="projectArea"><option value="technology">Tecnología</option><option value="home">Casa / Taller</option><option value="work">Trabajo</option><option value="study">Estudios</option><option value="finance">Finanzas</option><option value="personal">Personal</option></select></label>
+                <label class="field span-8"><span>Próxima acción</span><input id="projectNextAction" type="text" maxlength="160" placeholder="Ej: Probar todos los módulos en PC" required></label>
+                <label class="field span-4"><span>Fecha objetivo</span><input id="projectDeadline" type="date"></label>
+                <label class="field span-8"><span>Avance</span><input id="projectProgress" type="range" min="0" max="100" step="5" value="0"><small id="projectProgressValue" class="field-help">0%</small></label>
+                <label class="field span-4"><span>Estado</span><select id="projectStatus"><option value="active">Activo</option><option value="paused">Pausado</option><option value="completed">Completado</option></select></label>
+                <label class="field span-12"><span>Notas</span><textarea id="projectNotes" rows="3" maxlength="500" placeholder="Alcance, restricción o decisión importante"></textarea></label>
             </div>
-
-            <ul id="projectList"></ul>
-        </section>
-    </main>
+            <div class="dialog-actions"><button id="cancelProjectDialog" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar proyecto</button></div>
+        </form>
+    </dialog>
 </body>
 </html>

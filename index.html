@@ -2,322 +2,184 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <meta
-        name="description"
-        content="ATLAS SO - Sistema personal de organización"
-    >
-
-    <title>ATLAS SO | Personal Dashboard</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b1220">
+    <title>Centro de mando | ATLAS SO</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="script.js" defer></script>
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="atlas.js" defer></script>
+    <script src="dashboard.js" defer></script>
 </head>
+<body data-page="dashboard" data-context="Tu panorama real, en una sola pantalla">
+    <div class="app-frame">
+        <div class="app-workspace">
+            <main class="page-content dashboard-page">
+                <section class="dashboard-hero">
+                    <div>
+                        <p class="page-eyebrow">CENTRO DE MANDO</p>
+                        <h1 id="dashboardGreeting">Buenas noches, Matías.</h1>
+                        <p id="dashboardHeadline">Revisando lo que requiere tu atención.</p>
+                    </div>
+                    <div class="hero-actions">
+                        <button id="openTaskDialog" class="primary-button" type="button">＋ Nueva tarea</button>
+                        <button id="openBackupDialog" class="secondary-button" type="button">Respaldo</button>
+                    </div>
+                </section>
 
-<body>
-    <main class="dashboard">
-        <header class="dashboard-header">
-            <span class="brand">ATLAS SO</span>
+                <section class="command-grid">
+                    <article class="panel attention-panel">
+                        <header class="panel-header">
+                            <div>
+                                <p class="section-kicker">PRIORIDAD OPERATIVA</p>
+                                <h2>Centro de atención</h2>
+                                <p>Lo urgente aparece solo; no tenés que buscarlo módulo por módulo.</p>
+                            </div>
+                            <span id="attentionBadge" class="status-badge tag-info">0 alertas</span>
+                        </header>
+                        <div id="attentionList" class="attention-list"></div>
+                    </article>
 
-            <h1>
-                <span id="greeting">Buen día</span>, Matías.
-            </h1>
+                    <aside class="panel daily-panel">
+                        <header class="panel-header">
+                            <div>
+                                <p class="section-kicker">EJECUCIÓN</p>
+                                <h2>Estado de hoy</h2>
+                            </div>
+                            <strong id="dailyScore">0%</strong>
+                        </header>
+                        <div class="daily-score-wrap">
+                            <div class="progress-track"><div id="dailyScoreBar" class="progress-bar"></div></div>
+                            <p id="dailyScoreCaption">Todavía no hay mediciones de hoy.</p>
+                        </div>
+                        <div id="dailyChecklist" class="daily-checklist"></div>
+                    </aside>
+                </section>
 
-            <div class="date-row">
-                <p id="currentDate" class="date"></p>
-                <p id="currentTime" class="time"></p>
-            </div>
+                <section class="modules-section">
+                    <div class="section-title-row">
+                        <div>
+                            <p class="section-kicker">PANORAMA GENERAL</p>
+                            <h2>Áreas de tu sistema</h2>
+                        </div>
+                        <p>Indicadores reales, no contadores decorativos.</p>
+                    </div>
+                    <div id="moduleOverview" class="module-overview"></div>
+                </section>
 
-            <p class="intro">
-                Estoy construyendo mi propio sistema.
-            </p>
-        </header>
+                <section class="dashboard-lower-grid">
+                    <article class="panel tasks-panel" id="tasks">
+                        <header class="panel-header">
+                            <div>
+                                <p class="section-kicker">BANDEJA RÁPIDA</p>
+                                <h2>Tareas y decisiones</h2>
+                                <p>Acciones sueltas que no necesitan convertirse en un módulo entero.</p>
+                            </div>
+                            <div class="segmented-control" id="taskFilters">
+                                <button class="active" data-filter="pending" type="button">Pendientes</button>
+                                <button data-filter="today" type="button">Hoy</button>
+                                <button data-filter="completed" type="button">Hechas</button>
+                            </div>
+                        </header>
+                        <div id="taskList" class="task-list"></div>
+                    </article>
 
-        <section
-            class="module-grid"
-            aria-label="Resumen por categoría"
-        >
-            <a
-    class="module-card module-link"
-    href="work.html"
->
-    <span class="module-icon">💼</span>
+                    <aside class="utility-stack">
+                        <article class="panel compact-panel">
+                            <header class="panel-header">
+                                <div>
+                                    <p class="section-kicker">ÚLTIMO MOVIMIENTO</p>
+                                    <h2>Actividad reciente</h2>
+                                </div>
+                            </header>
+                            <div id="recentActivity" class="recent-activity"></div>
+                        </article>
 
-    <div>
-        <h2>Trabajo</h2>
-
-        <p>
-            <strong data-category-count="work">0</strong>
-            pendientes
-        </p>
-    </div>
-</a>
-
-            <a
-    class="module-card module-link"
-    href="study.html"
->
-    <span class="module-icon">🎓</span>
-
-    <div>
-        <h2>Estudios</h2>
-
-        <p>
-            <strong data-category-count="study">0</strong>
-            pendientes
-        </p>
-    </div>
-</a>
-
-            <a
-    class="module-card module-link"
-    href="finance.html"
->
-    <span class="module-icon">💰</span>
-
-    <div>
-        <h2>Finanzas</h2>
-
-        <p>
-            <strong data-category-count="finance">0</strong>
-            pendientes
-        </p>
-    </div>
-</a>
-
-            <a
-    class="module-card module-link"
-    href="health.html"
->
-    <span class="module-icon">💪</span>
-
-    <div>
-        <h2>Salud</h2>
-
-        <p>
-            <strong data-category-count="health">0</strong>
-            pendientes
-        </p>
-    </div>
-</a>
-
-            <a
-    class="module-card module-link"
-    href="projects.html"
->
-    <span class="module-icon">🛠️</span>
-
-    <div>
-        <h2>Proyectos</h2>
-
-        <p>
-            <strong data-category-count="projects">0</strong>
-            pendientes
-        </p>
-    </div>
-</a>
-
-            <a
-    class="module-card module-link"
-    href="personal.html"
->
-    <span class="module-icon">👤</span>
-
-    <div>
-        <h2>Personal</h2>
-
-        <p>
-            <strong data-category-count="personal">0</strong>
-            pendientes
-        </p>
-    </div>
-</a>
-        </section>
-
-        <section class="status-card progress-card">
-            <div class="status-heading">
-                <h2>Progreso de hoy</h2>
-                <span id="progressText">0%</span>
-            </div>
-
-            <div
-                class="progress-track"
-                aria-label="Progreso de tareas"
-            >
-                <div
-                    id="progressBar"
-                    class="progress-bar"
-                ></div>
-            </div>
-
-            <p id="statusMessage">
-                Todavía no agregaste tareas.
-            </p>
-        </section>
-
-        <section
-            id="tasksSection"
-            class="status-card tasks-card"
-        >
-            <h2>Tareas de hoy</h2>
-
-            <div class="task-form">
-                <input
-                    id="taskInput"
-                    type="text"
-                    placeholder="Escribí una tarea"
-                    autocomplete="off"
-                >
-
-                <select
-                    id="taskCategory"
-                    aria-label="Categoría"
-                >
-                    <option value="work">
-                        💼 Trabajo
-                    </option>
-
-                    <option value="study">
-                        🎓 Estudios
-                    </option>
-
-                    <option value="finance">
-                        💰 Finanzas
-                    </option>
-
-                    <option value="health">
-                        💪 Salud
-                    </option>
-
-                    <option value="projects">
-                        🛠️ Proyectos
-                    </option>
-
-                    <option value="personal">
-                        👤 Personal
-                    </option>
-                </select>
-
-                <select
-                    id="taskPriority"
-                    aria-label="Prioridad"
-                >
-                    <option value="normal">
-                        Prioridad normal
-                    </option>
-
-                    <option value="high">
-                        Prioridad alta
-                    </option>
-                </select>
-
-                <button
-                    id="addTaskButton"
-                    type="button"
-                >
-                    Agregar
-                </button>
-            </div>
-
-            <div
-                class="task-filters"
-                aria-label="Filtrar tareas"
-            >
-                <button
-                    class="filter-button active"
-                    data-filter="all"
-                    type="button"
-                >
-                    Todas
-                </button>
-
-                <button
-                    class="filter-button"
-                    data-filter="pending"
-                    type="button"
-                >
-                    Pendientes
-                </button>
-
-                <button
-                    class="filter-button"
-                    data-filter="completed"
-                    type="button"
-                >
-                    Completadas
-                </button>
-            </div>
-
-            <ul id="taskList"></ul>
-        </section>
-<section class="status-card notes-card">
-    <div class="notes-heading">
-        <div>
-            <h2>Notas rápidas</h2>
-
-            <p>
-                Ideas, recordatorios o información temporal.
-            </p>
-        </div>
-
-        <span id="notesStatus">
-            Guardado
-        </span>
-    </div>
-
-    <textarea
-        id="quickNotes"
-        placeholder="Escribí algo que no querés olvidar..."
-    ></textarea>
-</section>
-<section class="status-card backup-card">
-    <div class="backup-heading">
-        <div>
-            <h2>Copias de seguridad</h2>
-
-            <p>
-                Protegé los datos de todos los módulos de ATLAS SO.
-            </p>
-        </div>
-
-        <div class="backup-actions">
-            <button
-                id="exportButton"
-                class="export-button"
-                type="button"
-            >
-                Exportar
-            </button>
-
-            <button
-                id="importButton"
-                class="import-button"
-                type="button"
-            >
-                Importar
-            </button>
-
-            <input
-                id="importFile"
-                type="file"
-                accept=".json,application/json"
-                hidden
-            >
+                        <article class="panel compact-panel" id="backup">
+                            <header class="panel-header">
+                                <div>
+                                    <p class="section-kicker">CAPTURA RÁPIDA</p>
+                                    <h2>Bloc inmediato</h2>
+                                </div>
+                                <span id="notesStatus" class="save-status">Guardado</span>
+                            </header>
+                            <div class="notes-wrap">
+                                <textarea id="quickNotes" rows="5" placeholder="Algo que todavía no sabés dónde ubicar..."></textarea>
+                            </div>
+                        </article>
+                    </aside>
+                </section>
+            </main>
         </div>
     </div>
 
-    <p id="backupStatus" role="status"></p>
-</section>
-        <footer>
-            <p class="quote">
-                “Lo que no se mide, no se mejora.”
-            </p>
-        </footer>
-    </main>
+    <dialog id="taskDialog">
+        <form id="taskForm">
+            <div class="dialog-heading">
+                <div>
+                    <p class="section-kicker">ACCIÓN RÁPIDA</p>
+                    <h2>Nueva tarea</h2>
+                    <p>Definí qué, cuándo y con qué prioridad.</p>
+                </div>
+                <button class="icon-button" data-close-dialog="taskDialog" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <div class="form-grid">
+                <label class="field span-12">
+                    <span>Tarea</span>
+                    <input id="taskText" type="text" maxlength="140" placeholder="Ej: Enviar planilla aprobada a BDP" required>
+                </label>
+                <label class="field span-4">
+                    <span>Área</span>
+                    <select id="taskCategory">
+                        <option value="work">Trabajo</option>
+                        <option value="study">Estudios</option>
+                        <option value="finance">Finanzas</option>
+                        <option value="health">Salud</option>
+                        <option value="projects">Proyectos</option>
+                        <option value="personal">Personal</option>
+                    </select>
+                </label>
+                <label class="field span-4">
+                    <span>Prioridad</span>
+                    <select id="taskPriority">
+                        <option value="normal">Normal</option>
+                        <option value="high">Alta</option>
+                    </select>
+                </label>
+                <label class="field span-4">
+                    <span>Fecha objetivo</span>
+                    <input id="taskDueDate" type="date">
+                </label>
+            </div>
+            <div class="dialog-actions">
+                <button class="secondary-button" data-close-dialog="taskDialog" type="button">Cancelar</button>
+                <button class="primary-button" type="submit">Agregar tarea</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="backupDialog">
+        <div class="dialog-content">
+            <div class="dialog-heading">
+                <div>
+                    <p class="section-kicker">SEGURIDAD DE DATOS</p>
+                    <h2>Copia completa</h2>
+                    <p>Incluye módulos, notas y comprobantes adjuntos.</p>
+                </div>
+                <button class="icon-button" data-close-dialog="backupDialog" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <div class="backup-options">
+                <button id="exportBackup" class="backup-option" type="button">
+                    <strong>Exportar copia</strong>
+                    <span>Descarga un archivo con toda tu información.</span>
+                </button>
+                <button id="importBackup" class="backup-option" type="button">
+                    <strong>Restaurar copia</strong>
+                    <span>Reemplaza los datos actuales por los del archivo.</span>
+                </button>
+                <input id="backupFile" type="file" accept="application/json,.json" hidden>
+            </div>
+            <p id="backupStatus" class="backup-status">La copia se guarda únicamente cuando vos la descargás.</p>
+        </div>
+    </dialog>
 </body>
 </html>

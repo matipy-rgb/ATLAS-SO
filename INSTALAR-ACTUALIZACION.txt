@@ -1,0 +1,25 @@
+ATLAS SO — ACTUALIZACIÓN DE ESCRITORIO
+
+1. Antes de reemplazar archivos, entrá a la versión actual de ATLAS SO y exportá una copia de seguridad.
+2. Copiá TODOS los archivos de este paquete dentro de la carpeta del proyecto.
+3. Aceptá reemplazar los archivos existentes.
+4. No borres los datos del navegador: la actualización conserva las claves anteriores de localStorage.
+5. Abrí index.html mediante Live Server y presioná Ctrl + F5.
+6. Verificá Finanzas, Estudios, Trabajo, Salud, Proyectos y Personal.
+
+ARCHIVOS RETIRADOS
+
+- dashboard-finance.js ya no se usa. La integración completa está en dashboard.js y atlas.js.
+- Los estilos antiguos aislados fueron reemplazados por un sistema visual común.
+
+RESPALDO
+
+La copia versión 4 incluye tareas, notas, movimientos, cuentas, estudios, salud,
+proyectos, trabajo, hábitos y comprobantes de pago guardados en IndexedDB.
+
+GUARDAR EN GITHUB DESPUÉS DE PROBAR
+
+git status
+git add .
+git commit -m "Rebuild ATLAS SO desktop command center"
+git push

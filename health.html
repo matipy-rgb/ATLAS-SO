@@ -2,130 +2,62 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Salud | ATLAS SO</title>
-
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="module.css">
+    <script src="atlas.js" defer></script>
     <script src="health.js" defer></script>
 </head>
+<body data-page="health" data-context="Seguimiento diario sin humo ni estimaciones">
+    <div class="app-frame"><div class="app-workspace">
+        <main class="page-content">
+            <section class="page-hero">
+                <div><p class="page-eyebrow">SALUD</p><h1>Registro físico</h1><p>Peso, sueño, hidratación y entrenamiento: cuatro datos simples para ver tendencias reales.</p></div>
+                <div class="page-hero-actions"><button id="focusHealthForm" class="primary-button" type="button">＋ Medir hoy</button></div>
+            </section>
 
-<body>
-    <main class="dashboard">
-        <header class="page-header">
-            <a class="back-link" href="index.html">
-                ← Volver al panel
-            </a>
+            <section class="summary-grid">
+                <article class="summary-item"><span>Último peso</span><strong id="latestWeight">—</strong><small id="weightChange">Sin referencia anterior</small></article>
+                <article class="summary-item purple"><span>Sueño promedio · 7 días</span><strong id="averageSleep">—</strong><small>Objetivo sugerido: 7–9 h</small></article>
+                <article class="summary-item"><span>Agua promedio · 7 días</span><strong id="averageWater">—</strong><small>Según tus registros</small></article>
+                <article class="summary-item positive"><span>Entrenamientos · mes</span><strong id="monthlyWorkouts">0</strong><small id="healthTodayStatus">Hoy sin registrar</small></article>
+            </section>
 
-            <span class="brand">ATLAS SO</span>
+            <section class="module-layout">
+                <div class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">CONTROL DIARIO</p><h2 id="healthFormTitle">Registrar el día</h2><p>Si la fecha ya existe, el sistema la actualiza; no la duplica.</p></div></header>
+                        <form id="healthForm" class="module-form form-grid">
+                            <label class="field span-3"><span>Fecha</span><input id="healthDate" type="date" required></label>
+                            <label class="field span-3"><span>Peso (kg)</span><input id="healthWeight" type="number" min="30" max="250" step="0.1" placeholder="90"></label>
+                            <label class="field span-3"><span>Sueño (horas)</span><input id="healthSleep" type="number" min="0" max="24" step="0.5" placeholder="8"></label>
+                            <label class="field span-3"><span>Agua (litros)</span><input id="healthWater" type="number" min="0" max="12" step="0.25" placeholder="3"></label>
+                            <label class="field span-4"><span>Energía del día</span><select id="healthEnergy"><option value="">Sin medir</option><option value="1">1 · Muy baja</option><option value="2">2 · Baja</option><option value="3">3 · Normal</option><option value="4">4 · Buena</option><option value="5">5 · Excelente</option></select></label>
+                            <label class="span-4 checkbox-card"><input id="healthWorkout" type="checkbox"> Entrené este día</label>
+                            <label class="field span-4"><span>Nota</span><input id="healthNote" type="text" maxlength="180" placeholder="Dolor, ánimo o detalle útil"></label>
+                            <div class="span-12 form-actions"><button class="primary-button" type="submit">Guardar medición</button></div>
+                        </form>
+                    </article>
 
-            <h1>Salud</h1>
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">HISTORIAL</p><h2>Mediciones recientes</h2><p id="healthListCaption">0 registros</p></div></header>
+                        <div id="healthList" class="module-list"></div>
+                    </article>
+                </div>
 
-            <p class="page-description">
-                Registrá tus hábitos diarios y medí tu progreso.
-            </p>
-        </header>
-
-        <section class="health-summary">
-            <article class="health-summary-card">
-                <span>Último peso</span>
-                <strong id="latestWeight">Sin datos</strong>
-            </article>
-
-            <article class="health-summary-card">
-                <span>Promedio de sueño</span>
-                <strong id="averageSleep">Sin datos</strong>
-            </article>
-
-            <article class="health-summary-card">
-                <span>Entrenamientos recientes</span>
-                <strong id="recentWorkouts">0 de 7</strong>
-            </article>
-
-            <article class="health-summary-card">
-                <span>Último registro de agua</span>
-                <strong id="latestWater">Sin datos</strong>
-            </article>
-        </section>
-
-        <section class="status-card health-form-card">
-            <h2>Registro diario</h2>
-
-            <form id="healthForm" class="health-form">
-                <input
-                    id="healthDate"
-                    type="date"
-                    required
-                >
-
-                <input
-                    id="healthWeight"
-                    type="number"
-                    min="30"
-                    max="300"
-                    step="0.1"
-                    placeholder="Peso en kg"
-                    required
-                >
-
-                <input
-                    id="sleepHours"
-                    type="number"
-                    min="0"
-                    max="24"
-                    step="0.5"
-                    placeholder="Horas de sueño"
-                    required
-                >
-
-                <input
-                    id="waterLiters"
-                    type="number"
-                    min="0"
-                    max="15"
-                    step="0.1"
-                    placeholder="Agua en litros"
-                    required
-                >
-
-                <select
-                    id="workoutCompleted"
-                    aria-label="Entrenamiento"
-                >
-                    <option value="false">
-                        No entrené
-                    </option>
-
-                    <option value="true">
-                        Entrené
-                    </option>
-                </select>
-
-                <button
-                    class="primary-button"
-                    type="submit"
-                >
-                    Guardar
-                </button>
-            </form>
-        </section>
-
-        <section class="status-card health-history-card">
-            <div class="section-heading">
-                <h2>Historial</h2>
-
-                <p>
-                    Si registrás nuevamente una fecha,
-                    se actualizará ese día.
-                </p>
-            </div>
-
-            <ul id="healthRecordList"></ul>
-        </section>
-    </main>
+                <aside class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">ÚLTIMOS 7 DÍAS</p><h2>Constancia de registro</h2></div></header>
+                        <div id="healthWeek" class="week-strip"></div>
+                    </article>
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">LECTURA RÁPIDA</p><h2>Tendencia</h2></div></header>
+                        <div id="healthInsights" class="stat-list"></div>
+                    </article>
+                </aside>
+            </section>
+        </main>
+    </div></div>
 </body>
 </html>

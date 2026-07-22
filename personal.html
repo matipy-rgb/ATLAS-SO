@@ -2,103 +2,58 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal | ATLAS SO</title>
-
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="module.css">
+    <link rel="stylesheet" href="personal.css">
+    <script src="atlas.js" defer></script>
     <script src="personal.js" defer></script>
 </head>
+<body data-page="personal" data-context="Hábitos diarios, rachas y consistencia semanal">
+    <div class="app-frame"><div class="app-workspace">
+        <main class="page-content">
+            <section class="page-hero">
+                <div><p class="page-eyebrow">PERSONAL</p><h1>Sistema de hábitos</h1><p>Marcá hechos, no intenciones. La semana muestra rápidamente dónde hay constancia y dónde hay excusas.</p></div>
+                <div class="page-hero-actions"><button id="openHabitDialog" class="primary-button" type="button">＋ Nuevo hábito</button></div>
+            </section>
 
-<body>
-    <main class="dashboard">
-        <header class="page-header">
-            <a class="back-link" href="index.html">
-                ← Volver al panel
-            </a>
+            <section class="summary-grid">
+                <article class="summary-item"><span>Hábitos activos</span><strong id="habitCount">0</strong><small>Configurados</small></article>
+                <article class="summary-item positive"><span>Completados hoy</span><strong id="habitDoneToday">0</strong><small id="habitTodayCaption">Sin hábitos</small></article>
+                <article class="summary-item warning"><span>Mejor racha actual</span><strong id="habitBestStreak">0 días</strong><small>Constancia consecutiva</small></article>
+                <article class="summary-item purple"><span>Cumplimiento semanal</span><strong id="habitWeekRate">0%</strong><small>Últimos 7 días</small></article>
+            </section>
 
-            <span class="brand">ATLAS SO</span>
+            <section class="module-layout habit-layout">
+                <div class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">CONTROL DE HOY</p><h2>Hábitos diarios</h2><p>Tocá cada hábito al completarlo.</p></div><strong id="habitProgressLabel">0/0</strong></header>
+                        <div class="habit-progress-wrap"><div class="progress-track"><div id="habitProgressBar" class="progress-bar"></div></div></div>
+                        <div id="habitList" class="habit-list"></div>
+                    </article>
+                </div>
 
-            <h1>Hábitos personales</h1>
+                <aside class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">ÚLTIMOS 7 DÍAS</p><h2>Consistencia</h2></div></header>
+                        <div id="habitWeek" class="habit-week"></div>
+                    </article>
+                    <div class="info-callout"><strong>Regla simple:</strong> si un hábito no ayuda a una meta concreta o no se puede medir con sí/no, probablemente está mal definido.</div>
+                </aside>
+            </section>
+        </main>
+    </div></div>
 
-            <p class="page-description">
-                La constancia convierte acciones pequeñas
-                en resultados grandes.
-            </p>
-        </header>
-
-        <section class="habit-summary">
-            <article class="habit-summary-card">
-                <span>Hábitos activos</span>
-                <strong id="totalHabits">0</strong>
-            </article>
-
-            <article class="habit-summary-card">
-                <span>Completados hoy</span>
-                <strong id="completedToday">0</strong>
-            </article>
-
-            <article class="habit-summary-card">
-                <span>Mejor racha</span>
-                <strong id="bestStreak">0 días</strong>
-            </article>
-
-            <article class="habit-summary-card">
-                <span>Progreso diario</span>
-                <strong id="habitProgressText">0%</strong>
-            </article>
-        </section>
-
-        <section class="status-card habit-progress-card">
-            <div class="status-heading">
-                <h2>Progreso de hoy</h2>
-                <span id="habitProgressLabel">0 de 0</span>
+    <dialog id="habitDialog">
+        <form id="habitForm">
+            <div class="dialog-heading"><div><p class="section-kicker">NUEVO SISTEMA</p><h2>Agregar hábito</h2><p>Usá una acción clara: “Tomar creatina”, no “Ser saludable”.</p></div><button id="closeHabitDialog" class="icon-button" type="button">×</button></div>
+            <div class="form-grid">
+                <label class="field span-8"><span>Hábito</span><input id="habitName" type="text" maxlength="90" placeholder="Ej: Entrenar" required></label>
+                <label class="field span-4"><span>Área</span><select id="habitArea"><option value="health">Salud</option><option value="study">Estudios</option><option value="finance">Finanzas</option><option value="personal">Personal</option><option value="work">Trabajo</option></select></label>
             </div>
-
-            <div class="progress-track">
-                <div
-                    id="habitProgressBar"
-                    class="progress-bar"
-                ></div>
-            </div>
-        </section>
-
-        <section class="status-card habit-form-card">
-            <h2>Agregar hábito</h2>
-
-            <form id="habitForm" class="habit-form">
-                <input
-                    id="habitName"
-                    type="text"
-                    placeholder="Ejemplo: Entrenar"
-                    autocomplete="off"
-                    required
-                >
-
-                <button
-                    class="primary-button"
-                    type="submit"
-                >
-                    Agregar
-                </button>
-            </form>
-        </section>
-
-        <section class="status-card habit-list-card">
-            <div class="section-heading">
-                <h2>Hábitos diarios</h2>
-
-                <p>
-                    Marcá cada hábito cuando lo completes hoy.
-                </p>
-            </div>
-
-            <ul id="habitList"></ul>
-        </section>
-    </main>
+            <div class="dialog-actions"><button id="cancelHabitDialog" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Agregar hábito</button></div>
+        </form>
+    </dialog>
 </body>
 </html>
