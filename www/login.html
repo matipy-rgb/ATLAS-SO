@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
+    <title>Ingresar | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="stylesheet" href="auth.css">
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="auth-page.js?v=0.3.3" defer></script>
+</head>
+<body data-auth-page="login">
+    <main class="auth-layout">
+        <section class="auth-story">
+            <a class="auth-brand" href="login.html" aria-label="ATLAS SO">
+                <span class="auth-brand-mark">A</span>
+                <span><strong>ATLAS SO</strong><small>Sistema operativo personal</small></span>
+            </a>
+
+            <div class="auth-story-copy">
+                <p class="auth-eyebrow">TU INFORMACIÓN, BAJO CONTROL</p>
+                <h1>Una sola cuenta.<br>Todo tu sistema.</h1>
+                <p>Entrá desde la computadora o el teléfono y trabajá siempre sobre el mismo espacio protegido.</p>
+                <div class="auth-benefits">
+                    <span><b>01</b> Datos separados por usuario</span>
+                    <span><b>02</b> Recuperación segura por correo</span>
+                    <span><b>03</b> Sincronización entre dispositivos</span>
+                </div>
+            </div>
+
+            <p class="auth-motto">Lo que no se mide, no se mejora.</p>
+        </section>
+
+        <section class="auth-panel">
+            <div class="auth-card">
+                <div id="setupNotice" class="setup-notice" hidden>
+                    <strong>Falta conectar la base segura</strong>
+                    <p>Completá <code>atlas-config.js</code> con la URL y la publishable key de Supabase.</p>
+                </div>
+
+                <header class="auth-heading">
+                    <p class="auth-eyebrow">ACCESO SEGURO</p>
+                    <h2 id="authTitle">Bienvenido de vuelta</h2>
+                    <p id="authSubtitle">Ingresá con tu correo y contraseña.</p>
+                </header>
+
+                <nav class="auth-tabs" aria-label="Opciones de acceso">
+                    <button class="active" data-auth-view="login" type="button">Ingresar</button>
+                    <button data-auth-view="register" type="button">Crear cuenta</button>
+                </nav>
+
+                <form id="loginForm" class="auth-form" data-auth-form="login">
+                    <label>
+                        <span>Correo electrónico</span>
+                        <input id="loginEmail" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
+                    </label>
+                    <label>
+                        <span>Contraseña</span>
+                        <div class="password-field">
+                            <input id="loginPassword" type="password" autocomplete="current-password" minlength="8" placeholder="Tu contraseña" required>
+                            <button data-toggle-password="loginPassword" type="button" aria-label="Mostrar contraseña">Ver</button>
+                        </div>
+                    </label>
+                    <button class="auth-primary" type="submit">Ingresar a ATLAS SO</button>
+                    <button class="auth-link" data-auth-view="forgot" type="button">¿Olvidaste tu contraseña?</button>
+                </form>
+
+                <form id="registerForm" class="auth-form" data-auth-form="register" hidden>
+                    <label>
+                        <span>Nombre y apellido</span>
+                        <input id="registerName" type="text" autocomplete="name" maxlength="80" placeholder="Tu nombre completo" required>
+                    </label>
+                    <label>
+                        <span>Correo electrónico</span>
+                        <input id="registerEmail" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
+                    </label>
+                    <label>
+                        <span>Contraseña</span>
+                        <div class="password-field">
+                            <input id="registerPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Mínimo 8 caracteres" required>
+                            <button data-toggle-password="registerPassword" type="button" aria-label="Mostrar contraseña">Ver</button>
+                        </div>
+                    </label>
+                    <label class="auth-check">
+                        <input id="registerTerms" type="checkbox" required>
+                        <span>Entiendo que esta cuenta es personal y no debo compartir mi contraseña.</span>
+                    </label>
+                    <button class="auth-primary" type="submit">Crear mi cuenta</button>
+                </form>
+
+                <form id="forgotForm" class="auth-form" data-auth-form="forgot" hidden>
+                    <label>
+                        <span>Correo de la cuenta</span>
+                        <input id="forgotEmail" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
+                    </label>
+                    <button class="auth-primary" type="submit">Enviar enlace de recuperación</button>
+                    <button class="auth-link" data-auth-view="login" type="button">Volver al ingreso</button>
+                </form>
+
+                <div id="authMessage" class="auth-message" role="status" aria-live="polite"></div>
+            </div>
+            <p class="auth-footnote">ATLAS SO · Acceso cifrado y datos aislados por cuenta</p>
+        </section>
+    </main>
+</body>
+</html>

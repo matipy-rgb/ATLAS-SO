@@ -1,4 +1,4 @@
-# ATLAS SO · v0.3.3
+# ATLAS SO · v0.4.1
 
 Centro personal de operaciones para escritorio y teléfono, con acceso por cuenta, recuperación de contraseña y sincronización en la nube.
 
@@ -8,7 +8,8 @@ Centro personal de operaciones para escritorio y teléfono, con acceso por cuent
 - Finanzas con cuentas, vencimientos, pagos parciales y comprobantes.
 - Estudios con instituciones, materias, entregas, avance y resultados.
 - Trabajo con horas, bruto, descuentos y neto.
-- Recursos Humanos con funcionarios, vacaciones, reposos, maternidad y reintegros automáticos.
+- Recursos Humanos privado con funcionarios, clientes, sucursales, horarios, marcaciones, novedades, liquidación y alertas IPS/MTESS.
+- Conversor privado de capturas REOP a CSV IPS para movimientos de permiso, con lectura local, revisión y controles de formato.
 - Salud con peso, sueño, agua y entrenamiento.
 - Proyectos con plazos, progreso y próxima acción.
 - Personal con hábitos, rachas y consistencia semanal.
@@ -22,6 +23,11 @@ Centro personal de operaciones para escritorio y teléfono, con acceso por cuent
 - Migración automática de los datos de la versión anterior al primer usuario que ingrese.
 
 La conexión pública con Supabase ya está cargada en esta compilación. Antes de crear la primera cuenta, completá las direcciones permitidas siguiendo [CONFIGURAR-ACTUALIZACION.md](CONFIGURAR-ACTUALIZACION.md).
+
+Antes de abrir la v0.4.1, ejecutá una sola vez `supabase/v0.4-rrhh-admin.sql`
+en el SQL Editor. La primera cuenta registrada quedará fijada como única
+administradora de RR. HH.; para las demás cuentas el menú, la ruta y los datos
+permanecerán bloqueados.
 
 ## Teléfono y APK
 

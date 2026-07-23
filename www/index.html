@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
+    <title>Centro de mando | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
+</head>
+<body data-page="dashboard" data-script="dashboard.js" data-context="Tu panorama real, en una sola pantalla" data-protected>
+    <div class="app-frame">
+        <div class="app-workspace">
+            <main class="page-content dashboard-page">
+                <section class="dashboard-hero">
+                    <div>
+                        <p class="page-eyebrow">CENTRO DE MANDO</p>
+                        <h1 id="dashboardGreeting">Buenas noches, Matías.</h1>
+                        <p id="dashboardHeadline">Revisando lo que requiere tu atención.</p>
+                    </div>
+                    <div class="hero-actions">
+                        <button id="openTaskDialog" class="primary-button" type="button">＋ Nueva tarea</button>
+                        <button id="openBackupDialog" class="secondary-button" type="button">Respaldo</button>
+                    </div>
+                </section>
+
+                <section class="command-grid">
+                    <article class="panel attention-panel">
+                        <header class="panel-header">
+                            <div>
+                                <p class="section-kicker">PRIORIDAD OPERATIVA</p>
+                                <h2>Centro de atención</h2>
+                                <p>Lo urgente aparece solo; no tenés que buscarlo módulo por módulo.</p>
+                            </div>
+                            <span id="attentionBadge" class="status-badge tag-info">0 alertas</span>
+                        </header>
+                        <div id="attentionList" class="attention-list"></div>
+                    </article>
+
+                    <aside class="panel daily-panel">
+                        <header class="panel-header">
+                            <div>
+                                <p class="section-kicker">EJECUCIÓN</p>
+                                <h2>Estado de hoy</h2>
+                            </div>
+                            <strong id="dailyScore">0%</strong>
+                        </header>
+                        <div class="daily-score-wrap">
+                            <div class="progress-track"><div id="dailyScoreBar" class="progress-bar"></div></div>
+                            <p id="dailyScoreCaption">Todavía no hay mediciones de hoy.</p>
+                        </div>
+                        <div id="dailyChecklist" class="daily-checklist"></div>
+                    </aside>
+                </section>
+
+                <section class="modules-section">
+                    <div class="section-title-row">
+                        <div>
+                            <p class="section-kicker">PANORAMA GENERAL</p>
+                            <h2>Áreas de tu sistema</h2>
+                        </div>
+                        <p>Indicadores reales, no contadores decorativos.</p>
+                    </div>
+                    <div id="moduleOverview" class="module-overview"></div>
+                </section>
+
+                <section class="dashboard-lower-grid">
+                    <article class="panel tasks-panel" id="tasks">
+                        <header class="panel-header">
+                            <div>
+                                <p class="section-kicker">BANDEJA RÁPIDA</p>
+                                <h2>Tareas y decisiones</h2>
+                                <p>Acciones sueltas que no necesitan convertirse en un módulo entero.</p>
+                            </div>
+                            <div class="segmented-control" id="taskFilters">
+                                <button class="active" data-filter="pending" type="button">Pendientes</button>
+                                <button data-filter="today" type="button">Hoy</button>
+                                <button data-filter="completed" type="button">Hechas</button>
+                            </div>
+                        </header>
+                        <div id="taskList" class="task-list"></div>
+                    </article>
+
+                    <aside class="utility-stack">
+                        <article class="panel compact-panel">
+                            <header class="panel-header">
+                                <div>
+                                    <p class="section-kicker">ÚLTIMO MOVIMIENTO</p>
+                                    <h2>Actividad reciente</h2>
+                                </div>
+                            </header>
+                            <div id="recentActivity" class="recent-activity"></div>
+                        </article>
+
+                        <article class="panel compact-panel" id="backup">
+                            <header class="panel-header">
+                                <div>
+                                    <p class="section-kicker">CAPTURA RÁPIDA</p>
+                                    <h2>Bloc inmediato</h2>
+                                </div>
+                                <span id="notesStatus" class="save-status">Guardado</span>
+                            </header>
+                            <div class="notes-wrap">
+                                <textarea id="quickNotes" rows="5" placeholder="Algo que todavía no sabés dónde ubicar..."></textarea>
+                            </div>
+                        </article>
+                    </aside>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <dialog id="taskDialog">
+        <form id="taskForm">
+            <div class="dialog-heading">
+                <div>
+                    <p class="section-kicker">ACCIÓN RÁPIDA</p>
+                    <h2>Nueva tarea</h2>
+                    <p>Definí qué, cuándo y con qué prioridad.</p>
+                </div>
+                <button class="icon-button" data-close-dialog="taskDialog" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <div class="form-grid">
+                <label class="field span-12">
+                    <span>Tarea</span>
+                    <input id="taskText" type="text" maxlength="140" placeholder="Ej: Enviar planilla aprobada a BDP" required>
+                </label>
+                <label class="field span-4">
+                    <span>Área</span>
+                    <select id="taskCategory">
+                        <option value="work">Trabajo</option>
+                        <option value="hr">RRHH</option>
+                        <option value="study">Estudios</option>
+                        <option value="finance">Finanzas</option>
+                        <option value="health">Salud</option>
+                        <option value="projects">Proyectos</option>
+                        <option value="personal">Personal</option>
+                    </select>
+                </label>
+                <label class="field span-4">
+                    <span>Prioridad</span>
+                    <select id="taskPriority">
+                        <option value="normal">Normal</option>
+                        <option value="high">Alta</option>
+                    </select>
+                </label>
+                <label class="field span-4">
+                    <span>Fecha objetivo</span>
+                    <input id="taskDueDate" type="date">
+                </label>
+            </div>
+            <div class="dialog-actions">
+                <button class="secondary-button" data-close-dialog="taskDialog" type="button">Cancelar</button>
+                <button class="primary-button" type="submit">Agregar tarea</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="backupDialog">
+        <div class="dialog-content">
+            <div class="dialog-heading">
+                <div>
+                    <p class="section-kicker">SEGURIDAD DE DATOS</p>
+                    <h2>Copia completa</h2>
+                    <p>Incluye módulos, notas y comprobantes adjuntos.</p>
+                </div>
+                <button class="icon-button" data-close-dialog="backupDialog" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <div class="backup-options">
+                <button id="exportBackup" class="backup-option" type="button">
+                    <strong>Exportar copia</strong>
+                    <span>Descarga un archivo con toda tu información.</span>
+                </button>
+                <button id="importBackup" class="backup-option" type="button">
+                    <strong>Restaurar copia</strong>
+                    <span>Reemplaza los datos actuales por los del archivo.</span>
+                </button>
+                <input id="backupFile" type="file" accept="application/json,.json" hidden>
+            </div>
+            <p id="backupStatus" class="backup-status">La copia se guarda únicamente cuando vos la descargás.</p>
+        </div>
+    </dialog>
+</body>
+</html>

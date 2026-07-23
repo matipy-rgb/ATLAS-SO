@@ -1,6 +1,6 @@
 {
     "name": "atlas-so",
-    "version": "0.3.3",
+    "version": "0.4.1",
     "private": true,
     "description": "ATLAS SO · centro personal de operaciones",
     "scripts": {
@@ -12,7 +12,9 @@
     },
     "dependencies": {
         "@capacitor/android": "8.4.2",
-        "@capacitor/core": "8.4.2"
+        "@capacitor/core": "8.4.2",
+        "@tesseract.js-data/spa": "^1.0.0",
+        "tesseract.js": "^6.0.1"
     },
     "devDependencies": {
         "@capacitor/cli": "8.4.2"

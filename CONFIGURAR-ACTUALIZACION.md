@@ -67,3 +67,16 @@ Después de subir esta versión a GitHub:
 5. Extraé el ZIP e instalá `app-debug.apk` en Android.
 
 El APK de prueba no es todavía una versión firmada para Play Store. Esa firma se prepara cuando la aplicación esté estable.
+# ATLAS SO v0.4 · activación de RR. HH. privado
+
+Antes de reemplazar los archivos en tu proyecto, abrí:
+
+**Supabase → SQL Editor → New query**
+
+Copiá todo el contenido de `supabase/v0.4-rrhh-admin.sql`, ejecutalo con
+**Run** y confirmá que aparezca `Success`. Este paso fija a la primera cuenta
+registrada como única administradora de Recursos Humanos y bloquea las claves
+`atlasHR...` para cualquier otra cuenta.
+
+Después reemplazá los archivos, cerrá ATLAS SO, volvé a abrirlo y presioná
+`Ctrl + F5`.
