@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
+    <title>Personal | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="module.css">
+    <link rel="stylesheet" href="personal.css">
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
+</head>
+<body data-page="personal" data-script="personal.js" data-context="Hábitos diarios, rachas y consistencia semanal" data-protected>
+    <div class="app-frame"><div class="app-workspace">
+        <main class="page-content">
+            <section class="page-hero">
+                <div><p class="page-eyebrow">PERSONAL</p><h1>Sistema de hábitos</h1><p>Marcá hechos, no intenciones. La semana muestra rápidamente dónde hay constancia y dónde hay excusas.</p></div>
+                <div class="page-hero-actions"><button id="openHabitDialog" class="primary-button" type="button">＋ Nuevo hábito</button></div>
+            </section>
+
+            <section class="summary-grid">
+                <article class="summary-item"><span>Hábitos activos</span><strong id="habitCount">0</strong><small>Configurados</small></article>
+                <article class="summary-item positive"><span>Completados hoy</span><strong id="habitDoneToday">0</strong><small id="habitTodayCaption">Sin hábitos</small></article>
+                <article class="summary-item warning"><span>Mejor racha actual</span><strong id="habitBestStreak">0 días</strong><small>Constancia consecutiva</small></article>
+                <article class="summary-item purple"><span>Cumplimiento semanal</span><strong id="habitWeekRate">0%</strong><small>Últimos 7 días</small></article>
+            </section>
+
+            <section class="module-layout habit-layout">
+                <div class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">CONTROL DE HOY</p><h2>Hábitos diarios</h2><p>Tocá cada hábito al completarlo.</p></div><strong id="habitProgressLabel">0/0</strong></header>
+                        <div class="habit-progress-wrap"><div class="progress-track"><div id="habitProgressBar" class="progress-bar"></div></div></div>
+                        <div id="habitList" class="habit-list"></div>
+                    </article>
+                </div>
+
+                <aside class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">ÚLTIMOS 7 DÍAS</p><h2>Consistencia</h2></div></header>
+                        <div id="habitWeek" class="habit-week"></div>
+                    </article>
+                    <div class="info-callout"><strong>Regla simple:</strong> si un hábito no ayuda a una meta concreta o no se puede medir con sí/no, probablemente está mal definido.</div>
+                </aside>
+            </section>
+        </main>
+    </div></div>
+
+    <dialog id="habitDialog">
+        <form id="habitForm">
+            <div class="dialog-heading"><div><p class="section-kicker">NUEVO SISTEMA</p><h2>Agregar hábito</h2><p>Usá una acción clara: “Tomar creatina”, no “Ser saludable”.</p></div><button id="closeHabitDialog" class="icon-button" type="button">×</button></div>
+            <div class="form-grid">
+                <label class="field span-8"><span>Hábito</span><input id="habitName" type="text" maxlength="90" placeholder="Ej: Entrenar" required></label>
+                <label class="field span-4"><span>Área</span><select id="habitArea"><option value="health">Salud</option><option value="study">Estudios</option><option value="finance">Finanzas</option><option value="personal">Personal</option><option value="work">Trabajo</option></select></label>
+            </div>
+            <div class="dialog-actions"><button id="cancelHabitDialog" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Agregar hábito</button></div>
+        </form>
+    </dialog>
+</body>
+</html>

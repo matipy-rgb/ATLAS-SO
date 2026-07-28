@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
+    <title>Trabajo | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="module.css">
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
+</head>
+<body data-page="work" data-script="work.js" data-context="Horas, ingresos y jornadas verificables" data-protected>
+    <div class="app-frame"><div class="app-workspace">
+        <main class="page-content">
+            <section class="page-hero">
+                <div>
+                    <p class="page-eyebrow">TRABAJO</p>
+                    <h1>Control de jornadas</h1>
+                    <p>Registrá lo trabajado y conocé el bruto, el descuento y el neto real del mes.</p>
+                </div>
+                <div class="page-hero-actions">
+                    <button id="focusWorkForm" class="primary-button" type="button">＋ Registrar jornada</button>
+                </div>
+            </section>
+
+            <section class="summary-grid">
+                <article class="summary-item"><span>Horas del mes</span><strong id="workHours">0 h</strong><small id="workDays">0 jornadas</small></article>
+                <article class="summary-item"><span>Bruto estimado</span><strong id="workGross">₲ 0</strong><small>Antes de descuentos</small></article>
+                <article class="summary-item warning"><span>Descuentos</span><strong id="workDiscount">₲ 0</strong><small>IPS u otros</small></article>
+                <article class="summary-item positive"><span>Neto estimado</span><strong id="workNet">₲ 0</strong><small>Ingreso real calculado</small></article>
+            </section>
+
+            <section class="module-layout">
+                <div class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">NUEVA JORNADA</p><h2>Registrar trabajo</h2><p>Los valores habituales se cargan automáticamente.</p></div></header>
+                        <form id="workForm" class="module-form form-grid">
+                            <label class="field span-3"><span>Fecha</span><input id="workDate" type="date" required></label>
+                            <label class="field span-5"><span>Descripción / cliente</span><input id="workDescription" type="text" maxlength="90" placeholder="Ej: Reemplazo RRHH ASUPOR" required></label>
+                            <label class="field span-2"><span>Horas</span><input id="workHoursInput" type="number" min="0.5" max="24" step="0.5" value="4" required></label>
+                            <label class="field span-2"><span>Tarifa por hora</span><input id="workRate" type="number" min="0" step="1" value="14635" required></label>
+                            <label class="field span-3"><span>Descuento %</span><input id="workDiscountRate" type="number" min="0" max="100" step="0.1" value="9"></label>
+                            <label class="field span-9"><span>Nota</span><input id="workNote" type="text" maxlength="180" placeholder="Opcional: turno, horas extra o incidencia"></label>
+                            <div class="span-12 form-actions"><button class="primary-button" type="submit">Guardar jornada</button></div>
+                        </form>
+                    </article>
+
+                    <article class="panel">
+                        <header class="panel-header">
+                            <div><p class="section-kicker">HISTORIAL</p><h2>Jornadas registradas</h2><p id="workListCaption">0 registros</p></div>
+                            <div class="filter-row"><input id="workMonthFilter" type="month" aria-label="Filtrar por mes"></div>
+                        </header>
+                        <div id="workList" class="module-list"></div>
+                    </article>
+                </div>
+
+                <aside class="module-stack">
+                    <article class="panel">
+                        <header class="panel-header"><div><p class="section-kicker">CONFIGURACIÓN</p><h2>Valores habituales</h2><p>Ahorran tiempo al cargar cada día.</p></div></header>
+                        <form id="workSettingsForm" class="module-form form-grid">
+                            <label class="field span-6"><span>Horas normales</span><input id="defaultHours" type="number" min="0.5" step="0.5"></label>
+                            <label class="field span-6"><span>Tarifa por hora</span><input id="defaultRate" type="number" min="0" step="1"></label>
+                            <label class="field span-6"><span>Descuento %</span><input id="defaultDiscount" type="number" min="0" max="100" step="0.1"></label>
+                            <div class="span-6 form-actions"><button class="secondary-button" type="submit">Guardar</button></div>
+                        </form>
+                    </article>
+                    <div id="workProjection" class="info-callout"></div>
+                </aside>
+            </section>
+        </main>
+    </div></div>
+</body>
+</html>

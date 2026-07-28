@@ -1,0 +1,9 @@
+{
+    "appId": "py.atlas.so",
+    "appName": "ATLAS SO",
+    "webDir": "www",
+    "backgroundColor": "#0b1220",
+    "android": {
+        "allowMixedContent": false
+    }
+}

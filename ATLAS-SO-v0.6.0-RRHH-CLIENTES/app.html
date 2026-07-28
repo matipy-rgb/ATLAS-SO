@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1220">
+    <title>Mi día | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
+</head>
+<body data-page="dashboard" data-script="dashboard.js" data-context="Tu día, tus prioridades y tu avance" data-protected>
+    <div class="app-frame">
+        <div class="app-workspace">
+            <main class="page-content dashboard-page">
+                <section class="today-hero">
+                    <div class="today-hero-copy">
+                        <p id="todayLabel" class="page-eyebrow">HOY</p>
+                        <h1 id="dashboardGreeting">Hola.</h1>
+                        <p id="dashboardHeadline">Armando tu panorama del día.</p>
+                    </div>
+                    <div class="today-score" aria-label="Progreso de hoy">
+                        <div class="score-ring" id="scoreRing">
+                            <strong id="dailyScore">0%</strong>
+                            <span>del día</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="quick-action-strip" aria-label="Acciones rápidas">
+                    <button type="button" data-atlas-capture="task"><span>✓</span><strong>Tarea</strong><small>Algo por hacer</small></button>
+                    <button type="button" data-atlas-capture="expense"><span>₲</span><strong>Movimiento</strong><small>Ingreso o gasto</small></button>
+                    <button type="button" data-atlas-capture="study"><span>▣</span><strong>Estudio</strong><small>Examen o entrega</small></button>
+                    <button type="button" data-atlas-capture="health"><span>＋</span><strong>Salud</strong><small>Medir el día</small></button>
+                    <button type="button" data-atlas-capture="note"><span>✎</span><strong>Nota</strong><small>Capturar una idea</small></button>
+                </section>
+
+                <section class="dashboard-primary-grid">
+                    <article class="panel focus-panel">
+                        <header class="simple-panel-header">
+                            <div>
+                                <p class="section-kicker">TU PRIORIDAD</p>
+                                <h2>Una cosa importante</h2>
+                            </div>
+                            <button id="editDailyFocus" class="text-button" type="button">Editar</button>
+                        </header>
+                        <div id="dailyFocusCard" class="daily-focus-card"></div>
+                    </article>
+
+                    <article class="panel next-panel">
+                        <header class="simple-panel-header">
+                            <div>
+                                <p class="section-kicker">AGENDA UNIFICADA</p>
+                                <h2>Lo próximo</h2>
+                            </div>
+                            <span id="agendaCount" class="status-badge tag-info">0 pendientes</span>
+                        </header>
+                        <div id="todayAgenda" class="today-agenda"></div>
+                    </article>
+                </section>
+
+                <section class="life-section">
+                    <div class="section-title-row">
+                        <div>
+                            <p class="section-kicker">TU ESPACIO</p>
+                            <h2>Todo lo importante, sin buscar</h2>
+                        </div>
+                        <p>Entrá a un área para ver el detalle.</p>
+                    </div>
+                    <div id="moduleOverview" class="module-overview"></div>
+                </section>
+
+                <section class="dashboard-secondary-grid">
+                    <article class="panel tasks-panel" id="tasks">
+                        <header class="panel-header">
+                            <div>
+                                <p class="section-kicker">LISTA PERSONAL</p>
+                                <h2>Mis tareas</h2>
+                                <p>Lo que todavía necesita una acción.</p>
+                            </div>
+                            <div class="segmented-control" id="taskFilters">
+                                <button class="active" data-filter="pending" type="button">Pendientes</button>
+                                <button data-filter="today" type="button">Hoy</button>
+                                <button data-filter="completed" type="button">Hechas</button>
+                            </div>
+                        </header>
+                        <div id="taskList" class="task-list"></div>
+                    </article>
+
+                    <aside class="dashboard-side-stack">
+                        <article class="panel pulse-panel">
+                            <header class="simple-panel-header">
+                                <div>
+                                    <p class="section-kicker">ÚLTIMOS 7 DÍAS</p>
+                                    <h2>Tu ritmo</h2>
+                                </div>
+                                <strong id="weekPulseRate">0%</strong>
+                            </header>
+                            <div id="weekPulse" class="week-pulse"></div>
+                            <p id="weekPulseCaption" class="panel-caption">Empezá a registrar para ver tu constancia.</p>
+                        </article>
+
+                        <article class="panel insight-panel">
+                            <header class="simple-panel-header">
+                                <div>
+                                    <p class="section-kicker">LECTURA RÁPIDA</p>
+                                    <h2>ATLAS te sugiere</h2>
+                                </div>
+                            </header>
+                            <div id="smartInsights" class="smart-insights"></div>
+                        </article>
+
+                        <article class="panel notes-panel" id="notes">
+                            <header class="simple-panel-header">
+                                <div>
+                                    <p class="section-kicker">BLOC RÁPIDO</p>
+                                    <h2>Ideas sueltas</h2>
+                                </div>
+                                <span id="notesStatus" class="save-status">Guardado</span>
+                            </header>
+                            <div class="notes-wrap">
+                                <textarea id="quickNotes" rows="5" placeholder="Escribí algo antes de que se te escape…"></textarea>
+                            </div>
+                        </article>
+                    </aside>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <dialog id="focusDialog">
+        <form id="focusForm">
+            <div class="dialog-heading">
+                <div>
+                    <p class="section-kicker">ENFOQUE DIARIO</p>
+                    <h2>¿Qué haría que hoy valga la pena?</h2>
+                    <p>Elegí una sola prioridad. El resto puede esperar su turno.</p>
+                </div>
+                <button class="icon-button" data-close-dialog="focusDialog" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <label class="field">
+                <span>Mi prioridad de hoy</span>
+                <input id="focusText" type="text" maxlength="140" placeholder="Ej: Terminar el trabajo práctico" required>
+            </label>
+            <div class="dialog-actions">
+                <button class="secondary-button" data-close-dialog="focusDialog" type="button">Cancelar</button>
+                <button class="primary-button" type="submit">Guardar prioridad</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="onboardingDialog" class="onboarding-dialog">
+        <form id="onboardingForm">
+            <div class="onboarding-mark">A</div>
+            <p class="section-kicker">BIENVENIDO A ATLAS SO</p>
+            <h2>Hagamos que esto te sirva desde hoy.</h2>
+            <p>Elegí las áreas que más te importan. Podrás usar todas; esto solo ordena tu inicio.</p>
+            <div class="onboarding-areas">
+                <label><input type="checkbox" name="focusArea" value="finance" checked><span>₲</span>Finanzas</label>
+                <label><input type="checkbox" name="focusArea" value="study" checked><span>▣</span>Estudios</label>
+                <label><input type="checkbox" name="focusArea" value="health"><span>＋</span>Salud</label>
+                <label><input type="checkbox" name="focusArea" value="projects"><span>◆</span>Proyectos</label>
+                <label><input type="checkbox" name="focusArea" value="personal"><span>○</span>Hábitos</label>
+                <label><input type="checkbox" name="focusArea" value="work"><span>▤</span>Trabajo</label>
+            </div>
+            <label class="field onboarding-first-goal">
+                <span>¿Qué querés tener bajo control primero?</span>
+                <input id="onboardingGoal" type="text" maxlength="140" placeholder="Ej: llegar a fin de mes sin atrasarme">
+            </label>
+            <div class="dialog-actions">
+                <button id="skipOnboarding" class="secondary-button" type="button">Explorar primero</button>
+                <button class="primary-button" type="submit">Preparar mi espacio</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="backupDialog">
+        <div class="dialog-content">
+            <div class="dialog-heading">
+                <div>
+                    <p class="section-kicker">TUS DATOS</p>
+                    <h2>Copia de seguridad</h2>
+                    <p>Descargá o restaurá la información de todos tus módulos.</p>
+                </div>
+                <button class="icon-button" data-close-dialog="backupDialog" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <div class="backup-options">
+                <button id="exportBackup" class="backup-option" type="button">
+                    <strong>Descargar una copia</strong>
+                    <span>Guarda tus datos en un archivo personal.</span>
+                </button>
+                <button id="importBackup" class="backup-option" type="button">
+                    <strong>Restaurar una copia</strong>
+                    <span>Reemplaza los datos actuales por los del archivo.</span>
+                </button>
+                <input id="backupFile" type="file" accept="application/json,.json" hidden>
+            </div>
+            <p id="backupStatus" class="backup-status">Tu copia solo se descarga cuando vos lo pedís.</p>
+        </div>
+    </dialog>
+</body>
+</html>
