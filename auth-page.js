@@ -117,8 +117,8 @@
     }
 
     function safeNextPage() {
-        const next = new URLSearchParams(location.search).get("next") || "index.html";
-        return /^[a-z0-9-]+\.html(?:#[a-z0-9-]+)?$/i.test(next) ? next : "index.html";
+        const next = new URLSearchParams(location.search).get("next") || "app.html";
+        return /^[a-z0-9-]+\.html(?:#[a-z0-9-]+)?$/i.test(next) ? next : "app.html";
     }
 
     function changeView(view) {
@@ -196,7 +196,7 @@
                 }));
                 if (error) throw error;
                 if (data.session) {
-                    location.replace("index.html");
+                    location.replace("app.html");
                     return;
                 }
                 form.reset();
@@ -290,6 +290,11 @@
         reportAuthError(error, "carga de recuperación");
         setMessage(friendlyError(error), "error");
     });
+
+    const requestedView = new URLSearchParams(location.search).get("view");
+    if (page === "login" && ["login", "register", "forgot"].includes(requestedView)) {
+        changeView(requestedView);
+    }
 
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
         navigator.serviceWorker.register("sw.js").catch(error => {

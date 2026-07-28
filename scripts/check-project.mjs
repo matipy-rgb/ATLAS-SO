@@ -17,7 +17,7 @@ for (const file of files.filter(name => name.endsWith(".js") && name !== "sw.js"
     }
 }
 
-const required = ["index.html", "login.html", "rrhh.html", "manifest.webmanifest", "atlas-config.js"];
+const required = ["index.html", "app.html", "login.html", "privacy.html", "rrhh.html", "manifest.webmanifest", "atlas-config.js"];
 for (const file of required) {
     if (!files.includes(file)) {
         failed = true;

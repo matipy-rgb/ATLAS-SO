@@ -1,6 +1,7 @@
-const CACHE_NAME = "atlas-so-v0.4.1";
+const CACHE_NAME = "atlas-so-v0.6.0";
 const APP_SHELL = [
     "./",
+    "./app.html",
     "./login.html",
     "./reset-password.html",
     "./index.html",
@@ -12,6 +13,8 @@ const APP_SHELL = [
     "./projects.html",
     "./personal.html",
     "./offline.html",
+    "./privacy.html",
+    "./landing.css",
     "./styles.css",
     "./dashboard.css",
     "./module.css",
@@ -32,6 +35,9 @@ const APP_SHELL = [
     "./work.js",
     "./rrhh.js",
     "./rrhh-super.js",
+    "./rrhh-context.js",
+    "./rrhh-import.js",
+    "./vendor/xlsx.full.min.js",
     "./vendor/tesseract.min.js",
     "./vendor/tesseract-worker.min.js",
     "./vendor/tesseract-core/tesseract-core.wasm.js",
@@ -77,10 +83,19 @@ self.addEventListener("fetch", event => {
         "/auth-core.js",
         "/auth-page.js",
         "/login.html",
+        "/index.html",
+        "/app.html",
+        "/landing.css",
+        "/dashboard.css",
+        "/dashboard.js",
+        "/atlas.js",
+        "/app-bootstrap.js",
         "/reset-password.html",
         "/rrhh.html",
         "/rrhh.js",
         "/rrhh-super.js",
+        "/rrhh-context.js",
+        "/rrhh-import.js",
         "/rrhh.css"
     ];
     if (networkFirstFiles.some(file => requestUrl.pathname.endsWith(file))) {

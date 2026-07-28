@@ -1,4 +1,4 @@
-# Configurar ATLAS SO v0.3.3
+# Configurar ATLAS SO v0.5.0
 
 La pantalla de acceso y la conexión pública ya están configuradas. No coloques contraseñas, App Passwords ni la `service_role key` dentro de ningún archivo del proyecto.
 

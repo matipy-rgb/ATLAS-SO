@@ -1,20 +1,22 @@
 {
     "name": "atlas-so",
-    "version": "0.4.1",
+    "version": "0.6.0",
     "private": true,
-    "description": "ATLAS SO · centro personal de operaciones",
+    "description": "ATLAS SO · todo lo importante en un solo lugar",
     "scripts": {
+        "dev": "node scripts/dev-server.mjs",
         "mobile:prepare": "node scripts/prepare-mobile.mjs",
         "mobile:init": "npm run mobile:prepare && npx cap add android",
         "mobile:sync": "npm run mobile:prepare && npx cap sync android",
         "mobile:open": "npx cap open android",
-        "check": "node scripts/check-project.mjs && node scripts/test-auth-recovery.mjs"
+        "check": "node scripts/check-project.mjs && node scripts/test-auth-recovery.mjs && node scripts/test-v05.mjs && node scripts/test-rrhh-v06.mjs"
     },
     "dependencies": {
         "@capacitor/android": "8.4.2",
         "@capacitor/core": "8.4.2",
         "@tesseract.js-data/spa": "^1.0.0",
-        "tesseract.js": "^6.0.1"
+        "tesseract.js": "^6.0.1",
+        "xlsx": "^0.18.5"
     },
     "devDependencies": {
         "@capacitor/cli": "8.4.2"

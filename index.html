@@ -4,187 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0b1220">
-    <title>Centro de mando | ATLAS SO</title>
+    <meta name="description" content="ATLAS SO organiza tus finanzas, estudios, salud, proyectos, hábitos y trabajo en un solo espacio personal.">
+    <title>ATLAS SO | Tu vida, en un solo lugar</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/atlas-192.png">
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="dashboard.css">
-    <script src="vendor/supabase.js"></script>
-    <script src="atlas-config.js"></script>
-    <script src="auth-core.js"></script>
-    <script src="app-bootstrap.js" defer></script>
+    <link rel="stylesheet" href="landing.css">
 </head>
-<body data-page="dashboard" data-script="dashboard.js" data-context="Tu panorama real, en una sola pantalla" data-protected>
-    <div class="app-frame">
-        <div class="app-workspace">
-            <main class="page-content dashboard-page">
-                <section class="dashboard-hero">
-                    <div>
-                        <p class="page-eyebrow">CENTRO DE MANDO</p>
-                        <h1 id="dashboardGreeting">Buenas noches, Matías.</h1>
-                        <p id="dashboardHeadline">Revisando lo que requiere tu atención.</p>
-                    </div>
-                    <div class="hero-actions">
-                        <button id="openTaskDialog" class="primary-button" type="button">＋ Nueva tarea</button>
-                        <button id="openBackupDialog" class="secondary-button" type="button">Respaldo</button>
-                    </div>
-                </section>
+<body>
+    <header class="landing-header">
+        <a class="landing-brand" href="index.html" aria-label="ATLAS SO">
+            <span class="landing-brand-mark">A</span>
+            <span><strong>ATLAS SO</strong><small>Sistema personal</small></span>
+        </a>
+        <nav aria-label="Navegación">
+            <a href="#como-funciona">Cómo funciona</a>
+            <a href="#areas">Qué incluye</a>
+            <a href="privacy.html">Privacidad</a>
+        </nav>
+        <a class="header-login" href="login.html">Ingresar</a>
+    </header>
 
-                <section class="command-grid">
-                    <article class="panel attention-panel">
-                        <header class="panel-header">
-                            <div>
-                                <p class="section-kicker">PRIORIDAD OPERATIVA</p>
-                                <h2>Centro de atención</h2>
-                                <p>Lo urgente aparece solo; no tenés que buscarlo módulo por módulo.</p>
-                            </div>
-                            <span id="attentionBadge" class="status-badge tag-info">0 alertas</span>
-                        </header>
-                        <div id="attentionList" class="attention-list"></div>
-                    </article>
-
-                    <aside class="panel daily-panel">
-                        <header class="panel-header">
-                            <div>
-                                <p class="section-kicker">EJECUCIÓN</p>
-                                <h2>Estado de hoy</h2>
-                            </div>
-                            <strong id="dailyScore">0%</strong>
-                        </header>
-                        <div class="daily-score-wrap">
-                            <div class="progress-track"><div id="dailyScoreBar" class="progress-bar"></div></div>
-                            <p id="dailyScoreCaption">Todavía no hay mediciones de hoy.</p>
-                        </div>
-                        <div id="dailyChecklist" class="daily-checklist"></div>
-                    </aside>
-                </section>
-
-                <section class="modules-section">
-                    <div class="section-title-row">
-                        <div>
-                            <p class="section-kicker">PANORAMA GENERAL</p>
-                            <h2>Áreas de tu sistema</h2>
-                        </div>
-                        <p>Indicadores reales, no contadores decorativos.</p>
-                    </div>
-                    <div id="moduleOverview" class="module-overview"></div>
-                </section>
-
-                <section class="dashboard-lower-grid">
-                    <article class="panel tasks-panel" id="tasks">
-                        <header class="panel-header">
-                            <div>
-                                <p class="section-kicker">BANDEJA RÁPIDA</p>
-                                <h2>Tareas y decisiones</h2>
-                                <p>Acciones sueltas que no necesitan convertirse en un módulo entero.</p>
-                            </div>
-                            <div class="segmented-control" id="taskFilters">
-                                <button class="active" data-filter="pending" type="button">Pendientes</button>
-                                <button data-filter="today" type="button">Hoy</button>
-                                <button data-filter="completed" type="button">Hechas</button>
-                            </div>
-                        </header>
-                        <div id="taskList" class="task-list"></div>
-                    </article>
-
-                    <aside class="utility-stack">
-                        <article class="panel compact-panel">
-                            <header class="panel-header">
-                                <div>
-                                    <p class="section-kicker">ÚLTIMO MOVIMIENTO</p>
-                                    <h2>Actividad reciente</h2>
-                                </div>
-                            </header>
-                            <div id="recentActivity" class="recent-activity"></div>
-                        </article>
-
-                        <article class="panel compact-panel" id="backup">
-                            <header class="panel-header">
-                                <div>
-                                    <p class="section-kicker">CAPTURA RÁPIDA</p>
-                                    <h2>Bloc inmediato</h2>
-                                </div>
-                                <span id="notesStatus" class="save-status">Guardado</span>
-                            </header>
-                            <div class="notes-wrap">
-                                <textarea id="quickNotes" rows="5" placeholder="Algo que todavía no sabés dónde ubicar..."></textarea>
-                            </div>
-                        </article>
-                    </aside>
-                </section>
-            </main>
-        </div>
-    </div>
-
-    <dialog id="taskDialog">
-        <form id="taskForm">
-            <div class="dialog-heading">
-                <div>
-                    <p class="section-kicker">ACCIÓN RÁPIDA</p>
-                    <h2>Nueva tarea</h2>
-                    <p>Definí qué, cuándo y con qué prioridad.</p>
+    <main>
+        <section class="landing-hero">
+            <div class="hero-copy">
+                <p class="landing-eyebrow">TU VIDA, BAJO CONTROL</p>
+                <h1>Todo lo importante.<br><span>Un solo lugar.</span></h1>
+                <p class="hero-lead">Organizá tus tareas, dinero, estudios, salud, proyectos, hábitos y trabajo sin saltar entre cinco aplicaciones.</p>
+                <div class="hero-actions">
+                    <a class="landing-primary" href="login.html?view=register">Crear mi espacio gratis</a>
+                    <a class="landing-secondary" href="login.html">Ya tengo una cuenta</a>
                 </div>
-                <button class="icon-button" data-close-dialog="taskDialog" type="button" aria-label="Cerrar">×</button>
-            </div>
-            <div class="form-grid">
-                <label class="field span-12">
-                    <span>Tarea</span>
-                    <input id="taskText" type="text" maxlength="140" placeholder="Ej: Enviar planilla aprobada a BDP" required>
-                </label>
-                <label class="field span-4">
-                    <span>Área</span>
-                    <select id="taskCategory">
-                        <option value="work">Trabajo</option>
-                        <option value="hr">RRHH</option>
-                        <option value="study">Estudios</option>
-                        <option value="finance">Finanzas</option>
-                        <option value="health">Salud</option>
-                        <option value="projects">Proyectos</option>
-                        <option value="personal">Personal</option>
-                    </select>
-                </label>
-                <label class="field span-4">
-                    <span>Prioridad</span>
-                    <select id="taskPriority">
-                        <option value="normal">Normal</option>
-                        <option value="high">Alta</option>
-                    </select>
-                </label>
-                <label class="field span-4">
-                    <span>Fecha objetivo</span>
-                    <input id="taskDueDate" type="date">
-                </label>
-            </div>
-            <div class="dialog-actions">
-                <button class="secondary-button" data-close-dialog="taskDialog" type="button">Cancelar</button>
-                <button class="primary-button" type="submit">Agregar tarea</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog id="backupDialog">
-        <div class="dialog-content">
-            <div class="dialog-heading">
-                <div>
-                    <p class="section-kicker">SEGURIDAD DE DATOS</p>
-                    <h2>Copia completa</h2>
-                    <p>Incluye módulos, notas y comprobantes adjuntos.</p>
+                <div class="hero-trust">
+                    <span>✓ Datos separados por cuenta</span>
+                    <span>✓ Sin publicidad</span>
+                    <span>✓ Funciona en PC y teléfono</span>
                 </div>
-                <button class="icon-button" data-close-dialog="backupDialog" type="button" aria-label="Cerrar">×</button>
             </div>
-            <div class="backup-options">
-                <button id="exportBackup" class="backup-option" type="button">
-                    <strong>Exportar copia</strong>
-                    <span>Descarga un archivo con toda tu información.</span>
-                </button>
-                <button id="importBackup" class="backup-option" type="button">
-                    <strong>Restaurar copia</strong>
-                    <span>Reemplaza los datos actuales por los del archivo.</span>
-                </button>
-                <input id="backupFile" type="file" accept="application/json,.json" hidden>
+
+            <div class="product-preview" aria-label="Vista de ATLAS SO">
+                <div class="preview-window">
+                    <div class="preview-top">
+                        <span class="preview-logo">A</span>
+                        <span>Mi día</span>
+                        <i></i>
+                    </div>
+                    <div class="preview-body">
+                        <div class="preview-greeting">
+                            <div><small>JUEVES, 23 DE JULIO</small><strong>Buenas noches, Matías.</strong><span>Tenés 3 cosas importantes por delante.</span></div>
+                            <b>72%</b>
+                        </div>
+                        <div class="preview-actions"><span>✓ Tarea</span><span>₲ Movimiento</span><span>▣ Estudio</span><span>＋ Salud</span></div>
+                        <div class="preview-grid">
+                            <article class="preview-focus"><small>TU PRIORIDAD</small><strong>Terminar el trabajo práctico</strong><span>Una cosa importante. Sin ruido.</span><button>Marcar como lista</button></article>
+                            <article class="preview-agenda"><small>LO PRÓXIMO</small><p><i class="red"></i><b>Pago de moto</b><span>Vence hoy</span></p><p><i class="purple"></i><b>Examen de Contabilidad</b><span>Faltan 6 días</span></p><p><i class="blue"></i><b>Entrenar</b><span>Hoy</span></p></article>
+                        </div>
+                    </div>
+                </div>
+                <div class="preview-float preview-float-one"><strong>₲ 550.000</strong><span>Próximo pago</span></div>
+                <div class="preview-float preview-float-two"><strong>5 días</strong><span>Mejor racha</span></div>
             </div>
-            <p id="backupStatus" class="backup-status">La copia se guarda únicamente cuando vos la descargás.</p>
-        </div>
-    </dialog>
+        </section>
+
+        <section id="como-funciona" class="value-section">
+            <div class="section-heading">
+                <p class="landing-eyebrow">SIMPLE DE VERDAD</p>
+                <h2>Abrís. Entendés. Actuás.</h2>
+                <p>ATLAS SO no te obliga a organizar la organización. Te muestra qué necesita atención y te deja registrar algo en segundos.</p>
+            </div>
+            <div class="value-grid">
+                <article><span>01</span><h3>Mirás tu día</h3><p>Una agenda reúne vencimientos, tareas, estudios y proyectos.</p></article>
+                <article><span>02</span><h3>Registrás rápido</h3><p>Un solo botón sirve para cargar una tarea, un gasto, una entrega o tu salud.</p></article>
+                <article><span>03</span><h3>Medís tu avance</h3><p>Ves tendencias reales y decidís con datos, no con memoria borrosa.</p></article>
+            </div>
+        </section>
+
+        <section id="areas" class="areas-section">
+            <div class="section-heading">
+                <p class="landing-eyebrow">TU SISTEMA COMPLETO</p>
+                <h2>Lo que necesitás, conectado.</h2>
+            </div>
+            <div class="areas-grid">
+                <article class="area-finance"><span>₲</span><div><h3>Finanzas</h3><p>Ingresos, gastos, deudas, cuotas y vencimientos.</p></div></article>
+                <article class="area-study"><span>▣</span><div><h3>Estudios</h3><p>Exámenes, entregas, progreso y resultados.</p></div></article>
+                <article class="area-health"><span>＋</span><div><h3>Salud</h3><p>Peso, sueño, agua, energía y entrenamientos.</p></div></article>
+                <article class="area-project"><span>◆</span><div><h3>Proyectos</h3><p>Metas convertidas en próximos pasos concretos.</p></div></article>
+                <article class="area-habit"><span>○</span><div><h3>Hábitos</h3><p>Rachas y consistencia semanal sin autoengaño.</p></div></article>
+                <article class="area-work"><span>▤</span><div><h3>Trabajo</h3><p>Horas, jornadas, ingresos y neto estimado.</p></div></article>
+            </div>
+        </section>
+
+        <section class="privacy-banner">
+            <div>
+                <p class="landing-eyebrow">TU INFORMACIÓN ES TUYA</p>
+                <h2>Un espacio personal, no una vitrina.</h2>
+                <p>Cada cuenta mantiene sus datos separados. ATLAS SO no incluye publicidad ni rastreadores comerciales.</p>
+                <a href="privacy.html">Cómo protegemos tus datos →</a>
+            </div>
+            <div class="privacy-shield">A</div>
+        </section>
+
+        <section class="final-cta">
+            <p class="landing-eyebrow">LO QUE NO SE MIDE, NO SE MEJORA</p>
+            <h2>Empezá por poner una cosa en orden.</h2>
+            <p>Después viene la siguiente. Así se construye un sistema que aguanta la vida real.</p>
+            <a class="landing-primary" href="login.html?view=register">Crear mi espacio</a>
+        </section>
+    </main>
+
+    <footer>
+        <a class="landing-brand" href="index.html"><span class="landing-brand-mark">A</span><span><strong>ATLAS SO</strong><small>Sistema personal</small></span></a>
+        <p>Productividad práctica para la vida real.</p>
+        <div><a href="privacy.html">Privacidad</a><a href="login.html">Ingresar</a></div>
+    </footer>
 </body>
 </html>

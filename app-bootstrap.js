@@ -2,6 +2,8 @@
     const DATA_KEYS = [
         "atlasTasks",
         "atlasQuickNotes",
+        "atlasPreferences",
+        "atlasDailyFocus",
         "atlasTransactions",
         "atlasObligations",
         "atlasStudyEvents",
@@ -162,7 +164,7 @@
 
         const session = await auth.getSession();
         if (!session) {
-            const next = encodeURIComponent(location.pathname.split("/").pop() || "index.html");
+            const next = encodeURIComponent(location.pathname.split("/").pop() || "app.html");
             window.location.replace(`login.html?next=${next}`);
             return;
         }
@@ -170,7 +172,7 @@
         await hydrate();
         const isHRAdmin = await auth.isHRAdmin();
         if (document.body.dataset.page === "rrhh" && !isHRAdmin) {
-            window.location.replace("index.html?access=denied");
+            window.location.replace("app.html?access=denied");
             return;
         }
         window.AtlasStore = {

@@ -14,9 +14,10 @@
     <script src="atlas-config.js"></script>
     <script src="auth-core.js"></script>
     <script src="vendor/tesseract.min.js" defer></script>
+    <script src="vendor/xlsx.full.min.js" defer></script>
     <script src="app-bootstrap.js" defer></script>
 </head>
-<body data-page="rrhh" data-script="rrhh.js" data-extra-script="rrhh-super.js" data-context="Administración integral y privada del personal" data-protected>
+<body data-page="rrhh" data-script="rrhh-context.js" data-extra-script="rrhh.js" data-context="Administración integral y privada del personal" data-protected>
     <div class="app-frame"><div class="app-workspace">
         <main class="page-content">
             <section class="page-hero">
@@ -28,6 +29,17 @@
                 <div class="page-hero-actions">
                     <button id="openAbsenceDialog" class="primary-button" type="button">＋ Registrar ausencia</button>
                     <button id="openEmployeeDialog" class="secondary-button" type="button">＋ Funcionario</button>
+                </div>
+            </section>
+
+            <section class="hr-context-bar" aria-label="Contexto de Recursos Humanos">
+                <div class="hr-context-current">
+                    <span class="hr-context-mark">RR</span>
+                    <div><small>ESPACIO DE TRABAJO ACTUAL</small><strong id="hrContextTitle">A Support · Arcor</strong><span id="hrContextCaption">Datos separados y protegidos por cliente</span></div>
+                </div>
+                <div class="hr-context-actions">
+                    <button id="hrChangeClient" class="secondary-button" type="button">Cambiar cliente</button>
+                    <button id="hrManageCompanies" class="secondary-button" type="button">Empresas administradas</button>
                 </div>
             </section>
 
@@ -252,6 +264,43 @@
                     <div id="hrEmployeeList" class="hr-employee-list"></div>
                 </aside>
             </section>
+
+            <section id="hrImportPanel" class="panel hr-import-panel" data-hr-panel="people" hidden>
+                <header class="panel-header">
+                    <div>
+                        <p class="section-kicker">CARGA MASIVA CONTROLADA</p>
+                        <h2>Importar funcionarios desde Excel</h2>
+                        <p>ATLAS analiza primero. Nada se guarda hasta que revises los resultados y presiones Procesar.</p>
+                    </div>
+                    <div class="hr-import-header-actions">
+                        <a class="secondary-button" href="outputs/atlas_rrhh_20260728/ATLAS_RRHH_FUNCIONARIOS.xlsx" download>Descargar plantilla</a>
+                        <button id="hrExportPeople" class="secondary-button" type="button">Exportar nómina</button>
+                    </div>
+                </header>
+                <div class="hr-import-drop-row">
+                    <label class="hr-excel-drop" for="hrPeopleExcel">
+                        <input id="hrPeopleExcel" type="file" accept=".xlsx,.xls,.xlsm" hidden>
+                        <span>⇧</span><strong>Seleccionar Excel de funcionarios</strong>
+                        <small>ATLAS_RRHH_FUNCIONARIOS.xlsx, .xls o .xlsm</small>
+                    </label>
+                    <div class="hr-import-rules">
+                        <strong>Control automático</strong>
+                        <span>✓ Cédulas repetidas dentro del archivo</span>
+                        <span>✓ Cédulas que ya existen en este cliente</span>
+                        <span>✓ Filas sin nombre o cédula</span>
+                        <span>✓ Vista previa antes de guardar</span>
+                    </div>
+                </div>
+                <div id="hrImportResult" hidden>
+                    <div id="hrImportSummary" class="hr-mini-summary"></div>
+                    <div id="hrImportErrors" class="hr-import-errors"></div>
+                    <div id="hrImportPreview" class="hr-table-shell"></div>
+                    <div class="ips-actions">
+                        <button id="hrImportCancel" class="secondary-button" type="button">Cancelar importación</button>
+                        <button id="hrImportProcess" class="primary-button" type="button" disabled>Procesar funcionarios</button>
+                    </div>
+                </div>
+            </section>
         </main>
     </div></div>
 
@@ -308,6 +357,20 @@
             </div>
             <div id="absencePreview" class="absence-preview">Elegí las fechas para calcular la duración.</div>
             <div class="dialog-actions"><button id="cancelAbsence" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar ausencia</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="hrContextDialog" class="hr-context-dialog">
+        <form method="dialog">
+            <div class="dialog-heading">
+                <div><p class="section-kicker">EMPRESA Y CLIENTE</p><h2>Elegí dónde vas a trabajar</h2><p>Cada espacio mantiene separados sus funcionarios, horarios, marcaciones y gestiones.</p></div>
+                <button class="icon-button" value="cancel" aria-label="Cerrar">×</button>
+            </div>
+            <div id="hrCompanyList" class="hr-company-list"></div>
+            <div class="hr-add-company">
+                <input id="hrNewCompanyName" type="text" maxlength="90" placeholder="Nombre de otra empresa administrada">
+                <button id="hrAddCompany" class="secondary-button" type="button">Agregar empresa</button>
+            </div>
         </form>
     </dialog>
 </body>

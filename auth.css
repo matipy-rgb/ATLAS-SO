@@ -9,6 +9,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { min-height: 100%; }
 body {
     margin: 0;
@@ -119,6 +120,8 @@ button { cursor: pointer; }
 .setup-notice p { margin: 5px 0 0; font-size: 12px; }
 .setup-notice code { font-weight: 800; }
 .auth-footnote { margin: 18px 0 0; color: #8b95a7; font-size: 11px; text-align: center; }
+.auth-footnote a { color: var(--blue); text-decoration: none; }
+.auth-footnote a:hover { text-decoration: underline; }
 
 @media (max-width: 900px) {
     .auth-layout { grid-template-columns: 1fr; }

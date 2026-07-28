@@ -154,3 +154,55 @@
 [data-hr-panel][hidden]{display:none!important}
 @media(max-width:1100px){.hr-super-grid{grid-template-columns:1fr 1fr}.hr-command-card:first-child{grid-column:1/-1}.hr-schedule-form,.hr-payroll-form{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.hr-super-grid,.hr-two-forms,.hr-data-list{grid-template-columns:1fr}.hr-command-card:first-child{grid-column:auto}.hr-inline-form,.hr-schedule-form,.hr-payroll-form,.hr-payroll-result{grid-template-columns:1fr}.hr-rate-list{grid-template-columns:1fr 1fr}.hr-module-nav{position:sticky;top:58px;z-index:5}.hr-payroll-result .total{grid-column:auto}}
+.hr-context-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px 18px;
+    margin: 0 0 18px;
+    border: 1px solid rgba(72, 187, 120, .28);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, .12), rgba(15, 23, 42, .72));
+}
+.hr-context-current, .hr-context-actions { display: flex; align-items: center; gap: 12px; }
+.hr-context-current > div { display: grid; gap: 2px; }
+.hr-context-current small { color: #76d6aa; font-size: .7rem; font-weight: 800; letter-spacing: .08em; }
+.hr-context-current strong { font-size: 1.08rem; color: #f8fafc; }
+.hr-context-current span:not(.hr-context-mark) { color: #a9b6c8; font-size: .82rem; }
+.hr-context-mark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: #10b981; color: #062e24; font-weight: 900; }
+.hr-context-dialog { width: min(860px, calc(100vw - 28px)); }
+.hr-company-list { display: grid; gap: 16px; margin: 20px 0; }
+.hr-company-card { padding: 16px; border: 1px solid rgba(148,163,184,.18); border-radius: 16px; background: rgba(15,23,42,.64); }
+.hr-company-card > div:first-child { display: grid; gap: 3px; margin-bottom: 12px; }
+.hr-company-card small { color: #76d6aa; font-weight: 800; letter-spacing: .06em; }
+.hr-company-card strong { color: #f8fafc; }
+.hr-company-card span { color: #94a3b8; font-size: .82rem; }
+.hr-client-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; }
+.hr-client-grid button { display: grid; gap: 5px; text-align: left; padding: 13px; border: 1px solid rgba(148,163,184,.18); border-radius: 13px; background: rgba(30,41,59,.8); cursor: pointer; }
+.hr-client-grid button:hover, .hr-client-grid button.active { border-color: #10b981; background: rgba(16,185,129,.12); }
+.hr-inline-add { margin-top: 12px; border: 0; background: transparent; color: #76d6aa; cursor: pointer; }
+.hr-add-company { display: flex; gap: 10px; }
+.hr-add-company input { flex: 1; }
+.hr-import-panel { margin-top: 18px; }
+.hr-import-header-actions, .hr-import-drop-row { display: flex; gap: 12px; align-items: stretch; }
+.hr-import-drop-row { margin-top: 14px; }
+.hr-excel-drop { flex: 1; display: grid; place-items: center; gap: 5px; min-height: 150px; border: 1px dashed rgba(52,211,153,.55); border-radius: 16px; background: rgba(16,185,129,.07); cursor: pointer; text-align: center; }
+.hr-excel-drop > span { font-size: 2rem; color: #34d399; }
+.hr-excel-drop small { color: #94a3b8; }
+.hr-import-rules { min-width: 260px; display: grid; gap: 8px; padding: 16px; border-radius: 16px; background: rgba(15,23,42,.65); }
+.hr-import-rules span { color: #a9b6c8; font-size: .84rem; }
+.hr-import-errors { margin: 14px 0; }
+.hr-import-errors > strong { color: #fca5a5; }
+.hr-import-errors li { margin-top: 6px; color: #fecaca; }
+.hr-import-ok { padding: 12px; border-radius: 12px; background: rgba(16,185,129,.1); color: #6ee7b7; }
+.hr-import-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: .72rem; font-weight: 800; }
+.hr-import-status.new { background: rgba(16,185,129,.13); color: #6ee7b7; }
+.hr-import-status.update { background: rgba(59,130,246,.13); color: #93c5fd; }
+.hr-import-status.error { background: rgba(239,68,68,.13); color: #fca5a5; }
+.hr-row-error { background: rgba(239,68,68,.06); }
+@media (max-width: 760px) {
+    .hr-context-bar, .hr-context-actions, .hr-import-drop-row, .hr-import-header-actions, .hr-add-company { align-items: stretch; flex-direction: column; }
+    .hr-context-actions button, .hr-import-header-actions > * { width: 100%; text-align: center; }
+    .hr-import-rules { min-width: 0; }
+}
