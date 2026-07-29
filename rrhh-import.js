@@ -1,22 +1,21 @@
 (function () {
-    const A = window.Atlas;
-    const XLSX = window.XLSX;
-    const fileInput = document.querySelector("#hrPeopleExcel");
-    const result = document.querySelector("#hrImportResult");
-    const summary = document.querySelector("#hrImportSummary");
-    const errorsTarget = document.querySelector("#hrImportErrors");
-    const preview = document.querySelector("#hrImportPreview");
-    const processButton = document.querySelector("#hrImportProcess");
-    let staged = [];
+    "use strict";
 
+    const A = window.Atlas;
+    const C = window.AtlasHRContext;
+    const XLSX = window.XLSX;
+    const q = selector => document.querySelector(selector);
+    const esc = A.escapeHTML;
     const MASTER_HEADERS = [
         "N°", "C.I.N°", "Apellidos y Nombres", "Modalidad Contractual", "Telefono",
         "Direccion", "Ciudad", "Edad", "N° Hijos", "Tipo de Relacion", "Cuenta Bancaria",
         "Banco", "Fecha de Nacimiento", "E-mail", "contacto de emergencia", "Estado Civil",
         "Cargo", "Horario", "fecha de ingeso", "Apellidos", "Nombres", "Centro de costo",
         "SEXO", "profesion", "mes de cumpleaño", "mes numero", "dias", "Estado",
-        "Nacionalidad", "salario"
+        "Nacionalidad", "salario", "ID del reloj", "Fecha de salida", "Observación de estado"
     ];
+    let staged = [];
+
     function clean(value) {
         return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -24,57 +23,90 @@
     function ci(value) { return String(value ?? "").replace(/\D/g, ""); }
     function valueBy(row, aliases) {
         const wanted = aliases.map(clean);
-        const entry = Object.entries(row).find(([key]) => wanted.includes(clean(key)));
-        return entry?.[1] ?? "";
+        return Object.entries(row).find(([key]) => wanted.includes(clean(key)))?.[1] ?? "";
     }
     function excelDate(value) {
         if (!value) return "";
-        if (value instanceof Date && !Number.isNaN(value.valueOf())) return value.toISOString().slice(0, 10);
+        if (value instanceof Date && !Number.isNaN(value.valueOf())) return A.localDate(value);
         if (typeof value === "number" && XLSX?.SSF?.parse_date_code) {
             const date = XLSX.SSF.parse_date_code(value);
             if (date) return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
         }
-        const text = String(value).trim();
-        const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-        return match ? `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}` : text.slice(0, 10);
+        return window.AtlasHRCalc.dateISO(value);
     }
-    function normalizeRow(row, index) {
+    function clientFor(value) {
+        const text = clean(value);
+        if (!text && !C.isGeneral) return C.client;
+        return C.company.clients.find(item => clean(item.id) === text || clean(item.name) === text || clean(item.costCenter) === text) || null;
+    }
+    function statusFor(value, endDate) {
+        const text = clean(value);
+        if (text.includes("inactiv") || text.includes("baja") || text.includes("retir")) {
+            return endDate.slice(0, 7) === A.localDate().slice(0, 7) ? "inactive-month" : "inactive";
+        }
+        if (text.includes("inactivodelmes")) return "inactive-month";
+        return "active";
+    }
+    function normalizeRow(row, sourceRow) {
         const document = ci(valueBy(row, ["C.I.N°", "CI", "Cedula", "Número de cédula"]));
         const fullName = String(valueBy(row, ["Apellidos y Nombres", "Nombre completo", "Funcionario"])).trim()
             || `${valueBy(row, ["Apellidos"])} ${valueBy(row, ["Nombres"])}`.trim();
-        const statusText = String(valueBy(row, ["Estado"])).toLowerCase();
+        const endDate = excelDate(valueBy(row, ["Fecha de salida", "Fecha de baja", "Retiro"]));
+        const clientText = valueBy(row, ["Centro de costo", "Cliente", "Centro de costo "]);
+        const client = clientFor(clientText);
+        const mode = String(valueBy(row, ["Modalidad Contractual", "Modalidad"]));
         return {
-            id: A.createId() + index,
-            sourceRow: index + 1,
+            id: String(A.createId()) + sourceRow,
+            sourceRow,
             ci: document,
             fullName,
-            client: window.AtlasHRContext?.client?.name || "",
+            clientId: client?.id || "",
+            clientSource: String(clientText || ""),
             position: String(valueBy(row, ["Cargo"])).trim(),
-            branch: "",
-            clockId: "",
-            startDate: excelDate(valueBy(row, ["fecha de ingeso", "fecha de ingreso"])),
-            endDate: "",
-            workerType: /jornal/i.test(valueBy(row, ["Modalidad Contractual"])) ? "daily" : /parcial/i.test(valueBy(row, ["Modalidad Contractual"])) ? "parttime" : "monthly",
-            salary: Number(String(valueBy(row, ["salario"])).replace(/\D/g, "")) || 3044000,
-            scheduleId: "",
-            workDays: [1, 2, 3, 4, 5, 6],
-            active: !/inactiv|baja|retir/i.test(statusText),
+            costCenter: String(clientText || client?.costCenter || "").trim(),
+            clockId: String(valueBy(row, ["ID del reloj", "ID Reloj", "ID marcación"])).trim(),
+            startDate: excelDate(valueBy(row, ["fecha de ingeso", "fecha de ingreso", "Ingreso"])),
+            endDate,
+            status: statusFor(valueBy(row, ["Estado"]), endDate),
+            statusNote: String(valueBy(row, ["Observación de estado", "Observacion"])).trim(),
+            active: statusFor(valueBy(row, ["Estado"]), endDate) === "active",
+            workerType: /jornal/i.test(mode) ? "daily" : /parcial/i.test(mode) ? "parttime" : "monthly",
+            salary: Number(String(valueBy(row, ["salario", "Sueldo"])).replace(/\D/g, "")) || 3044000,
+            birthDate: excelDate(valueBy(row, ["Fecha de Nacimiento", "Nacimiento"])),
+            sex: String(valueBy(row, ["SEXO", "Sexo"])).trim(),
+            civilStatus: String(valueBy(row, ["Estado Civil"])).trim(),
+            nationality: String(valueBy(row, ["Nacionalidad"])).trim() || "Paraguaya",
+            profession: String(valueBy(row, ["profesion", "Profesión"])).trim(),
+            city: String(valueBy(row, ["Ciudad"])).trim(),
+            address: String(valueBy(row, ["Direccion", "Dirección"])).trim(),
+            phone: String(valueBy(row, ["Telefono", "Teléfono"])).trim(),
+            email: String(valueBy(row, ["E-mail", "Email"])).trim(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             sourceData: Object.fromEntries(MASTER_HEADERS.map(header => [header, valueBy(row, [header])]))
         };
     }
+
     function validate(rows) {
         const existing = A.readArray("atlasHRPeople");
         const existingByCI = new Map(existing.filter(item => item.ci).map(item => [ci(item.ci), item]));
+        const existingClock = new Map(existing.filter(item => item.clockId).map(item => [String(item.clockId), item]));
         const counts = new Map();
-        rows.forEach(item => counts.set(item.ci, (counts.get(item.ci) || 0) + 1));
+        const clockCounts = new Map();
+        rows.forEach(item => {
+            counts.set(item.ci, (counts.get(item.ci) || 0) + 1);
+            if (item.clockId) clockCounts.set(item.clockId, (clockCounts.get(item.clockId) || 0) + 1);
+        });
         return rows.map(item => {
             const issues = [];
             if (!item.ci) issues.push("Falta número de cédula");
             if (!item.fullName) issues.push("Falta apellido y nombre");
+            if (!item.clientId) issues.push(`Cliente o centro de costo no reconocido: ${item.clientSource || "vacío"}`);
             if (item.ci && counts.get(item.ci) > 1) issues.push("Cédula repetida dentro del Excel");
+            if (item.clockId && clockCounts.get(item.clockId) > 1) issues.push("ID del reloj repetido dentro del Excel");
             const existingPerson = existingByCI.get(item.ci);
+            const clockOwner = existingClock.get(item.clockId);
+            if (clockOwner && clockOwner.id !== existingPerson?.id) issues.push("ID del reloj ya asignado a otra persona");
             return {
                 ...item,
                 issues,
@@ -83,34 +115,24 @@
             };
         });
     }
+
     function render() {
         const invalid = staged.filter(item => item.issues.length);
         const fresh = staged.filter(item => item.action === "new");
         const updates = staged.filter(item => item.action === "update");
-        summary.innerHTML = `
-            <span><strong>${staged.length}</strong> filas leídas</span>
-            <span><strong>${fresh.length}</strong> nuevos</span>
-            <span><strong>${updates.length}</strong> actualizaciones</span>
-            <span><strong>${invalid.length}</strong> con error</span>`;
-        errorsTarget.innerHTML = invalid.length ? `<strong>Errores que deben corregirse</strong><ul>${invalid.map(item =>
-            `<li>Fila ${item.sourceRow} · CI ${A.escapeHTML(item.ci || "vacía")} · ${A.escapeHTML(item.fullName || "sin nombre")}: ${A.escapeHTML(item.issues.join(", "))}</li>`
-        ).join("")}</ul>` : `<div class="hr-import-ok">✓ El archivo está listo para procesarse.</div>`;
-        preview.innerHTML = `<table class="hr-simple-table"><thead><tr><th>Fila</th><th>Cédula</th><th>Funcionario</th><th>Modalidad</th><th>Cargo</th><th>Ingreso</th><th>Resultado</th></tr></thead><tbody>${staged.map(item => `
-            <tr class="${item.issues.length ? "hr-row-error" : ""}">
-                <td>${item.sourceRow}</td><td>${A.escapeHTML(item.ci || "—")}</td><td>${A.escapeHTML(item.fullName || "—")}</td>
-                <td>${A.escapeHTML(item.workerType === "daily" ? "Jornalero" : item.workerType === "parttime" ? "Tiempo parcial" : "Mensualizado")}</td>
-                <td>${A.escapeHTML(item.position || "—")}</td><td>${A.escapeHTML(item.startDate || "—")}</td>
-                <td><span class="hr-import-status ${item.action}">${item.action === "error" ? "Error" : item.action === "update" ? "Actualizar" : "Nuevo"}</span></td>
-            </tr>`).join("")}</tbody></table>`;
-        result.hidden = false;
-        processButton.disabled = !staged.length || invalid.length > 0;
+        q("#hrImportSummary").innerHTML = `<span><strong>${staged.length.toLocaleString("es-PY")}</strong> filas</span><span><strong>${fresh.length}</strong> nuevos</span><span><strong>${updates.length}</strong> actualizaciones</span><span><strong>${invalid.length}</strong> con error</span>`;
+        q("#hrImportErrors").innerHTML = invalid.length ? `<strong>Corregí estos datos antes de procesar:</strong><ul>${invalid.slice(0, 100).map(item =>
+            `<li>Fila ${item.sourceRow} · CI ${esc(item.ci || "vacía")} · ${esc(item.fullName || "sin nombre")}: ${esc(item.issues.join(", "))}</li>`
+        ).join("")}</ul>${invalid.length > 100 ? `<p>Se muestran 100 de ${invalid.length} errores.</p>` : ""}` : '<div class="hr-import-ok">✓ El archivo está listo para procesarse.</div>';
+        q("#hrImportPreview").innerHTML = `<table class="hr-simple-table"><thead><tr><th>Fila</th><th>Cédula</th><th>Funcionario</th><th>Cliente</th><th>Estado</th><th>Resultado</th></tr></thead><tbody>${staged.slice(0, 200).map(item => `<tr class="${item.issues.length ? "hr-row-error" : ""}"><td>${item.sourceRow}</td><td>${esc(item.ci || "—")}</td><td>${esc(item.fullName || "—")}</td><td>${esc(C.clientById(item.clientId)?.name || item.clientSource || "—")}</td><td>${esc(item.status)}</td><td><span class="hr-import-status ${item.action}">${item.action === "error" ? "Error" : item.action === "update" ? "Actualizar" : "Nuevo"}</span></td></tr>`).join("")}</tbody></table>`;
+        q("#hrImportResult").hidden = false;
+        q("#hrImportProcess").disabled = !staged.length || invalid.length > 0;
     }
+
     async function readWorkbook(file) {
-        if (!XLSX) throw new Error("El lector de Excel no está disponible.");
         const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
         const preferred = workbook.SheetNames.find(name => /datos.*personal/i.test(name)) || workbook.SheetNames[0];
-        const sheet = workbook.Sheets[preferred];
-        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
+        const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[preferred], { header: 1, defval: "", raw: true });
         const headerIndex = matrix.findIndex(row => row.some(cell => ["cin", "cin°", "cedula", "apellidosynombres"].includes(clean(cell))));
         if (headerIndex < 0) throw new Error("No encontré la fila de encabezados de Datos Personales.");
         const headers = matrix[headerIndex].map(String);
@@ -120,57 +142,66 @@
         staged = validate(rows.map((row, index) => normalizeRow(row, headerIndex + index + 2)));
         render();
     }
-    fileInput?.addEventListener("change", async event => {
+
+    q("#hrPeopleExcel").addEventListener("change", async event => {
         const file = event.target.files?.[0];
         if (!file) return;
         try {
             await readWorkbook(file);
-            A.notify("Excel analizado. Revisá la vista previa.", "success");
+            A.notify("Excel analizado. Nada se guardó todavía.");
         } catch (error) {
             A.notify(error.message || "No se pudo leer el archivo.", "error");
+        } finally {
             event.target.value = "";
         }
     });
-    document.querySelector("#hrImportCancel")?.addEventListener("click", () => {
-        staged = []; result.hidden = true; fileInput.value = "";
-    });
-    processButton?.addEventListener("click", () => {
+    q("#hrImportCancel").addEventListener("click", () => { staged = []; q("#hrImportResult").hidden = true; });
+    q("#hrImportProcess").addEventListener("click", () => {
         if (!staged.length || staged.some(item => item.issues.length)) return;
-        const current = A.readArray("atlasHRPeople");
+        let current = A.readArray("atlasHRPeople");
         staged.forEach(item => {
-            const cleanItem = { ...item }; delete cleanItem.issues; delete cleanItem.action; delete cleanItem.existingId; delete cleanItem.sourceRow;
+            const cleanItem = { ...item };
+            ["issues", "action", "existingId", "sourceRow", "clientSource"].forEach(key => delete cleanItem[key]);
             const index = current.findIndex(person => ci(person.ci) === item.ci);
             if (index >= 0) current[index] = { ...current[index], ...cleanItem, id: current[index].id, createdAt: current[index].createdAt };
             else current.unshift(cleanItem);
         });
         A.writeJSON("atlasHRPeople", current);
-        A.notify(`${staged.length} funcionario(s) procesado(s) correctamente.`, "success");
-        setTimeout(() => location.reload(), 700);
+        window.dispatchEvent(new CustomEvent("atlas:hr-data-changed", { detail: { type: "people-import" } }));
+        A.notify(`${staged.length.toLocaleString("es-PY")} funcionario(s) procesado(s).`);
+        staged = [];
+        q("#hrImportResult").hidden = true;
     });
-    document.querySelector("#hrExportPeople")?.addEventListener("click", () => {
-        const people = [...A.readArray("atlasHRPeople")].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-        if (!people.length) return A.notify("No hay funcionarios para exportar en este cliente.", "error");
-        const rows = people.map((person, index) => {
-            const source = person.sourceData || {};
-            return {
-                ...Object.fromEntries(MASTER_HEADERS.map(header => [header, source[header] ?? ""])),
-                "N°": people.length - index,
-                "C.I.N°": person.ci,
-                "Apellidos y Nombres": person.fullName,
-                "Modalidad Contractual": person.workerType === "daily" ? "Jornalero" : person.workerType === "parttime" ? "Tiempo parcial" : "Mensualizado",
-                "Cargo": person.position,
-                "Horario": person.scheduleId || source.Horario || "",
-                "fecha de ingeso": person.startDate,
-                "Centro de costo ": window.AtlasHRContext?.client?.name || "",
-                "Estado": person.active === false ? "INACTIVO" : "ACTIVO",
-                "salario": person.salary
-            };
-        });
-        const sheet = XLSX.utils.json_to_sheet(rows, { header: MASTER_HEADERS });
+
+    q("#hrExportPeople").addEventListener("click", () => {
+        const roster = C.visible(A.readArray("atlasHRPeople")).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName), "es"));
+        if (!roster.length) return A.notify("No hay funcionarios para exportar.", "error");
+        const rows = roster.map((person, index) => ({
+            ...Object.fromEntries(MASTER_HEADERS.map(header => [header, person.sourceData?.[header] ?? ""])),
+            "N°": index + 1,
+            "C.I.N°": person.ci,
+            "Apellidos y Nombres": person.fullName,
+            "Modalidad Contractual": person.workerType === "daily" ? "Jornalero" : person.workerType === "parttime" ? "Tiempo parcial" : "Mensualizado",
+            "Telefono": person.phone,
+            "Direccion": person.address,
+            "Ciudad": person.city,
+            "Fecha de Nacimiento": person.birthDate,
+            "E-mail": person.email,
+            "Estado Civil": person.civilStatus,
+            "Cargo": person.position,
+            "fecha de ingeso": person.startDate,
+            "Centro de costo": C.clientById(person.clientId)?.name || person.costCenter,
+            "SEXO": person.sex,
+            "profesion": person.profession,
+            "Estado": person.status === "active" ? "ACTIVO" : person.status === "inactive-month" ? "INACTIVO MES" : "INACTIVO",
+            "Nacionalidad": person.nationality,
+            "salario": person.salary,
+            "ID del reloj": person.clockId,
+            "Fecha de salida": person.endDate,
+            "Observación de estado": person.statusNote
+        }));
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, sheet, "DATOS PERSONALES");
-        const company = window.AtlasHRContext?.company?.name || "EMPRESA";
-        const client = window.AtlasHRContext?.client?.name || "CLIENTE";
-        XLSX.writeFile(workbook, `ATLAS_RRHH_${company}_${client}_FUNCIONARIOS.xlsx`.replace(/[^\w.-]+/g, "_"));
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows, { header: MASTER_HEADERS }), "DATOS PERSONALES");
+        XLSX.writeFile(workbook, `ATLAS_RRHH_${C.company.name}_${C.client?.name || C.company.rosterName}_FUNCIONARIOS.xlsx`.replace(/[^\w.-]+/g, "_"));
     });
 })();

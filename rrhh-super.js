@@ -1,341 +1,730 @@
 (function () {
-    const A = window.Atlas;
-    const KEYS = {
-        clients: "atlasHRClients",
-        branches: "atlasHRBranches",
-        schedules: "atlasHRSchedules",
-        attendance: "atlasHRAttendance",
-        compliance: "atlasHRCompliance"
-    };
-    const read = key => A.readArray(KEYS[key]);
-    const write = (key, value) => A.writeJSON(KEYS[key], value);
-    const money = value => `G. ${Math.round(Number(value) || 0).toLocaleString("es-PY")}`;
-    const esc = A.escapeHTML;
-    let clients = read("clients");
-    let branches = read("branches");
-    let schedules = read("schedules");
-    let attendance = read("attendance");
-    let compliance = read("compliance");
+    "use strict";
 
-    function people() { return A.readArray("atlasHRPeople"); }
-    function id() { return A.createId(); }
-    function personName(personId) {
-        return people().find(item => String(item.id) === String(personId))?.fullName || "Funcionario";
+    const A = window.Atlas;
+    const C = window.AtlasHRContext;
+    const Calc = window.AtlasHRCalc;
+    const Store = window.AtlasHRStorage;
+    const XLSX = window.XLSX;
+    const q = selector => document.querySelector(selector);
+    const esc = A.escapeHTML;
+    const KEYS = {
+        schedules: "atlasHRSchedules",
+        assignments: "atlasHRScheduleAssignments",
+        absences: "atlasHRAbsences",
+        compliance: "atlasHRCompliance",
+        holidays: "atlasHRHolidays",
+        imports: "atlasHRAttendanceImports"
+    };
+    let schedules = A.readArray(KEYS.schedules).map(normalizeSchedule);
+    let assignments = A.readArray(KEYS.assignments).map(normalizeAssignment);
+    let attendance = [];
+    let stagedAttendance = [];
+    let stagedMappings = new Map();
+    let calculations = [];
+
+    function people() { return window.AtlasHRPeople?.all() || A.readArray("atlasHRPeople"); }
+    function visiblePeople() { return C.visible(people()); }
+    function personById(id) { return people().find(item => String(item.id) === String(id)); }
+    function clientName(person) { return C.clientById(person?.clientId)?.name || "Sin cliente"; }
+    function save(key, value) { A.writeJSON(KEYS[key], value); }
+    function id(prefix = "") { return `${prefix}${A.createId()}-${Math.floor(Math.random() * 100000)}`; }
+    function todayPeriod() { return A.localDate().slice(0, 7); }
+
+    function normalizeRules(item) {
+        if (Array.isArray(item?.rules) && item.rules.length) return item.rules.map(rule => ({
+            day: Number(rule.day),
+            active: rule.active !== false,
+            start: rule.start || item.start || "",
+            end: rule.end || item.end || "",
+            breakMinutes: Number(rule.breakMinutes ?? item.breakMinutes ?? 0),
+            tolerance: Number(rule.tolerance ?? item.tolerance ?? 0)
+        }));
+        const days = Array.isArray(item?.days) && item.days.length ? item.days : [1, 2, 3, 4, 5, 6];
+        return days.map(day => ({
+            day: Number(day),
+            active: true,
+            start: item?.start || "",
+            end: item?.end || "",
+            breakMinutes: Number(item?.breakMinutes || 0),
+            tolerance: Number(item?.tolerance || 0)
+        }));
+    }
+
+    function normalizeSchedule(item) {
+        const legacyRevision = {
+            id: id("rev-"),
+            effectiveFrom: item?.effectiveFrom || item?.createdAt?.slice(0, 10) || "2000-01-01",
+            rules: normalizeRules(item),
+            note: item?.note || "",
+            createdAt: item?.createdAt || new Date().toISOString()
+        };
+        return {
+            id: String(item?.id || id("sch-")),
+            name: String(item?.name || "Horario sin nombre").trim(),
+            active: item?.active !== false,
+            revisions: Array.isArray(item?.revisions) && item.revisions.length
+                ? item.revisions.map(revision => ({ ...revision, id: String(revision.id || id("rev-")), rules: normalizeRules(revision) }))
+                : [legacyRevision],
+            createdAt: item?.createdAt || new Date().toISOString(),
+            updatedAt: item?.updatedAt || item?.createdAt || new Date().toISOString()
+        };
+    }
+
+    function normalizeAssignment(item) {
+        return {
+            id: String(item?.id || id("asg-")),
+            employeeId: String(item?.employeeId || ""),
+            scheduleId: String(item?.scheduleId || ""),
+            from: item?.from || item?.effectiveFrom || "2000-01-01",
+            to: item?.to || "",
+            note: String(item?.note || ""),
+            createdAt: item?.createdAt || new Date().toISOString()
+        };
+    }
+
+    function activeRevision(schedule, date = A.localDate()) {
+        return [...(schedule?.revisions || [])]
+            .filter(item => !item.effectiveFrom || item.effectiveFrom <= date)
+            .sort((a, b) => String(b.effectiveFrom).localeCompare(String(a.effectiveFrom)))[0]
+            || schedule?.revisions?.[0]
+            || null;
+    }
+
+    function scheduleView(schedule, date) {
+        const revision = activeRevision(schedule, date);
+        if (!revision) return null;
+        const first = revision.rules?.[0] || {};
+        return {
+            id: schedule.id,
+            name: schedule.name,
+            start: first.start,
+            end: first.end,
+            breakMinutes: first.breakMinutes,
+            tolerance: first.tolerance,
+            rules: revision.rules,
+            revisionId: revision.id,
+            effectiveFrom: revision.effectiveFrom
+        };
+    }
+
+    function assignmentFor(employeeId, date) {
+        return assignments
+            .filter(item => item.employeeId === String(employeeId) && item.from <= date && (!item.to || item.to >= date))
+            .sort((a, b) => String(b.from).localeCompare(String(a.from)))[0] || null;
+    }
+
+    function scheduleFor(employeeId, date) {
+        const assignment = assignmentFor(employeeId, date);
+        return scheduleView(schedules.find(item => item.id === assignment?.scheduleId), date);
     }
 
     function activateTab(name) {
-        document.querySelectorAll("[data-hr-tab]").forEach(button => {
-            button.classList.toggle("active", button.dataset.hrTab === name);
-        });
-        document.querySelectorAll("[data-hr-panel]").forEach(panel => {
-            panel.hidden = panel.dataset.hrPanel !== name;
-        });
-        const layout = document.querySelector(".hr-layout");
-        const directory = document.querySelector(".hr-directory-panel");
-        const main = document.querySelector(".hr-main-panel");
-        if (name === "people") {
-            layout.hidden = false;
-            main.hidden = true;
-            directory.hidden = false;
-        } else if (name === "news") {
-            layout.hidden = false;
-            main.hidden = false;
-            directory.hidden = false;
-        } else {
-            main.hidden = false;
-        }
+        document.querySelectorAll("[data-hr-tab]").forEach(button => button.classList.toggle("active", button.dataset.hrTab === name));
+        document.querySelectorAll("[data-hr-panel]").forEach(panel => { panel.hidden = panel.dataset.hrPanel !== name; });
         history.replaceState(null, "", `#${name}`);
+        if (name === "schedules") loadAttendance().catch(console.error);
+        if (name === "calculations" && !q("#hrCalculationPeriod").value) q("#hrCalculationPeriod").value = q("#hrAttendancePeriod").value;
     }
 
-    document.querySelector(".hr-module-nav")?.addEventListener("click", event => {
+    q(".hr-module-nav")?.addEventListener("click", event => {
         const button = event.target.closest("[data-hr-tab]");
         if (button) activateTab(button.dataset.hrTab);
     });
 
-    function renderClientOptions() {
-        const options = clients
-            .sort((a, b) => a.name.localeCompare(b.name, "es"))
-            .map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("");
-        const select = document.querySelector("#hrBranchClient");
-        if (select) select.innerHTML = `<option value="">Seleccionar cliente</option>${options}`;
-        renderEmployeeStructureOptions();
+    function selectedDays() {
+        return Array.from(q("#hrScheduleDays").querySelectorAll("input:checked"), input => Number(input.value));
     }
 
-    function renderEmployeeStructureOptions() {
-        const clientSelect = document.querySelector("#employeeClient");
-        const branchSelect = document.querySelector("#employeeBranch");
-        const scheduleSelect = document.querySelector("#employeeSchedule");
-        if (!clientSelect || !branchSelect || !scheduleSelect) return;
-        const selectedClient = clientSelect.value;
-        const selectedBranch = branchSelect.value;
-        const selectedSchedule = scheduleSelect.value;
-        clientSelect.innerHTML = `<option value="">Sin cliente asignado</option>${clients.map(item => `<option value="${esc(item.name)}">${esc(item.name)}</option>`).join("")}`;
-        if (clients.some(item => item.name === selectedClient)) clientSelect.value = selectedClient;
-        const client = clients.find(item => item.name === clientSelect.value);
-        const availableBranches = branches.filter(item => !client || item.clientId === client.id);
-        branchSelect.innerHTML = `<option value="">Sin sucursal asignada</option>${availableBranches.map(item => `<option value="${esc(item.name)}">${esc(item.name)}</option>`).join("")}`;
-        if (availableBranches.some(item => item.name === selectedBranch)) branchSelect.value = selectedBranch;
-        scheduleSelect.innerHTML = `<option value="">Sin horario asignado</option>${schedules.map(item => `<option value="${item.id}">${esc(item.name)} · ${esc(item.start)}–${esc(item.end)}</option>`).join("")}`;
-        if (schedules.some(item => item.id === selectedSchedule)) scheduleSelect.value = selectedSchedule;
+    function resetScheduleForm() {
+        q("#hrScheduleForm").reset();
+        q("#hrScheduleId").value = "";
+        q("#hrScheduleFrom").value = A.localDate();
+        q("#hrScheduleDays").querySelectorAll("input").forEach(input => { input.checked = Number(input.value) !== 0; });
+        q("#hrScheduleCancel").hidden = true;
     }
 
-    function renderStructure() {
-        renderClientOptions();
-        const target = document.querySelector("#hrStructureList");
-        if (!target) return;
-        if (!clients.length) {
-            target.innerHTML = '<div class="empty-state">Todavía no cargaste clientes ni sucursales.</div>';
+    function renderScheduleOptions() {
+        const options = schedules.filter(item => item.active).sort((a, b) => a.name.localeCompare(b.name, "es"))
+            .map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("");
+        q("#hrAssignmentSchedule").innerHTML = `<option value="">Seleccionar horario</option>${options}`;
+    }
+
+    function renderEmployeeOptions() {
+        const employees = visiblePeople().filter(item => item.status === "active").sort((a, b) => a.fullName.localeCompare(b.fullName, "es"));
+        const options = employees.map(item => `<option value="${esc(item.id)}">${esc(item.fullName)} · CI ${esc(item.ci || "—")}</option>`).join("");
+        ["#hrAssignmentEmployee", "#hrAttendanceEmployee"].forEach(selector => {
+            const select = q(selector);
+            const selected = select.value;
+            select.innerHTML = `<option value="">Seleccionar funcionario</option>${options}`;
+            if (employees.some(item => item.id === selected)) select.value = selected;
+        });
+    }
+
+    function renderSchedules() {
+        renderScheduleOptions();
+        const target = q("#hrScheduleList");
+        if (!schedules.length) {
+            target.innerHTML = '<div class="empty-state">Creá el primer tipo de horario.</div>';
             return;
         }
-        target.innerHTML = clients.map(client => {
-            const items = branches.filter(branch => branch.clientId === client.id);
-            return `<article class="hr-data-card">
-                <div><small>${esc(client.code || "SIN CÓDIGO")}</small><strong>${esc(client.name)}</strong>
-                <span>${items.length} sucursal${items.length === 1 ? "" : "es"}</span></div>
-                <ul>${items.length ? items.map(branch => `<li><b>${esc(branch.name)}</b><span>${esc(branch.address || "Sin ubicación")}</span><button data-delete-branch="${branch.id}" type="button">Eliminar</button></li>`).join("") : "<li>Sin sucursales registradas</li>"}</ul>
-                <button data-delete-client="${client.id}" class="hr-delete-link" type="button">Eliminar cliente</button>
+        target.innerHTML = schedules.sort((a, b) => a.name.localeCompare(b.name, "es")).map(item => {
+            const revision = activeRevision(item);
+            const days = (revision?.rules || []).map(rule => ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"][Number(rule.day)]).join(", ");
+            const rule = revision?.rules?.[0] || {};
+            return `<article class="hr-data-card hr-schedule-card">
+                <div><small>${esc(days || "Sin días")}</small><strong>${esc(item.name)}</strong><span>${esc(rule.start || "—")}–${esc(rule.end || "—")} · desde ${esc(revision?.effectiveFrom || "—")}</span></div>
+                <p>${esc(revision?.note || "Sin observación")} · ${item.revisions.length} versión(es)</p>
+                <button data-edit-schedule="${esc(item.id)}" type="button">Editar / nueva vigencia</button>
+                <button data-toggle-schedule="${esc(item.id)}" class="hr-delete-link" type="button">${item.active ? "Desactivar" : "Reactivar"}</button>
             </article>`;
         }).join("");
     }
 
-    document.querySelector("#hrClientForm")?.addEventListener("submit", event => {
+    q("#hrScheduleForm").addEventListener("submit", event => {
         event.preventDefault();
-        const name = document.querySelector("#hrClientName").value.trim();
-        if (clients.some(item => item.name.toLowerCase() === name.toLowerCase())) {
-            A.notify("Ese cliente ya existe.", "error"); return;
+        const days = selectedDays();
+        if (!days.length) return A.notify("Elegí al menos un día de trabajo.", "error");
+        const scheduleId = q("#hrScheduleId").value;
+        const revision = {
+            id: id("rev-"),
+            effectiveFrom: q("#hrScheduleFrom").value,
+            note: q("#hrScheduleNote").value.trim(),
+            rules: days.map(day => ({
+                day,
+                active: true,
+                start: q("#hrScheduleStart").value,
+                end: q("#hrScheduleEnd").value,
+                breakMinutes: Number(q("#hrScheduleBreak").value || 0),
+                tolerance: Number(q("#hrScheduleTolerance").value || 0)
+            })),
+            createdAt: new Date().toISOString()
+        };
+        const current = schedules.find(item => item.id === scheduleId);
+        if (current) {
+            current.name = q("#hrScheduleName").value.trim();
+            const sameDate = current.revisions.find(item => item.effectiveFrom === revision.effectiveFrom);
+            if (sameDate) Object.assign(sameDate, revision, { id: sameDate.id });
+            else current.revisions.push(revision);
+            current.updatedAt = new Date().toISOString();
+        } else {
+            schedules.push(normalizeSchedule({
+                id: id("sch-"),
+                name: q("#hrScheduleName").value,
+                revisions: [revision]
+            }));
         }
-        clients.push({ id: id(), name, code: document.querySelector("#hrClientCode").value.trim(), active: true });
-        write("clients", clients); event.target.reset(); renderStructure();
-        A.notify("Cliente guardado.", "success");
+        save("schedules", schedules);
+        resetScheduleForm();
+        renderSchedules();
+        renderAssignments();
+        A.notify(current ? "Nueva vigencia guardada sin modificar periodos anteriores." : "Horario creado.");
     });
 
-    document.querySelector("#hrBranchForm")?.addEventListener("submit", event => {
-        event.preventDefault();
-        branches.push({
-            id: id(),
-            clientId: document.querySelector("#hrBranchClient").value,
-            name: document.querySelector("#hrBranchName").value.trim(),
-            address: document.querySelector("#hrBranchAddress").value.trim()
+    q("#hrScheduleList").addEventListener("click", event => {
+        const edit = event.target.closest("[data-edit-schedule]");
+        const toggle = event.target.closest("[data-toggle-schedule]");
+        if (edit) {
+            const item = schedules.find(schedule => schedule.id === edit.dataset.editSchedule);
+            const revision = activeRevision(item);
+            const rule = revision?.rules?.[0] || {};
+            q("#hrScheduleId").value = item.id;
+            q("#hrScheduleName").value = item.name;
+            q("#hrScheduleStart").value = rule.start || "";
+            q("#hrScheduleEnd").value = rule.end || "";
+            q("#hrScheduleBreak").value = rule.breakMinutes || 0;
+            q("#hrScheduleTolerance").value = rule.tolerance || 0;
+            q("#hrScheduleFrom").value = A.localDate();
+            q("#hrScheduleNote").value = revision?.note || "";
+            const days = new Set((revision?.rules || []).map(entry => Number(entry.day)));
+            q("#hrScheduleDays").querySelectorAll("input").forEach(input => { input.checked = days.has(Number(input.value)); });
+            q("#hrScheduleCancel").hidden = false;
+            q("#hrScheduleName").focus();
+        }
+        if (toggle) {
+            schedules = schedules.map(item => item.id === toggle.dataset.toggleSchedule ? { ...item, active: !item.active, updatedAt: new Date().toISOString() } : item);
+            save("schedules", schedules); renderSchedules();
+        }
+    });
+    q("#hrScheduleCancel").addEventListener("click", resetScheduleForm);
+
+    function renderAssignments() {
+        renderEmployeeOptions();
+        const ids = new Set(visiblePeople().map(item => item.id));
+        const visible = assignments.filter(item => ids.has(item.employeeId)).sort((a, b) => String(b.from).localeCompare(String(a.from)));
+        if (!visible.length) {
+            q("#hrAssignmentList").innerHTML = '<div class="empty-state">Todavía no hay horarios asignados.</div>';
+            return;
+        }
+        q("#hrAssignmentList").innerHTML = `<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Horario</th><th>Desde</th><th>Hasta</th><th>Observación</th><th></th></tr></thead><tbody>${visible.map(item => `
+            <tr><td>${esc(personById(item.employeeId)?.fullName || "No encontrado")}</td><td>${esc(schedules.find(schedule => schedule.id === item.scheduleId)?.name || "Horario no encontrado")}</td>
+            <td>${esc(item.from)}</td><td>${esc(item.to || "Vigente")}</td><td>${esc(item.note || "—")}</td><td><button data-delete-assignment="${esc(item.id)}" type="button">Finalizar</button></td></tr>`).join("")}</tbody></table>`;
+    }
+
+    function previousDate(date) {
+        const parsed = A.parseDate(date);
+        parsed.setDate(parsed.getDate() - 1);
+        return A.localDate(parsed);
+    }
+
+    function assignSchedule(employeeId, scheduleId, from, to = "", note = "") {
+        assignments.forEach(item => {
+            if (item.employeeId === employeeId && item.from < from && (!item.to || item.to >= from)) item.to = previousDate(from);
         });
-        write("branches", branches); event.target.reset(); renderStructure();
-        A.notify("Sucursal guardada.", "success");
-    });
-
-    document.querySelector("#hrStructureList")?.addEventListener("click", event => {
-        const branchId = event.target.dataset.deleteBranch;
-        const clientId = event.target.dataset.deleteClient;
-        if (branchId) {
-            branches = branches.filter(item => item.id !== branchId); write("branches", branches);
-        }
-        if (clientId) {
-            if (branches.some(item => item.clientId === clientId)) {
-                A.notify("Eliminá primero las sucursales de este cliente.", "error"); return;
-            }
-            clients = clients.filter(item => item.id !== clientId); write("clients", clients);
-        }
-        renderStructure();
-    });
-    document.querySelector("#employeeClient")?.addEventListener("change", renderEmployeeStructureOptions);
-
-    function minutes(time) {
-        const [hour, minute] = String(time || "00:00").split(":").map(Number);
-        return hour * 60 + minute;
-    }
-    function scheduleDuration(item) {
-        let total = minutes(item.end) - minutes(item.start);
-        if (total <= 0) total += 1440;
-        return Math.max(0, total - Number(item.breakMinutes || 0));
-    }
-    function scheduleSegments(item) {
-        let start = minutes(item.start), end = minutes(item.end);
-        if (end <= start) end += 1440;
-        let night = 0;
-        for (let point = start; point < end; point += 1) {
-            const minuteOfDay = point % 1440;
-            if (minuteOfDay >= 1200 || minuteOfDay < 360) night += 1;
-        }
-        return { night, day: end - start - night };
-    }
-    function renderSchedules() {
-        const target = document.querySelector("#hrScheduleList");
-        if (!target) return;
-        target.innerHTML = schedules.length ? schedules.map(item => {
-            const total = scheduleDuration(item);
-            const segments = scheduleSegments(item);
-            const warning = total > 8 * 60 ? "Jornada extensa: revisar extras y descanso." : (minutes(item.end) <= minutes(item.start) ? "Cruza medianoche." : "Jornada dentro del mismo día.");
-            return `<article class="hr-data-card hr-schedule-card">
-                <div><small>HORARIO</small><strong>${esc(item.name)}</strong><span>${esc(item.start)}–${esc(item.end)} · ${(total / 60).toFixed(2)} h netas</span></div>
-                <p>Diurnas: ${(segments.day / 60).toFixed(2)} h · nocturnas: ${(segments.night / 60).toFixed(2)} h. ${esc(warning)} Tolerancia: ${item.tolerance || 0} min.</p>
-                <button data-delete-schedule="${item.id}" class="hr-delete-link" type="button">Eliminar</button>
-            </article>`;
-        }).join("") : '<div class="empty-state">Creá el primer tipo de horario.</div>';
-        renderEmployeeStructureOptions();
+        const duplicate = assignments.find(item => item.employeeId === employeeId && item.from === from);
+        const next = normalizeAssignment({ id: duplicate?.id || id("asg-"), employeeId, scheduleId, from, to, note, createdAt: duplicate?.createdAt });
+        if (duplicate) assignments = assignments.map(item => item.id === duplicate.id ? next : item);
+        else assignments.push(next);
     }
 
-    document.querySelector("#hrScheduleForm")?.addEventListener("submit", event => {
+    q("#hrAssignmentForm").addEventListener("submit", event => {
         event.preventDefault();
-        schedules.push({
-            id: id(),
-            name: document.querySelector("#hrScheduleName").value.trim(),
-            start: document.querySelector("#hrScheduleStart").value,
-            end: document.querySelector("#hrScheduleEnd").value,
-            breakMinutes: Number(document.querySelector("#hrScheduleBreak").value || 0),
-            tolerance: Number(document.querySelector("#hrScheduleTolerance").value || 0)
-        });
-        write("schedules", schedules); event.target.reset(); renderSchedules();
-        A.notify("Horario creado.", "success");
+        assignSchedule(q("#hrAssignmentEmployee").value, q("#hrAssignmentSchedule").value, q("#hrAssignmentFrom").value, q("#hrAssignmentTo").value, q("#hrAssignmentNote").value);
+        save("assignments", assignments);
+        event.target.reset();
+        q("#hrAssignmentFrom").value = A.localDate();
+        renderAssignments();
+        A.notify("Horario asignado.");
     });
-    document.querySelector("#hrScheduleList")?.addEventListener("click", event => {
-        const targetId = event.target.dataset.deleteSchedule;
-        if (!targetId) return;
-        schedules = schedules.filter(item => item.id !== targetId);
-        write("schedules", schedules); renderSchedules();
+    q("#hrAssignmentList").addEventListener("click", event => {
+        const button = event.target.closest("[data-delete-assignment]");
+        if (!button) return;
+        assignments = assignments.map(item => item.id === button.dataset.deleteAssignment ? { ...item, to: previousDate(A.localDate()) } : item);
+        save("assignments", assignments); renderAssignments();
     });
 
-    function renderEmployeeOptions() {
-        const options = people().filter(item => item.active !== false)
-            .map(item => `<option value="${item.id}">${esc(item.fullName)} · CI ${esc(item.ci || "—")}</option>`).join("");
-        const select = document.querySelector("#hrAttendanceEmployee");
-        if (select) select.innerHTML = `<option value="">Seleccionar funcionario</option>${options}`;
+    function workbookRows(rows, name) {
+        const workbook = XLSX.utils.book_new();
+        const sheet = XLSX.utils.json_to_sheet(rows);
+        XLSX.utils.book_append_sheet(workbook, sheet, name);
+        return workbook;
     }
+
+    q("#hrExportAssignments").addEventListener("click", () => {
+        const ids = new Set(visiblePeople().map(item => item.id));
+        const rows = assignments.filter(item => ids.has(item.employeeId)).map(item => {
+            const person = personById(item.employeeId);
+            return {
+                "Cédula": person?.ci || "",
+                "Nombre": person?.fullName || "",
+                "Denominación del horario": schedules.find(schedule => schedule.id === item.scheduleId)?.name || "",
+                "Desde": item.from,
+                "Hasta": item.to,
+                "Observación": item.note
+            };
+        });
+        if (!rows.length) return A.notify("No hay asignaciones para exportar.", "error");
+        XLSX.writeFile(workbookRows(rows, "ASIGNACIONES"), `ATLAS_HORARIOS_${C.company.name}_${C.client?.name || C.company.rosterName}.xlsx`.replace(/[^\w.-]+/g, "_"));
+    });
+
+    q("#hrAssignmentFile").addEventListener("change", async event => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+            let imported = 0;
+            const errors = [];
+            rows.forEach((row, index) => {
+                const value = aliases => Object.entries(row).find(([key]) => aliases.some(alias => clean(key).includes(clean(alias))))?.[1] ?? "";
+                const document = String(value(["cedula", "c.i"])).replace(/\D/g, "");
+                const person = people().find(item => item.ci === document);
+                const scheduleName = String(value(["denominacion del horario", "horario"])).trim();
+                const schedule = schedules.find(item => item.name.toLowerCase() === scheduleName.toLowerCase());
+                if (!person || !schedule) {
+                    errors.push(`Fila ${index + 2}: ${!person ? "cédula no encontrada" : "horario no encontrado"}`);
+                    return;
+                }
+                assignSchedule(person.id, schedule.id, Calc.dateISO(value(["desde"])) || A.localDate(), Calc.dateISO(value(["hasta"])), String(value(["observacion"])));
+                imported += 1;
+            });
+            save("assignments", assignments); renderAssignments();
+            A.notify(`${imported} asignación(es) importada(s)${errors.length ? `; ${errors.length} fila(s) omitida(s)` : ""}.`, errors.length ? "error" : "success");
+        } catch (error) {
+            A.notify(error.message || "No se pudo leer el Excel.", "error");
+        } finally {
+            event.target.value = "";
+        }
+    });
+
+    function clean(value) {
+        return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function periodRecords() {
+        return C.visible(attendance);
+    }
+
+    async function loadAttendance() {
+        const period = q("#hrAttendancePeriod").value || todayPeriod();
+        q("#hrAttendancePeriod").value = period;
+        attendance = await Store.getMonth(C.active.companyId, period);
+        renderAttendance();
+    }
+
     function renderAttendance() {
         renderEmployeeOptions();
-        const visible = [...attendance].sort((a, b) => `${b.date}${b.in || ""}`.localeCompare(`${a.date}${a.in || ""}`));
-        const summary = document.querySelector("#hrAttendanceSummary");
-        if (summary) {
-            const missing = visible.filter(item => item.status === "missing").length;
-            const incomplete = visible.filter(item => item.status === "worked" && (!item.in || !item.out)).length;
-            summary.innerHTML = `<span><strong>${visible.length}</strong> registros</span><span><strong>${missing}</strong> faltas</span><span><strong>${incomplete}</strong> incompletas</span>`;
+        const records = periodRecords().sort((a, b) => `${b.date}${b.in}`.localeCompare(`${a.date}${a.in}`));
+        const pending = records.filter(item => item.rawStatus === "FALTA" && !item.resolvedStatus).length;
+        const incomplete = records.filter(item => (item.in && !item.out) || (!item.in && item.out)).length;
+        q("#hrAttendanceSummary").innerHTML = `<span><strong>${records.length.toLocaleString("es-PY")}</strong> registros</span><span><strong>${pending}</strong> FALTA pendiente</span><span><strong>${incomplete}</strong> incompletas</span>`;
+        if (!records.length) {
+            q("#hrAttendanceList").innerHTML = '<div class="empty-state">No hay marcaciones en este periodo.</div>';
+            return;
         }
-        const target = document.querySelector("#hrAttendanceList");
-        if (!target) return;
-        if (!visible.length) { target.innerHTML = '<div class="empty-state">No hay marcaciones cargadas.</div>'; return; }
-        target.innerHTML = `<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th></th></tr></thead><tbody>${visible.map(item => `
-            <tr><td>${esc(personName(item.employeeId))}</td><td>${esc(item.date)}</td><td>${esc(item.in || "—")}</td><td>${esc(item.out || "—")}</td><td>${esc(item.status === "missing" ? "FALTA" : item.status === "holiday" ? "FERIADO" : item.status === "leave" ? "JUSTIFICADA" : "TRABAJÓ")}</td><td><button data-delete-attendance="${item.id}" type="button">Eliminar</button></td></tr>`).join("")}</tbody></table>`;
+        const shown = records.slice(0, 500);
+        q("#hrAttendanceList").innerHTML = `${records.length > shown.length ? `<p class="hr-table-note">Se muestran 500 de ${records.length.toLocaleString("es-PY")}; la exportación y el cálculo usan todos.</p>` : ""}<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th></th></tr></thead><tbody>${shown.map(item => {
+            const raw = item.rawStatus === "FALTA" ? "FALTA pendiente" : item.resolvedStatus || "Marcación";
+            return `<tr><td>${esc(personById(item.employeeId)?.fullName || item.sourceName || "No vinculado")}</td><td>${esc(item.date)}</td><td>${esc(item.in || "—")}</td><td>${esc(item.out || (item.rawStatus === "FALTA" ? "FALTA" : "—"))}</td><td>${esc(Calc.STATUS[item.resolvedStatus || (item.rawStatus === "FALTA" ? "raw_missing" : "worked")] || raw)}</td><td><button data-delete-attendance="${esc(item.id)}" type="button">Eliminar</button></td></tr>`;
+        }).join("")}</tbody></table>`;
     }
 
-    document.querySelector("#hrAttendanceForm")?.addEventListener("submit", event => {
-        event.preventDefault();
-        attendance.push({
-            id: id(),
-            employeeId: document.querySelector("#hrAttendanceEmployee").value,
-            date: document.querySelector("#hrAttendanceDate").value,
-            in: document.querySelector("#hrAttendanceIn").value,
-            out: document.querySelector("#hrAttendanceOut").value,
-            status: document.querySelector("#hrAttendanceStatus").value
+    function parseAttendanceWorkbook(workbook) {
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", cellDates: true, raw: true });
+        const headerIndex = matrix.findIndex(row => {
+            const cells = row.map(clean);
+            return cells.some(cell => cell === "nombre") && cells.some(cell => cell === "id") && cells.some(cell => cell === "fecha");
         });
-        write("attendance", attendance); event.target.reset(); renderAttendance();
-        A.notify("Marcación guardada.", "success");
-    });
-    document.querySelector("#hrAttendanceList")?.addEventListener("click", event => {
-        const targetId = event.target.dataset.deleteAttendance;
-        if (!targetId) return;
-        attendance = attendance.filter(item => item.id !== targetId);
-        write("attendance", attendance); renderAttendance();
-    });
-
-    function splitCSV(line, separator) {
-        const result = []; let current = ""; let quoted = false;
-        for (let i = 0; i < line.length; i += 1) {
-            const char = line[i];
-            if (char === '"') quoted = !quoted;
-            else if (char === separator && !quoted) { result.push(current.trim()); current = ""; }
-            else current += char;
-        }
-        result.push(current.trim()); return result;
-    }
-    document.querySelector("#hrAttendanceFile")?.addEventListener("change", async event => {
-        const file = event.target.files?.[0]; if (!file) return;
-        const text = await file.text(); const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
-        if (lines.length < 2) { A.notify("El CSV no contiene registros.", "error"); return; }
-        const separator = lines[0].includes(";") ? ";" : ",";
-        const headers = splitCSV(lines[0], separator).map(item => item.toLowerCase());
-        const column = names => headers.findIndex(header => names.some(name => header.includes(name)));
-        const idx = { name: column(["nombre"]), employeeId: column(["id"]), date: column(["fecha"]), in: column(["entrada"]), out: column(["salida"]) };
-        let imported = 0;
-        lines.slice(1).forEach(line => {
-            const values = splitCSV(line, separator);
-            const person = people().find(item => String(item.clockId || "") === values[idx.employeeId] || item.fullName?.toLowerCase() === values[idx.name]?.toLowerCase());
-            if (!person || !values[idx.date]) return;
-            const status = String(values[idx.out] || "").toUpperCase() === "FALTA" ? "missing" : "worked";
-            attendance.push({ id: id(), employeeId: person.id, date: values[idx.date], in: values[idx.in] || "", out: status === "missing" ? "" : values[idx.out] || "", status });
-            imported += 1;
-        });
-        write("attendance", attendance); renderAttendance();
-        A.notify(`${imported} marcación${imported === 1 ? "" : "es"} importada${imported === 1 ? "" : "s"}.`, imported ? "success" : "error");
-        event.target.value = "";
-    });
-
-    function ensureCompliance() {
-        const existing = new Set(compliance.map(item => `${item.employeeId}:${item.agency}:${item.action}`));
-        people().forEach(person => {
-            const action = person.active === false ? "Salida" : "Ingreso";
-            ["IPS", "MTESS"].forEach(agency => {
-                const key = `${person.id}:${agency}:${action}`;
-                if (!existing.has(key)) compliance.push({ id: id(), employeeId: person.id, agency, action, status: "pending", date: "", reference: "" });
-            });
-        });
-        write("compliance", compliance);
-    }
-    function renderCompliance() {
-        ensureCompliance();
-        const target = document.querySelector("#hrComplianceList");
-        const alerts = document.querySelector("#hrComplianceAlerts");
-        const pending = compliance.filter(item => item.status !== "confirmed");
-        if (alerts) alerts.innerHTML = pending.length ? pending.slice(0, 6).map(item => `<button data-open-compliance type="button"><strong>${esc(item.agency)} · ${esc(item.action)}</strong><span>${esc(personName(item.employeeId))}</span></button>`).join("") : '<div class="empty-state">No hay ingresos ni salidas pendientes.</div>';
-        if (!target) return;
-        target.innerHTML = compliance.length ? `<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Institución</th><th>Gestión</th><th>Estado</th><th>Fecha</th><th>Documento</th></tr></thead><tbody>${compliance.map(item => `
-            <tr><td>${esc(personName(item.employeeId))}</td><td>${esc(item.agency)}</td><td>${esc(item.action)}</td><td><select data-compliance-status="${item.id}"><option value="pending" ${item.status === "pending" ? "selected" : ""}>Pendiente</option><option value="submitted" ${item.status === "submitted" ? "selected" : ""}>Presentado</option><option value="confirmed" ${item.status === "confirmed" ? "selected" : ""}>Confirmado</option><option value="na" ${item.status === "na" ? "selected" : ""}>No corresponde</option></select></td><td><input data-compliance-date="${item.id}" type="date" value="${esc(item.date || "")}"></td><td><input data-compliance-ref="${item.id}" value="${esc(item.reference || "")}" placeholder="N.º o referencia"></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state">Cargá funcionarios para generar controles.</div>';
-    }
-    document.querySelector("#hrComplianceList")?.addEventListener("change", event => {
-        const element = event.target;
-        const targetId = element.dataset.complianceStatus || element.dataset.complianceDate || element.dataset.complianceRef;
-        const item = compliance.find(row => row.id === targetId); if (!item) return;
-        if (element.dataset.complianceStatus) item.status = element.value;
-        if (element.dataset.complianceDate) item.date = element.value;
-        if (element.dataset.complianceRef) item.reference = element.value.trim();
-        write("compliance", compliance); renderCompliance();
-    });
-    document.querySelector("#hrComplianceAlerts")?.addEventListener("click", () => activateTab("compliance"));
-
-    document.querySelector("#hrPayrollForm")?.addEventListener("submit", event => {
-        event.preventDefault();
-        const salary = Number(document.querySelector("#hrSalary").value || 0);
-        const type = document.querySelector("#hrWorkerType").value;
-        const baseDay = type === "parttime" ? salary / 208 : salary / 240;
-        const baseNight = baseDay * 1.30 * (8 / 7);
-        const values = {
-            day: Number(document.querySelector("#hrDayHours").value || 0) * baseDay,
-            night: Number(document.querySelector("#hrNightHours").value || 0) * baseNight,
-            extraDay: Number(document.querySelector("#hrExtraDay").value || 0) * baseDay * 1.5,
-            extraNight: Number(document.querySelector("#hrExtraNight").value || 0) * baseNight * 2,
-            holiday: Number(document.querySelector("#hrHolidayHours").value || 0) * baseDay * 2,
-            absence: Number(document.querySelector("#hrAbsentDays").value || 0) * (salary / 30)
+        if (headerIndex < 0) throw new Error("No encontré las columnas Nombre, ID, Fecha, Entrada y Salida.");
+        const headers = matrix[headerIndex].map(clean);
+        const indexFor = aliases => headers.findIndex(header => aliases.some(alias => header === clean(alias)));
+        const indexes = {
+            name: indexFor(["nombre"]),
+            clockId: indexFor(["id"]),
+            date: indexFor(["fecha"]),
+            in: indexFor(["entrada"]),
+            out: indexFor(["salida"])
         };
-        const earnings = values.day + values.night + values.extraDay + values.extraNight + values.holiday;
-        const total = Math.max(0, earnings - values.absence);
-        document.querySelector("#hrPayrollResult").innerHTML = `
-            <div><span>Valor hora diurna</span><strong>${money(baseDay)}</strong></div>
-            <div><span>Valor hora nocturna</span><strong>${money(baseNight)}</strong></div>
-            <div><span>Ordinarias diurnas</span><strong>${money(values.day)}</strong></div>
-            <div><span>Ordinarias nocturnas</span><strong>${money(values.night)}</strong></div>
-            <div><span>Extras diurnas +50 %</span><strong>${money(values.extraDay)}</strong></div>
-            <div><span>Extras nocturnas +100 %</span><strong>${money(values.extraNight)}</strong></div>
-            <div><span>Domingos / feriados</span><strong>${money(values.holiday)}</strong></div>
-            <div class="negative"><span>Descuento por ausencias</span><strong>− ${money(values.absence)}</strong></div>
-            <div class="total"><span>Total calculado</span><strong>${money(total)}</strong></div>`;
+        return matrix.slice(headerIndex + 1).filter(row => row.some(value => String(value).trim())).map((row, offset) => ({
+            sourceRow: headerIndex + offset + 2,
+            sourceName: String(row[indexes.name] || "").trim(),
+            clockId: String(row[indexes.clockId] ?? "").trim(),
+            date: Calc.dateISO(row[indexes.date]),
+            in: normalizeTime(row[indexes.in]),
+            out: String(row[indexes.out] || "").toUpperCase() === "FALTA" ? "" : normalizeTime(row[indexes.out]),
+            rawStatus: String(row[indexes.out] || "").toUpperCase() === "FALTA" ? "FALTA" : ""
+        })).filter(item => item.date);
+    }
+
+    function normalizeTime(value) {
+        const minutes = Calc.timeMinutes(value);
+        if (minutes === null) return "";
+        return `${String(Math.floor((minutes % 1440) / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    }
+
+    function linkAttendance(rows) {
+        const roster = people();
+        stagedMappings = new Map();
+        return rows.map(row => {
+            const compactName = clean(row.sourceName);
+            const person = roster.find(item => item.clockId && String(item.clockId) === row.clockId)
+                || roster.find(item => item.ci && item.ci === row.clockId.replace(/\D/g, ""))
+                || roster.find(item => clean(item.fullName) === compactName);
+            if (!person && row.clockId) stagedMappings.set(row.clockId, "");
+            return {
+                ...row,
+                id: id("att-"),
+                employeeId: person?.id || "",
+                clientId: person?.clientId || "",
+                resolvedStatus: "",
+                updatedAt: new Date().toISOString()
+            };
+        });
+    }
+
+    function renderAttendanceStage() {
+        const unknownRows = stagedAttendance.filter(item => !item.employeeId);
+        const periods = new Set(stagedAttendance.map(item => item.date.slice(0, 7)));
+        const selectedPeriod = periods.size === 1 ? Array.from(periods)[0] : "";
+        const current = selectedPeriod === q("#hrAttendancePeriod").value ? attendance : [];
+        const previewMerge = Store.mergeRecords(current, stagedAttendance.filter(item => item.employeeId));
+        q("#hrAttendanceImportSummary").innerHTML = `<span><strong>${stagedAttendance.length.toLocaleString("es-PY")}</strong> filas</span><span><strong>${previewMerge.counts.new}</strong> nuevas</span><span><strong>${previewMerge.counts.updated}</strong> actualizadas</span><span><strong>${previewMerge.counts.equal}</strong> iguales</span><span><strong>${unknownRows.length}</strong> sin vincular</span>`;
+        q("#hrAttendanceUnknown").innerHTML = stagedMappings.size ? `<strong>Vinculá estos ID del reloj una sola vez:</strong>${Array.from(stagedMappings).map(([clockId]) => {
+            const example = stagedAttendance.find(item => item.clockId === clockId);
+            return `<label class="hr-clock-map"><span>ID ${esc(clockId)} · ${esc(example?.sourceName || "")}</span><select data-map-clock="${esc(clockId)}"><option value="">Seleccionar funcionario</option>${visiblePeople().map(person => `<option value="${esc(person.id)}">${esc(person.fullName)} · CI ${esc(person.ci)}</option>`).join("")}</select></label>`;
+        }).join("")}` : '<div class="hr-import-ok">✓ Todos los ID del reloj están vinculados.</div>';
+        q("#hrAttendancePreview").innerHTML = `<table class="hr-simple-table"><thead><tr><th>Fila</th><th>Nombre del reloj</th><th>ID</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Vínculo</th></tr></thead><tbody>${stagedAttendance.slice(0, 100).map(item => `<tr class="${item.employeeId ? "" : "hr-row-error"}"><td>${item.sourceRow}</td><td>${esc(item.sourceName)}</td><td>${esc(item.clockId)}</td><td>${esc(item.date)}</td><td>${esc(item.in || "—")}</td><td>${esc(item.rawStatus || item.out || "—")}</td><td>${esc(personById(item.employeeId)?.fullName || "Pendiente")}</td></tr>`).join("")}</tbody></table>`;
+        q("#hrAttendanceImportResult").hidden = false;
+        q("#hrAttendanceProcess").disabled = periods.size !== 1 || unknownRows.length > 0;
+        if (periods.size !== 1) q("#hrAttendanceUnknown").insertAdjacentHTML("afterbegin", '<p>El archivo debe contener un solo mes.</p>');
+    }
+
+    q("#hrAttendanceFile").addEventListener("change", async event => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: "array", cellDates: true });
+            stagedAttendance = linkAttendance(parseAttendanceWorkbook(workbook));
+            renderAttendanceStage();
+        } catch (error) {
+            A.notify(error.message || "No se pudo leer el archivo del reloj.", "error");
+        } finally {
+            event.target.value = "";
+        }
     });
 
-    const originalWrite = A.writeJSON;
-    A.writeJSON = function (key, value) {
-        originalWrite(key, value);
-        if (key === "atlasHRPeople") setTimeout(() => { renderEmployeeOptions(); renderCompliance(); }, 0);
-    };
+    q("#hrAttendanceUnknown").addEventListener("change", event => {
+        const select = event.target.closest("[data-map-clock]");
+        if (!select) return;
+        stagedMappings.set(select.dataset.mapClock, select.value);
+        stagedAttendance = stagedAttendance.map(item => item.clockId === select.dataset.mapClock && select.value
+            ? { ...item, employeeId: select.value, clientId: personById(select.value)?.clientId || "" }
+            : item);
+        renderAttendanceStage();
+    });
 
-    renderStructure();
+    q("#hrAttendanceProcess").addEventListener("click", async () => {
+        const period = stagedAttendance[0]?.date.slice(0, 7);
+        if (!period || stagedAttendance.some(item => !item.employeeId)) return;
+        const importId = id("imp-");
+        const linkedIds = new Map();
+        stagedAttendance.forEach(item => {
+            if (item.clockId && item.employeeId) linkedIds.set(item.clockId, item.employeeId);
+        });
+        const roster = people().map(person => {
+            const mapped = Array.from(linkedIds).find(([, employeeId]) => employeeId === person.id);
+            return mapped && !person.clockId ? { ...person, clockId: mapped[0], updatedAt: new Date().toISOString() } : person;
+        });
+        if (roster.some((person, index) => person.clockId !== people()[index]?.clockId)) {
+            A.writeJSON("atlasHRPeople", roster);
+            window.dispatchEvent(new CustomEvent("atlas:hr-data-changed", { detail: { type: "people-import" } }));
+        }
+        const result = await Store.upsertMonth(C.active.companyId, period, stagedAttendance.map(item => ({ ...item, sourceImportId: importId })));
+        const imports = A.readArray(KEYS.imports);
+        imports.unshift({ id: importId, companyId: C.active.companyId, clientId: C.active.clientId, period, rows: stagedAttendance.length, counts: result.counts, importedAt: new Date().toISOString() });
+        A.writeJSON(KEYS.imports, imports);
+        q("#hrAttendancePeriod").value = period;
+        stagedAttendance = [];
+        q("#hrAttendanceImportResult").hidden = true;
+        await loadAttendance();
+        A.notify(`Importación guardada: ${result.counts.new} nuevas, ${result.counts.updated} actualizadas y ${result.counts.equal} iguales.`);
+    });
+    q("#hrAttendanceCancel").addEventListener("click", () => { stagedAttendance = []; q("#hrAttendanceImportResult").hidden = true; });
+
+    q("#hrAttendanceForm").addEventListener("submit", async event => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const person = personById(q("#hrAttendanceEmployee").value);
+        const date = q("#hrAttendanceDate").value;
+        const status = q("#hrAttendanceStatus").value;
+        const item = {
+            id: id("att-"),
+            employeeId: person.id,
+            clientId: person.clientId,
+            clockId: person.clockId,
+            sourceName: person.fullName,
+            date,
+            in: q("#hrAttendanceIn").value,
+            out: q("#hrAttendanceOut").value,
+            rawStatus: status === "raw_missing" ? "FALTA" : "",
+            resolvedStatus: status === "raw_missing" ? "" : status,
+            updatedAt: new Date().toISOString()
+        };
+        await Store.upsertMonth(C.active.companyId, date.slice(0, 7), [item]);
+        q("#hrAttendancePeriod").value = date.slice(0, 7);
+        form.reset();
+        await loadAttendance();
+        A.notify("Marcación guardada.");
+    });
+    q("#hrAttendanceList").addEventListener("click", async event => {
+        const button = event.target.closest("[data-delete-attendance]");
+        if (!button || !window.confirm("¿Eliminar esta marcación?")) return;
+        attendance = await Store.remove(C.active.companyId, q("#hrAttendancePeriod").value, button.dataset.deleteAttendance);
+        renderAttendance();
+    });
+    q("#hrAttendancePeriod").addEventListener("change", () => loadAttendance().catch(console.error));
+    q("#hrExportAttendance").addEventListener("click", () => {
+        const rows = periodRecords().map(item => ({
+            "Nombre": personById(item.employeeId)?.fullName || item.sourceName,
+            "ID": item.clockId,
+            "Fecha": item.date,
+            "Entrada": item.in,
+            "Salida": item.rawStatus === "FALTA" && !item.resolvedStatus ? "FALTA" : item.out,
+            "Clasificación": Calc.STATUS[item.resolvedStatus] || ""
+        }));
+        if (!rows.length) return A.notify("No hay marcaciones para exportar.", "error");
+        XLSX.writeFile(workbookRows(rows, "MARCACIONES"), `ATLAS_MARCACIONES_${q("#hrAttendancePeriod").value}.xlsx`);
+    });
+
+    function datesInPeriod(period) {
+        const [year, month] = period.split("-").map(Number);
+        const last = new Date(year, month, 0).getDate();
+        const limit = period === todayPeriod() ? Math.min(last, Number(A.localDate().slice(-2))) : last;
+        return Array.from({ length: limit }, (_, index) => `${period}-${String(index + 1).padStart(2, "0")}`);
+    }
+
+    function absenceFor(employeeId, date) {
+        return A.readArray(KEYS.absences).find(item => String(item.employeeId) === String(employeeId) && !item.cancelled && item.startDate <= date && item.endDate >= date);
+    }
+
+    function holidaySet() {
+        return new Set(A.readArray(KEYS.holidays).map(item => item.date || item));
+    }
+
+    function resolvedRecord(person, date, record) {
+        const absence = absenceFor(person.id, date);
+        const mapped = { vacation: "vacation", medical: "medical", maternity: "maternity", permission: "permission" }[absence?.type];
+        if (mapped && (!record || record.rawStatus === "FALTA" || (!record.in && !record.out))) return { ...(record || {}), date, resolvedStatus: mapped };
+        return record || { id: id("virtual-"), employeeId: person.id, clientId: person.clientId, date, rawStatus: "FALTA" };
+    }
+
+    async function runCalculations() {
+        const period = q("#hrCalculationPeriod").value || todayPeriod();
+        q("#hrCalculationPeriod").value = period;
+        const records = await Store.getMonth(C.active.companyId, period);
+        const visibleRecords = C.visible(records);
+        const byEmployeeDate = new Map(visibleRecords.map(item => [`${item.employeeId}:${item.date}`, item]));
+        const holidays = holidaySet();
+        const dates = datesInPeriod(period);
+        const roster = visiblePeople().filter(person => (!person.startDate || person.startDate <= `${period}-31`) && (!person.endDate || person.endDate >= `${period}-01`));
+        calculations = roster.map(person => {
+            const details = dates.map(date => {
+                if (person.startDate && date < person.startDate) return null;
+                if (person.endDate && date > person.endDate) return null;
+                const schedule = scheduleFor(person.id, date);
+                const record = resolvedRecord(person, date, byEmployeeDate.get(`${person.id}:${date}`));
+                if (!schedule && !byEmployeeDate.has(`${person.id}:${date}`) && !absenceFor(person.id, date)) return null;
+                return Calc.calculateDay({ record, schedule, holiday: holidays.has(date) });
+            }).filter(Boolean);
+            const totals = Calc.summarize(details);
+            const currentAssignment = assignmentFor(person.id, `${period}-28`) || assignmentFor(person.id, `${period}-01`);
+            const schedule = schedules.find(item => item.id === currentAssignment?.scheduleId);
+            const pending = details.filter(day => day.status === "raw_missing").length;
+            const incomplete = details.filter(day => day.status === "incomplete").length;
+            return {
+                person,
+                scheduleName: schedule?.name || "",
+                totals,
+                details,
+                pending,
+                incomplete,
+                pay: Calc.payable({ salary: person.salary, workerType: person.workerType, totals })
+            };
+        });
+        renderCalculations();
+        q("#hrExportCalculation").disabled = !calculations.length;
+    }
+
+    function totalField(name) {
+        return calculations.reduce((sum, item) => sum + Number(item.totals[name] || 0), 0);
+    }
+
+    function renderCalculations() {
+        const pending = calculations.reduce((sum, item) => sum + item.pending, 0);
+        const incomplete = calculations.reduce((sum, item) => sum + item.incomplete, 0);
+        const noSchedule = calculations.filter(item => !item.scheduleName).length;
+        q("#hrCalculationSummary").innerHTML = `<span><strong>${calculations.length}</strong> funcionarios</span><span><strong>${Calc.hours(totalField("actualMinutes"))}</strong> horas registradas</span><span><strong>${Calc.hours(totalField("extraDayMinutes"))}</strong> extra 50 %</span><span><strong>${Calc.hours(totalField("extraNightMinutes"))}</strong> extra 100 %</span><span><strong>${pending}</strong> FALTA pendiente</span>`;
+        const warnings = [];
+        if (pending) warnings.push(`${pending} FALTA deben justificarse o confirmarse.`);
+        if (incomplete) warnings.push(`${incomplete} marcaciones tienen entrada o salida faltante.`);
+        if (noSchedule) warnings.push(`${noSchedule} funcionario(s) no tienen horario asignado en el periodo.`);
+        q("#hrCalculationWarnings").innerHTML = warnings.length ? `<strong>Antes de cerrar:</strong><ul>${warnings.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : '<div class="hr-import-ok">✓ El periodo no tiene bloqueos detectados.</div>';
+        if (!calculations.length) {
+            q("#hrCalculationList").innerHTML = '<div class="empty-state">No hay funcionarios o asignaciones para calcular.</div>';
+            return;
+        }
+        q("#hrCalculationList").innerHTML = `<table class="hr-simple-table hr-calculation-table"><thead><tr><th>Funcionario</th><th>CI</th><th>Modalidad</th><th>Horario</th><th>Total horas</th><th>Días</th><th>Noct. 30 %</th><th>Extra 50 %</th><th>Extra 100 %</th><th>Dom./fer.</th><th>Dom./fer. noct.</th><th>Ausente</th><th>Horas faltantes</th><th>Vacaciones</th><th>Pendientes</th></tr></thead><tbody>${calculations.map(item => `<tr>
+            <td><strong>${esc(item.person.fullName)}</strong><small>${esc(clientName(item.person))}</small></td><td>${esc(item.person.ci)}</td><td>${esc(item.person.workerType)}</td><td>${esc(item.scheduleName || "Sin asignar")}</td>
+            <td>${Calc.hours(item.totals.actualMinutes)}</td><td>${item.details.filter(day => day.actualMinutes > 0).length}</td><td>${Calc.hours(item.totals.nightPremiumMinutes)}</td><td>${Calc.hours(item.totals.extraDayMinutes)}</td><td>${Calc.hours(item.totals.extraNightMinutes)}</td>
+            <td>${Calc.hours(item.totals.sundayHolidayMinutes)}</td><td>${Calc.hours(item.totals.sundayHolidayNightMinutes)}</td><td>${item.totals.absentDays}</td><td>${Calc.hours(item.totals.missingMinutes)}</td><td>${item.totals.vacationDays}</td><td>${item.pending + item.incomplete}</td>
+        </tr>`).join("")}</tbody></table>`;
+    }
+
+    q("#hrRunCalculation").addEventListener("click", () => runCalculations().catch(error => { console.error(error); A.notify("No se pudo calcular el periodo.", "error"); }));
+    q("#hrExportCalculation").addEventListener("click", () => {
+        if (!calculations.length) return;
+        const summary = calculations.map(item => ({
+            "Funcionario": item.person.fullName,
+            "Cédula": item.person.ci,
+            "Cliente": clientName(item.person),
+            "Centro de costo": item.person.costCenter || C.clientById(item.person.clientId)?.costCenter || "",
+            "Modalidad": item.person.workerType,
+            "Horario": item.scheduleName,
+            "Total horas": Calc.hours(item.totals.actualMinutes),
+            "Días trabajados": item.details.filter(day => day.actualMinutes > 0).length,
+            "Nocturnas 30%": Calc.hours(item.totals.nightPremiumMinutes),
+            "Extras 50%": Calc.hours(item.totals.extraDayMinutes),
+            "Extras 100%": Calc.hours(item.totals.extraNightMinutes),
+            "Domingos/Feriados": Calc.hours(item.totals.sundayHolidayMinutes),
+            "Domingos/Feriados nocturnas": Calc.hours(item.totals.sundayHolidayNightMinutes),
+            "Ausente": item.totals.absentDays,
+            "Horas faltantes": Calc.hours(item.totals.missingMinutes),
+            "Vacaciones": item.totals.vacationDays,
+            "Maternidad": item.totals.maternityDays,
+            "Permiso": item.totals.permissionDays,
+            "Reposo": item.totals.medicalDays,
+            "FALTA pendiente": item.pending,
+            "Marcación incompleta": item.incomplete
+        }));
+        const detail = calculations.flatMap(item => item.details.map(day => ({
+            "Funcionario": item.person.fullName,
+            "Cédula": item.person.ci,
+            "Fecha": day.date,
+            "Estado": day.statusLabel,
+            "Horario previsto": Calc.hours(day.scheduledMinutes),
+            "Horas registradas": Calc.hours(day.actualMinutes),
+            "Nocturnas 30%": Calc.hours(day.nightPremiumMinutes),
+            "Extras 50%": Calc.hours(day.extraDayMinutes),
+            "Extras 100%": Calc.hours(day.extraNightMinutes),
+            "Domingo/Feriado": Calc.hours(day.sundayHolidayMinutes),
+            "Horas faltantes": Calc.hours(day.missingMinutes),
+            "Observación": day.warnings.join(" ")
+        })));
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), "RESUMEN");
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(detail), "DETALLE");
+        XLSX.writeFile(workbook, `ATLAS_CALCULO_HORAS_${q("#hrCalculationPeriod").value}.xlsx`);
+    });
+
+    q("#hrPayrollForm").addEventListener("submit", event => {
+        event.preventDefault();
+        const totals = {
+            nightPremiumMinutes: Number(q("#hrNightHours").value || 0) * 60,
+            extraDayMinutes: Number(q("#hrExtraDay").value || 0) * 60,
+            extraNightMinutes: Number(q("#hrExtraNight").value || 0) * 60,
+            sundayHolidayMinutes: Number(q("#hrHolidayHours").value || 0) * 60,
+            sundayHolidayNightMinutes: 0,
+            absentDays: Number(q("#hrAbsentDays").value || 0)
+        };
+        const result = Calc.payable({ salary: q("#hrSalary").value, workerType: q("#hrWorkerType").value, totals });
+        const money = value => `G. ${Math.round(value).toLocaleString("es-PY")}`;
+        q("#hrPayrollResult").innerHTML = `<div><span>Hora base</span><strong>${money(result.hourly)}</strong></div><div><span>Adicional nocturno</span><strong>${money(result.ordinaryNightPremium)}</strong></div><div><span>Extras 50 %</span><strong>${money(result.extraDay)}</strong></div><div><span>Extras 100 %</span><strong>${money(result.extraNight)}</strong></div><div><span>Domingo / feriado</span><strong>${money(result.sundayHoliday)}</strong></div><div><span>Descuento por ausencias</span><strong>− ${money(result.absenceDiscount)}</strong></div><div class="total"><span>Bruto estimado</span><strong>${money(result.estimatedGross)}</strong></div>`;
+    });
+
+    function renderCompliance() {
+        const records = C.visible(A.readArray(KEYS.compliance)).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+        const pending = records.filter(item => item.status !== "done");
+        q("#hrComplianceAlerts").innerHTML = pending.length ? pending.slice(0, 5).map(item => `<button data-go-compliance type="button"><strong>${esc(item.type === "entry" ? "Alta" : item.type === "exit" ? "Baja" : item.type)}</strong><span>${esc(personById(item.employeeId)?.fullName || "Funcionario")} · ${esc(item.dueDate || "")}</span></button>`).join("") : '<div class="empty-state">Sin pendientes generados.</div>';
+        q("#hrComplianceList").innerHTML = records.length ? `<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Gestión</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>${records.map(item => `<tr><td>${esc(personById(item.employeeId)?.fullName || "No encontrado")}</td><td>${esc(item.type === "entry" ? "Alta de funcionario" : item.type === "exit" ? "Baja de funcionario" : item.type)}</td><td>${esc(item.dueDate || "—")}</td><td>${item.status === "done" ? "Completado" : "Pendiente"}</td><td><button data-compliance="${esc(item.id)}" type="button">${item.status === "done" ? "Reabrir" : "Completar"}</button></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state">No hay controles registrados.</div>';
+    }
+    q("#hrComplianceList").addEventListener("click", event => {
+        const button = event.target.closest("[data-compliance]");
+        if (!button) return;
+        const records = A.readArray(KEYS.compliance).map(item => item.id === button.dataset.compliance ? { ...item, status: item.status === "done" ? "pending" : "done", completedAt: item.status === "done" ? "" : new Date().toISOString() } : item);
+        save("compliance", records); renderCompliance();
+    });
+    q("#hrComplianceAlerts").addEventListener("click", event => { if (event.target.closest("[data-go-compliance]")) activateTab("compliance"); });
+
+    q("#hrScheduleFrom").value = A.localDate();
+    q("#hrAssignmentFrom").value = A.localDate();
+    q("#hrAttendancePeriod").value = todayPeriod();
+    q("#hrCalculationPeriod").value = todayPeriod();
+    q("#hrAttendanceDate").value = A.localDate();
     renderSchedules();
-    renderAttendance();
+    renderAssignments();
     renderCompliance();
-    document.querySelector("#hrAttendanceDate").value = A.localDate();
-    activateTab(location.hash.replace("#", "") || "overview");
+    loadAttendance().catch(console.error);
+    const requested = location.hash.slice(1);
+    if (q(`[data-hr-tab="${CSS.escape(requested)}"]`)) activateTab(requested);
+    window.addEventListener("atlas:hr-data-changed", () => { renderEmployeeOptions(); renderAssignments(); renderCompliance(); });
+
+    window.AtlasHRSchedules = {
+        all: () => schedules,
+        assignments: () => assignments,
+        scheduleFor,
+        assignmentFor,
+        activeRevision
+    };
 })();

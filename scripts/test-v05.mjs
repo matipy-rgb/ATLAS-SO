@@ -39,8 +39,8 @@ const checks = [
     [authPage.includes('|| "app.html"'), "El acceso no redirige al nuevo inicio."],
     [styles.includes("[hidden]"), "Los formularios ocultos necesitan una regla explícita."],
     [manifest.start_url === "./app.html", "La PWA no inicia en app.html."],
-    [serviceWorker.includes('CACHE_NAME = "atlas-so-v0.6.0"'), "La caché no corresponde a v0.6.0."],
-    [packageJson.version === "0.6.0", "package.json no corresponde a v0.6.0."]
+    [serviceWorker.includes('CACHE_NAME = "atlas-so-v0.7.0"'), "La caché no corresponde a v0.7.0."],
+    [packageJson.version === "0.7.0", "package.json no corresponde a v0.7.0."]
 ];
 
 const failures = checks.filter(([passed]) => !passed).map(([, message]) => message);
@@ -49,4 +49,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log("ATLAS SO v0.6: portada, inicio diario y herramientas globales verificadas.");
+console.log("ATLAS SO v0.7: portada, inicio diario y herramientas globales verificadas.");

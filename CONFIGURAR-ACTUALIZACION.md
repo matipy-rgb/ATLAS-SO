@@ -1,4 +1,4 @@
-# Configurar ATLAS SO v0.5.0
+# Configurar ATLAS SO v0.7.0
 
 La pantalla de acceso y la conexión pública ya están configuradas. No coloques contraseñas, App Passwords ni la `service_role key` dentro de ningún archivo del proyecto.
 
@@ -80,3 +80,10 @@ registrada como única administradora de Recursos Humanos y bloquea las claves
 
 Después reemplazá los archivos, cerrá ATLAS SO, volvé a abrirlo y presioná
 `Ctrl + F5`.
+
+# ATLAS SO v0.7 · marcaciones a escala
+
+Después de tener activa la protección de RR. HH. de la v0.4, ejecutá una sola
+vez `supabase/v0.7-rrhh-scale.sql`. Esta migración crea la tabla mensual de
+marcaciones con acceso exclusivo para la cuenta administradora. No borra ni
+reemplaza datos anteriores.

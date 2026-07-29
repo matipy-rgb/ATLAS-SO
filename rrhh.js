@@ -1,98 +1,117 @@
 (function () {
+    "use strict";
+
     const A = window.Atlas;
+    const C = window.AtlasHRContext;
     const PEOPLE_KEY = "atlasHRPeople";
     const ABSENCES_KEY = "atlasHRAbsences";
+    const PAGE_SIZE = 100;
     const typeLabels = {
         vacation: "Vacaciones",
         medical: "Reposo médico",
-        maternity: "Reposo por maternidad",
+        maternity: "Maternidad",
         permission: "Permiso",
         suspension: "Suspensión",
         other: "Otro"
     };
-
-    const elements = {
-        peopleCount: document.querySelector("#hrPeopleCount"),
-        peopleCaption: document.querySelector("#hrPeopleCaption"),
-        activeCount: document.querySelector("#hrActiveCount"),
-        activeCaption: document.querySelector("#hrActiveCaption"),
-        weekReturns: document.querySelector("#hrWeekReturns"),
-        nextReturn: document.querySelector("#hrNextReturn"),
-        overdueCount: document.querySelector("#hrOverdueCount"),
-        attention: document.querySelector("#hrAttention"),
-        listCaption: document.querySelector("#hrListCaption"),
-        absenceList: document.querySelector("#hrAbsenceList"),
-        employeeList: document.querySelector("#hrEmployeeList"),
-        search: document.querySelector("#hrSearch"),
-        statusFilter: document.querySelector("#hrStatusFilter"),
-        typeFilter: document.querySelector("#hrTypeFilter"),
-        employeeDialog: document.querySelector("#employeeDialog"),
-        employeeForm: document.querySelector("#employeeForm"),
-        absenceDialog: document.querySelector("#absenceDialog"),
-        absenceForm: document.querySelector("#absenceForm"),
-        absenceEmployee: document.querySelector("#absenceEmployee"),
-        absencePreview: document.querySelector("#absencePreview")
-    };
-
-    let people = A.readArray(PEOPLE_KEY).map(normalizePerson);
-    let absences = A.readArray(ABSENCES_KEY).map(normalizeAbsence);
-    let renderedDate = A.localDate();
+    const q = selector => document.querySelector(selector);
+    const esc = A.escapeHTML;
+    let page = 1;
 
     function normalizePerson(item) {
+        const legacyClient = String(item?.client || item?.department || "").trim().toLowerCase();
+        const linkedClient = item?.clientId || C.company.clients.find(client =>
+            client.name.toLowerCase() === legacyClient || client.id === legacyClient
+        )?.id || (C.isGeneral ? "" : C.active.clientId);
+        let status = item?.status;
+        if (!status) status = item?.active === false ? "inactive" : "active";
+        if (status === "inactive" && String(item?.endDate || "").slice(0, 7) === A.localDate().slice(0, 7)) status = "inactive-month";
         return {
-            id: item.id || A.createId(),
-            ci: String(item.ci || "").replace(/\D/g, ""),
-            fullName: String(item.fullName || item.name || "").trim(),
-            client: String(item.client || item.department || "").trim(),
-            position: String(item.position || "").trim(),
-            branch: String(item.branch || "").trim(),
-            clockId: String(item.clockId || "").trim(),
-            startDate: item.startDate || "",
-            endDate: item.endDate || "",
-            workerType: item.workerType || "monthly",
-            salary: Number(item.salary || 3044000),
-            scheduleId: String(item.scheduleId || ""),
-            workDays: Array.isArray(item.workDays) && item.workDays.length ? item.workDays.map(Number) : [1, 2, 3, 4, 5, 6],
-            active: item.active !== false,
-            createdAt: item.createdAt || new Date().toISOString(),
-            updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+            id: String(item?.id || A.createId()),
+            ci: String(item?.ci || "").replace(/\D/g, ""),
+            fullName: String(item?.fullName || item?.name || "").trim(),
+            clientId: String(linkedClient || ""),
+            position: String(item?.position || "").trim(),
+            costCenter: String(item?.costCenter || "").trim(),
+            clockId: String(item?.clockId || "").trim(),
+            startDate: item?.startDate || "",
+            endDate: item?.endDate || "",
+            status,
+            statusNote: String(item?.statusNote || ""),
+            active: status === "active",
+            workerType: item?.workerType || "monthly",
+            salary: Number(item?.salary || 3044000),
+            birthDate: item?.birthDate || "",
+            sex: String(item?.sex || ""),
+            civilStatus: String(item?.civilStatus || ""),
+            nationality: String(item?.nationality || "Paraguaya"),
+            profession: String(item?.profession || ""),
+            city: String(item?.city || ""),
+            address: String(item?.address || ""),
+            phone: String(item?.phone || ""),
+            email: String(item?.email || ""),
+            sourceData: item?.sourceData || {},
+            createdAt: item?.createdAt || new Date().toISOString(),
+            updatedAt: item?.updatedAt || item?.createdAt || new Date().toISOString()
         };
     }
 
     function normalizeAbsence(item) {
         return {
-            id: item.id || A.createId(),
-            employeeId: item.employeeId,
-            type: typeLabels[item.type] ? item.type : "other",
-            startDate: item.startDate || "",
-            endDate: item.endDate || "",
-            returnDate: item.returnDate || "",
-            note: String(item.note || item.notes || "").trim(),
-            actualReturnDate: item.actualReturnDate || "",
-            cancelled: Boolean(item.cancelled),
-            createdAt: item.createdAt || new Date().toISOString(),
-            updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+            id: String(item?.id || A.createId()),
+            employeeId: String(item?.employeeId || ""),
+            type: typeLabels[item?.type] ? item.type : "other",
+            startDate: item?.startDate || "",
+            endDate: item?.endDate || "",
+            returnDate: item?.returnDate || "",
+            note: String(item?.note || item?.notes || "").trim(),
+            actualReturnDate: item?.actualReturnDate || "",
+            cancelled: Boolean(item?.cancelled),
+            createdAt: item?.createdAt || new Date().toISOString(),
+            updatedAt: item?.updatedAt || item?.createdAt || new Date().toISOString()
         };
     }
 
-    function savePeople() { A.writeJSON(PEOPLE_KEY, people); }
-    function saveAbsences() { A.writeJSON(ABSENCES_KEY, absences); }
+    let people = A.readArray(PEOPLE_KEY).map(normalizePerson);
+    let absences = A.readArray(ABSENCES_KEY).map(normalizeAbsence);
+    A.writeJSON(PEOPLE_KEY, people);
+    if (absences.length) A.writeJSON(ABSENCES_KEY, absences);
+
+    function savePeople() {
+        A.writeJSON(PEOPLE_KEY, people);
+        window.dispatchEvent(new CustomEvent("atlas:hr-data-changed", { detail: { type: "people" } }));
+    }
+    function saveAbsences() {
+        A.writeJSON(ABSENCES_KEY, absences);
+        window.dispatchEvent(new CustomEvent("atlas:hr-data-changed", { detail: { type: "absences" } }));
+    }
     function personById(id) { return people.find(item => String(item.id) === String(id)); }
+    function clientName(person) { return C.clientById(person?.clientId)?.name || "Sin cliente"; }
+    function scopedPeople() { return C.visible(people); }
+    function scopedAbsences() {
+        const ids = new Set(scopedPeople().map(person => String(person.id)));
+        return absences.filter(item => ids.has(String(item.employeeId)));
+    }
+
+    function statusLabel(status) {
+        return status === "inactive-month" ? "Inactivo del mes" : status === "inactive" ? "Inactivo" : "Activo";
+    }
 
     function addDays(value, amount) {
         const date = A.parseDate(value);
+        if (!date) return "";
         date.setDate(date.getDate() + amount);
         return A.localDate(date);
     }
 
-    function firstWorkdayAfter(endDate, workDays) {
-        let candidate = addDays(endDate, 1);
-        const allowed = new Set((workDays || [1, 2, 3, 4, 5, 6]).map(Number));
-        for (let index = 0; index < 14; index += 1) {
-            if (allowed.has(A.parseDate(candidate).getDay())) return candidate;
-            candidate = addDays(candidate, 1);
+    function firstWorkdayAfter(endDate) {
+        let date = addDays(endDate, 1);
+        for (let count = 0; count < 14; count += 1) {
+            const day = A.parseDate(date)?.getDay();
+            if (day !== 0) return date;
+            date = addDays(date, 1);
         }
-        return addDays(endDate, 1);
+        return date;
     }
 
     function calendarDays(start, end) {
@@ -115,501 +134,323 @@
         return { key: "return", label: `Se presenta en ${returns} día(s)`, group: "return" };
     }
 
-    function counterFor(item, status) {
-        const total = calendarDays(item.startDate, item.endDate);
-        if (status.key === "completed") return { value: total, label: "día(s) registrados" };
-        if (status.key === "upcoming") return { value: total, label: "día(s) programados" };
-        if (status.key === "overdue") return { value: Math.abs(A.daysUntil(item.returnDate)), label: "día(s) sin confirmar" };
-        if (status.group === "return") return { value: Math.max(0, A.daysUntil(item.returnDate)), label: "día(s) para presentarse" };
-        return { value: Math.max(0, A.daysUntil(item.endDate) + 1), label: "día(s) de ausencia" };
-    }
-
     function renderSummary() {
-        const activePeople = people.filter(item => item.active);
-        const statuses = absences.map(item => ({ item, status: absenceStatus(item) }));
-        const active = statuses.filter(entry => entry.status.key === "active");
-        const overdue = statuses.filter(entry => entry.status.key === "overdue");
-        const returns = statuses.filter(entry => {
-            const days = A.daysUntil(entry.item.returnDate || entry.item.endDate);
-            return !entry.item.actualReturnDate && !entry.item.cancelled && days >= 0 && days <= 7;
-        }).sort((a, b) => String(a.item.returnDate).localeCompare(String(b.item.returnDate)));
+        const visiblePeople = scopedPeople();
+        const active = visiblePeople.filter(item => item.status === "active");
+        const inactiveMonth = visiblePeople.filter(item => item.status === "inactive-month" || (item.status !== "active" && item.endDate.slice(0, 7) === A.localDate().slice(0, 7)));
+        const visibleAbsences = scopedAbsences();
+        const absentToday = visibleAbsences.filter(item => absenceStatus(item).key === "active");
+        const overdue = visibleAbsences.filter(item => absenceStatus(item).key === "overdue");
+        q("#hrPeopleCount").textContent = active.length;
+        q("#hrPeopleCaption").textContent = `${visiblePeople.length.toLocaleString("es-PY")} en la nómina`;
+        q("#hrInactiveMonthCount").textContent = inactiveMonth.length;
+        q("#hrActiveCount").textContent = absentToday.length;
+        q("#hrActiveCaption").textContent = absentToday.length ? "Con novedad vigente" : "Sin ausencias activas";
+        q("#hrOverdueCount").textContent = overdue.length;
+        q("#hrNextReturn").textContent = overdue.length ? "Requieren confirmación" : "Sin pendientes";
+        const attention = q("#hrAttention");
+        if (overdue.length) {
+            attention.hidden = false;
+            attention.innerHTML = `<strong>${overdue.length} reintegro(s) necesitan confirmación.</strong> Revisalos en Novedades.`;
+        } else attention.hidden = true;
+    }
 
-        elements.peopleCount.textContent = activePeople.length;
-        elements.peopleCaption.textContent = people.length === activePeople.length ? `${people.length} en el directorio` : `${people.length - activePeople.length} inactivo(s)`;
-        elements.activeCount.textContent = active.length;
-        elements.activeCaption.textContent = active.length ? active.map(entry => personById(entry.item.employeeId)?.fullName).filter(Boolean).slice(0, 2).join(" · ") : "Sin ausencias activas";
-        elements.weekReturns.textContent = returns.length;
-        elements.nextReturn.textContent = returns[0] ? `${personById(returns[0].item.employeeId)?.fullName || "Funcionario"} · ${A.formatDate(returns[0].item.returnDate)}` : "Agenda despejada";
-        elements.overdueCount.textContent = overdue.length;
+    function filteredPeople() {
+        const query = q("#hrPeopleSearch").value.trim().toLocaleLowerCase("es");
+        const status = q("#hrPeopleStatus").value;
+        const client = q("#hrPeopleClient").value;
+        return scopedPeople().filter(item => {
+            const text = `${item.fullName} ${item.ci} ${item.clockId} ${item.position} ${clientName(item)}`.toLocaleLowerCase("es");
+            return (!query || text.includes(query))
+                && (status === "all" || item.status === status || (status === "inactive-month" && item.status !== "active" && item.endDate.slice(0, 7) === A.localDate().slice(0, 7)))
+                && (client === "all" || item.clientId === client);
+        }).sort((a, b) => a.fullName.localeCompare(b.fullName, "es"));
+    }
 
-        if (!overdue.length && !returns.some(entry => A.daysUntil(entry.item.returnDate) === 0)) {
-            elements.attention.hidden = true;
+    function renderPeopleFilters() {
+        const select = q("#hrPeopleClient");
+        const selected = select.value;
+        select.innerHTML = `<option value="all">Todos los clientes</option>${C.company.clients.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("")}`;
+        select.value = C.isGeneral ? (C.company.clients.some(item => item.id === selected) ? selected : "all") : C.active.clientId;
+        select.disabled = !C.isGeneral;
+    }
+
+    function renderPeople() {
+        renderPeopleFilters();
+        const filtered = filteredPeople();
+        const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        page = Math.min(page, maxPage);
+        const slice = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+        q("#hrPeopleListCaption").textContent = `${filtered.length.toLocaleString("es-PY")} registro(s) · mostrando hasta ${PAGE_SIZE} por página`;
+        q("#hrPeoplePage").textContent = `Página ${page} de ${maxPage}`;
+        q("#hrPeoplePrev").disabled = page <= 1;
+        q("#hrPeopleNext").disabled = page >= maxPage;
+        if (!slice.length) {
+            q("#hrEmployeeList").innerHTML = '<div class="empty-state">No hay funcionarios con estos filtros.</div>';
             return;
         }
-        const messages = [
-            ...overdue.map(entry => `${personById(entry.item.employeeId)?.fullName || "Funcionario"}: confirmar reintegro pendiente.`),
-            ...returns.filter(entry => A.daysUntil(entry.item.returnDate) === 0).map(entry => `${personById(entry.item.employeeId)?.fullName || "Funcionario"}: debe presentarse hoy.`)
-        ];
-        elements.attention.innerHTML = `<strong>Requiere atención hoy</strong><ul class="hr-attention-list">${messages.map(item => `<li>${A.escapeHTML(item)}</li>`).join("")}</ul>`;
-        elements.attention.hidden = false;
+        q("#hrEmployeeList").innerHTML = `<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Cédula</th><th>Reloj</th><th>Cliente</th><th>Cargo</th><th>Ingreso</th><th>Estado</th><th></th></tr></thead><tbody>${slice.map(item => `
+            <tr class="${item.status === "active" ? "" : "hr-row-inactive"}">
+                <td><strong>${esc(item.fullName)}</strong></td><td>${esc(item.ci || "—")}</td><td>${esc(item.clockId || "—")}</td>
+                <td>${esc(clientName(item))}</td><td>${esc(item.position || "—")}</td><td>${esc(item.startDate || "—")}</td>
+                <td><span class="hr-person-status ${esc(item.status)}">${esc(statusLabel(item.status))}</span></td>
+                <td><button data-person-edit="${esc(item.id)}" type="button">Editar</button></td>
+            </tr>`).join("")}</tbody></table>`;
     }
 
-    function visibleAbsences() {
-        const query = elements.search.value.trim().toLocaleLowerCase("es");
-        return absences.filter(item => {
-            const person = personById(item.employeeId) || {};
-            const status = absenceStatus(item);
-            const searchable = `${person.fullName || ""} ${person.ci || ""} ${person.client || ""} ${person.position || ""}`.toLocaleLowerCase("es");
-            const matchesQuery = !query || searchable.includes(query);
-            const matchesType = elements.typeFilter.value === "all" || item.type === elements.typeFilter.value;
-            const selectedStatus = elements.statusFilter.value;
-            let matchesStatus = true;
-            if (selectedStatus === "open") matchesStatus = !item.actualReturnDate && !item.cancelled;
-            else if (selectedStatus === "active") matchesStatus = status.key === "active";
-            else if (selectedStatus === "upcoming") matchesStatus = status.key === "upcoming";
-            else if (selectedStatus === "return") matchesStatus = status.group === "return";
-            else if (selectedStatus === "completed") matchesStatus = status.group === "completed";
-            return matchesQuery && matchesType && matchesStatus;
-        }).sort((a, b) => {
-            const order = { overdue: 0, "return-today": 1, active: 2, return: 3, upcoming: 4, completed: 5, cancelled: 6 };
-            const stateDifference = order[absenceStatus(a).key] - order[absenceStatus(b).key];
-            return stateDifference || String(a.returnDate || a.endDate).localeCompare(String(b.returnDate || b.endDate));
-        });
+    function renderEmployeeClientOptions(selected = "") {
+        q("#employeeClient").innerHTML = `<option value="">Seleccionar cliente</option>${C.company.clients.filter(item => item.active !== false).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("")}`;
+        q("#employeeClient").value = selected || (C.isGeneral ? "" : C.active.clientId);
     }
 
-    function renderAbsences() {
-        const visible = visibleAbsences();
-        elements.listCaption.textContent = `${visible.length} registro${visible.length === 1 ? "" : "s"}`;
-        if (!visible.length) {
-            elements.absenceList.innerHTML = `<div class="empty-state">${absences.length ? "No hay coincidencias con estos filtros." : "Todavía no registraste ausencias."}</div>`;
-            return;
-        }
-        elements.absenceList.innerHTML = visible.map(item => {
-            const person = personById(item.employeeId) || { fullName: "Funcionario no encontrado" };
-            const status = absenceStatus(item);
-            const counter = counterFor(item, status);
-            const canReturn = !item.actualReturnDate && !item.cancelled && status.key !== "upcoming";
-            return `
-                <article class="hr-absence-card" data-state="${status.key}">
-                    <div>
-                        <div class="hr-context"><span>${A.escapeHTML(person.client || "Sin área")}</span><span>CI ${A.escapeHTML(person.ci || "—")}</span><span>${A.escapeHTML(person.position || "Sin cargo")}</span></div>
-                        <h3>${A.escapeHTML(person.fullName)}</h3>
-                        <div class="hr-context"><span class="hr-type-badge">${A.escapeHTML(typeLabels[item.type])}</span><span class="hr-status-badge ${status.key === "return-today" ? "active" : status.key}">${A.escapeHTML(status.label)}</span></div>
-                        <p class="hr-date-line">Desde ${A.formatDate(item.startDate)} hasta ${A.formatDate(item.endDate)} · <strong>se presenta ${A.formatDate(item.returnDate)}</strong></p>
-                        ${item.note ? `<p class="hr-note">${A.escapeHTML(item.note)}</p>` : ""}
-                    </div>
-                    <div class="hr-absence-side">
-                        <div class="hr-day-counter"><strong>${counter.value}</strong><span>${counter.label}</span></div>
-                        <div class="hr-card-actions">
-                            ${canReturn ? `<button class="confirm-return" data-action="return" data-id="${item.id}" type="button">Confirmar reintegro</button>` : ""}
-                            ${!item.actualReturnDate && !item.cancelled ? `<button data-action="edit" data-id="${item.id}" type="button">Editar / extender</button>` : ""}
-                            <button class="delete-absence" data-action="delete" data-id="${item.id}" type="button">Eliminar</button>
-                        </div>
-                    </div>
-                </article>`;
-        }).join("");
+    function setField(id, value) {
+        const element = q(id);
+        if (element) element.value = value ?? "";
     }
 
-    function renderEmployees() {
-        if (!people.length) {
-            elements.employeeList.innerHTML = '<div class="empty-state">Agregá el primer funcionario para registrar novedades.</div>';
-            return;
-        }
-        elements.employeeList.innerHTML = [...people].sort((a, b) => a.fullName.localeCompare(b.fullName, "es")).map(item => `
-            <article class="hr-employee-card ${item.active ? "" : "inactive"}">
-                <span class="hr-employee-avatar">${A.escapeHTML(item.fullName.slice(0, 1).toUpperCase() || "?")}</span>
-                <span class="hr-employee-copy"><strong>${A.escapeHTML(item.fullName)}</strong><span>CI ${A.escapeHTML(item.ci || "—")} · ${A.escapeHTML(item.client || "Sin área")}</span></span>
-                <span class="hr-employee-menu">
-                    <button data-person-action="edit" data-id="${item.id}" type="button" title="Editar">✎</button>
-                    <button data-person-action="toggle" data-id="${item.id}" type="button" title="${item.active ? "Desactivar" : "Reactivar"}">${item.active ? "–" : "+"}</button>
-                </span>
-            </article>`).join("");
-    }
-
-    function renderEmployeeOptions(selected = "") {
-        const active = people.filter(item => item.active || String(item.id) === String(selected));
-        elements.absenceEmployee.innerHTML = `<option value="">Seleccionar funcionario</option>${active.sort((a, b) => a.fullName.localeCompare(b.fullName, "es")).map(item => `<option value="${item.id}">${A.escapeHTML(item.fullName)} · CI ${A.escapeHTML(item.ci || "—")}</option>`).join("")}`;
-        elements.absenceEmployee.value = String(selected || "");
-    }
-
-    function renderAll() {
-        renderSummary();
-        renderAbsences();
-        renderEmployees();
-        renderEmployeeOptions();
-        A.updateNavCounts();
-    }
-
-    function closeEmployeeDialog() { if (elements.employeeDialog.open) elements.employeeDialog.close(); elements.employeeForm.reset(); document.querySelector("#employeeId").value = ""; }
     function openEmployee(item = null) {
-        elements.employeeForm.reset();
-        document.querySelectorAll('[name="workday"]').forEach(input => { input.checked = (item?.workDays || [1, 2, 3, 4, 5, 6]).includes(Number(input.value)); });
-        document.querySelector("#employeeId").value = item?.id || "";
-        document.querySelector("#employeeCI").value = item?.ci || "";
-        document.querySelector("#employeeName").value = item?.fullName || "";
-        document.querySelector("#employeeClient").value = item?.client || "";
-        document.querySelector("#employeeBranch").value = item?.branch || "";
-        document.querySelector("#employeePosition").value = item?.position || "";
-        document.querySelector("#employeeClockId").value = item?.clockId || "";
-        document.querySelector("#employeeStartDate").value = item?.startDate || "";
-        document.querySelector("#employeeEndDate").value = item?.endDate || "";
-        document.querySelector("#employeeWorkerType").value = item?.workerType || "monthly";
-        document.querySelector("#employeeSalary").value = item?.salary || 3044000;
-        document.querySelector("#employeeSchedule").value = item?.scheduleId || "";
-        document.querySelector("#employeeDialogTitle").textContent = item ? "Editar funcionario" : "Nuevo funcionario";
-        elements.employeeDialog.showModal();
-        document.querySelector("#employeeCI").focus();
+        q("#employeeForm").reset();
+        setField("#employeeId", item?.id);
+        setField("#employeeCI", item?.ci);
+        setField("#employeeName", item?.fullName);
+        setField("#employeeClockId", item?.clockId);
+        renderEmployeeClientOptions(item?.clientId);
+        setField("#employeePosition", item?.position);
+        setField("#employeeCostCenter", item?.costCenter);
+        setField("#employeeStartDate", item?.startDate);
+        setField("#employeeEndDate", item?.endDate);
+        setField("#employeeStatus", item?.status || "active");
+        setField("#employeeWorkerType", item?.workerType || "monthly");
+        setField("#employeeSalary", item?.salary || 3044000);
+        setField("#employeeBirthDate", item?.birthDate);
+        setField("#employeeSex", item?.sex);
+        setField("#employeeCivilStatus", item?.civilStatus);
+        setField("#employeeNationality", item?.nationality || "Paraguaya");
+        setField("#employeeProfession", item?.profession);
+        setField("#employeeCity", item?.city);
+        setField("#employeeAddress", item?.address);
+        setField("#employeePhone", item?.phone);
+        setField("#employeeEmail", item?.email);
+        setField("#employeeStatusNote", item?.statusNote);
+        q("#employeeDialogTitle").textContent = item ? "Editar funcionario" : "Nuevo funcionario";
+        q("#employeeDialog").showModal();
+        q("#employeeCI").focus();
     }
 
-    elements.employeeForm.addEventListener("submit", event => {
+    function closeEmployee() {
+        if (q("#employeeDialog").open) q("#employeeDialog").close();
+        q("#employeeForm").reset();
+    }
+
+    function addCompliance(person, type) {
+        const list = A.readArray("atlasHRCompliance");
+        const today = A.localDate();
+        const duplicate = list.some(item => item.employeeId === person.id && item.type === type && item.status !== "done");
+        if (!duplicate) {
+            list.unshift({
+                id: String(A.createId()),
+                employeeId: person.id,
+                clientId: person.clientId,
+                type,
+                status: "pending",
+                dueDate: today,
+                createdAt: new Date().toISOString()
+            });
+            A.writeJSON("atlasHRCompliance", list);
+        }
+    }
+
+    q("#employeeForm").addEventListener("submit", event => {
         event.preventDefault();
-        const id = document.querySelector("#employeeId").value;
-        const ci = document.querySelector("#employeeCI").value.replace(/\D/g, "");
-        const duplicate = people.find(item => item.ci && item.ci === ci && String(item.id) !== String(id));
-        if (duplicate) { A.notify("Ya existe un funcionario con esa cédula.", "error"); return; }
-        const current = people.find(item => String(item.id) === String(id));
+        const id = q("#employeeId").value;
+        const ci = q("#employeeCI").value.replace(/\D/g, "");
+        if (people.some(item => item.ci && item.ci === ci && item.id !== id)) return A.notify("Ya existe un funcionario con esa cédula.", "error");
+        if (people.some(item => item.clockId && q("#employeeClockId").value.trim() && item.clockId === q("#employeeClockId").value.trim() && item.id !== id)) return A.notify("Ese ID del reloj ya está vinculado.", "error");
+        const current = people.find(item => item.id === id);
+        const status = q("#employeeStatus").value;
         const next = normalizePerson({
             ...current,
-            id: current?.id || A.createId(),
+            id: current?.id || String(A.createId()),
             ci,
-            fullName: document.querySelector("#employeeName").value,
-            client: document.querySelector("#employeeClient").value,
-            branch: document.querySelector("#employeeBranch").value,
-            position: document.querySelector("#employeePosition").value,
-            clockId: document.querySelector("#employeeClockId").value,
-            startDate: document.querySelector("#employeeStartDate").value,
-            endDate: document.querySelector("#employeeEndDate").value,
-            workerType: document.querySelector("#employeeWorkerType").value,
-            salary: document.querySelector("#employeeSalary").value,
-            scheduleId: document.querySelector("#employeeSchedule").value,
-            workDays: Array.from(document.querySelectorAll('[name="workday"]:checked'), input => Number(input.value)),
-            active: current?.active !== false,
+            fullName: q("#employeeName").value,
+            clockId: q("#employeeClockId").value,
+            clientId: q("#employeeClient").value,
+            position: q("#employeePosition").value,
+            costCenter: q("#employeeCostCenter").value,
+            startDate: q("#employeeStartDate").value,
+            endDate: q("#employeeEndDate").value,
+            status,
+            statusNote: q("#employeeStatusNote").value,
+            workerType: q("#employeeWorkerType").value,
+            salary: q("#employeeSalary").value,
+            birthDate: q("#employeeBirthDate").value,
+            sex: q("#employeeSex").value,
+            civilStatus: q("#employeeCivilStatus").value,
+            nationality: q("#employeeNationality").value,
+            profession: q("#employeeProfession").value,
+            city: q("#employeeCity").value,
+            address: q("#employeeAddress").value,
+            phone: q("#employeePhone").value,
+            email: q("#employeeEmail").value,
             updatedAt: new Date().toISOString()
         });
-        if (!next.workDays.length) { A.notify("Elegí al menos un día habitual de trabajo.", "error"); return; }
-        people = current ? people.map(item => String(item.id) === String(current.id) ? next : item) : [...people, next];
+        if (!next.clientId) return A.notify("Seleccioná el cliente real del funcionario.", "error");
+        people = current ? people.map(item => item.id === current.id ? next : item) : [next, ...people];
         savePeople();
-        closeEmployeeDialog();
+        if (!current && next.status === "active") addCompliance(next, "entry");
+        if (current?.status === "active" && next.status !== "active") addCompliance(next, "exit");
+        if (current?.status !== "active" && next.status === "active") addCompliance(next, "entry");
+        closeEmployee();
         renderAll();
         A.notify(current ? "Funcionario actualizado." : "Funcionario agregado.");
     });
 
-    function updateAbsencePreview(forceReturn = false) {
-        const employee = personById(elements.absenceEmployee.value);
-        const start = document.querySelector("#absenceStart").value;
-        const end = document.querySelector("#absenceEnd").value;
-        if (end && employee && forceReturn) document.querySelector("#absenceReturn").value = firstWorkdayAfter(end, employee.workDays);
-        const total = calendarDays(start, end);
-        const returnDate = document.querySelector("#absenceReturn").value;
-        elements.absencePreview.textContent = total ? `${total} día(s) calendario · reintegro previsto: ${A.formatDate(returnDate)}` : "Elegí fechas válidas para calcular la duración.";
+    function visibleAbsences() {
+        const query = q("#hrSearch").value.trim().toLocaleLowerCase("es");
+        return scopedAbsences().filter(item => {
+            const person = personById(item.employeeId) || {};
+            const status = absenceStatus(item);
+            const text = `${person.fullName || ""} ${person.ci || ""} ${clientName(person)} ${person.position || ""}`.toLocaleLowerCase("es");
+            const wantedStatus = q("#hrStatusFilter").value;
+            const statusOk = wantedStatus === "all"
+                || (wantedStatus === "open" && !item.actualReturnDate && !item.cancelled)
+                || wantedStatus === status.key
+                || (wantedStatus === "return" && status.group === "return")
+                || (wantedStatus === "completed" && status.group === "completed");
+            return (!query || text.includes(query)) && (q("#hrTypeFilter").value === "all" || item.type === q("#hrTypeFilter").value) && statusOk;
+        }).sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
     }
 
-    function closeAbsenceDialog() { if (elements.absenceDialog.open) elements.absenceDialog.close(); elements.absenceForm.reset(); document.querySelector("#absenceId").value = ""; }
+    function renderAbsences() {
+        const records = visibleAbsences();
+        q("#hrListCaption").textContent = `${records.length} registro(s)`;
+        if (!records.length) {
+            q("#hrAbsenceList").innerHTML = '<div class="empty-state">No hay novedades con estos filtros.</div>';
+            return;
+        }
+        q("#hrAbsenceList").innerHTML = records.map(item => {
+            const person = personById(item.employeeId) || {};
+            const state = absenceStatus(item);
+            return `<article class="hr-absence-card" data-state="${esc(state.key)}">
+                <div><div class="hr-context"><span>${esc(clientName(person))}</span><span>CI ${esc(person.ci || "—")}</span></div>
+                <h3>${esc(person.fullName || "Funcionario no encontrado")}</h3>
+                <p><span class="hr-type-badge">${esc(typeLabels[item.type])}</span> <span class="hr-status-badge ${esc(state.key)}">${esc(state.label)}</span></p>
+                <p class="hr-date-line">${A.formatDate(item.startDate)} → ${A.formatDate(item.endDate)} · reintegro ${A.formatDate(item.returnDate)}</p>
+                ${item.note ? `<p class="hr-note">${esc(item.note)}</p>` : ""}</div>
+                <div class="hr-card-actions">
+                    ${!item.actualReturnDate && !item.cancelled && state.key !== "upcoming" ? `<button data-absence-return="${esc(item.id)}" type="button">Confirmar reintegro</button>` : ""}
+                    ${!item.actualReturnDate && !item.cancelled ? `<button data-absence-edit="${esc(item.id)}" type="button">Editar</button>` : ""}
+                    <button data-absence-delete="${esc(item.id)}" type="button">Eliminar</button>
+                </div></article>`;
+        }).join("");
+    }
+
+    function renderAbsenceOptions(selected = "") {
+        q("#absenceEmployee").innerHTML = `<option value="">Seleccionar funcionario</option>${scopedPeople().filter(item => item.status === "active" || item.id === selected).sort((a, b) => a.fullName.localeCompare(b.fullName, "es")).map(item => `<option value="${esc(item.id)}">${esc(item.fullName)} · CI ${esc(item.ci)}</option>`).join("")}`;
+        q("#absenceEmployee").value = selected;
+    }
+
     function openAbsence(item = null) {
-        if (!people.some(person => person.active)) { A.notify("Primero agregá un funcionario activo.", "error"); openEmployee(); return; }
-        elements.absenceForm.reset();
-        document.querySelector("#absenceId").value = item?.id || "";
-        renderEmployeeOptions(item?.employeeId || "");
-        document.querySelector("#absenceType").value = item?.type || "vacation";
-        document.querySelector("#absenceStart").value = item?.startDate || A.localDate();
-        document.querySelector("#absenceEnd").value = item?.endDate || A.localDate();
-        document.querySelector("#absenceReturn").value = item?.returnDate || firstWorkdayAfter(A.localDate(), personById(elements.absenceEmployee.value)?.workDays);
-        document.querySelector("#absenceNote").value = item?.note || "";
-        document.querySelector("#absenceDialogTitle").textContent = item ? "Editar o extender ausencia" : "Registrar ausencia";
-        updateAbsencePreview(!item);
-        elements.absenceDialog.showModal();
-        elements.absenceEmployee.focus();
+        if (!scopedPeople().some(person => person.status === "active")) return A.notify("Primero agregá un funcionario activo en esta vista.", "error");
+        q("#absenceForm").reset();
+        setField("#absenceId", item?.id);
+        renderAbsenceOptions(item?.employeeId || "");
+        setField("#absenceType", item?.type || "vacation");
+        setField("#absenceStart", item?.startDate || A.localDate());
+        setField("#absenceEnd", item?.endDate || A.localDate());
+        setField("#absenceReturn", item?.returnDate || firstWorkdayAfter(A.localDate()));
+        setField("#absenceNote", item?.note);
+        q("#absenceDialogTitle").textContent = item ? "Editar novedad" : "Registrar ausencia";
+        updateAbsencePreview();
+        q("#absenceDialog").showModal();
     }
 
-    elements.absenceForm.addEventListener("submit", event => {
+    function updateAbsencePreview(autoReturn = false) {
+        const start = q("#absenceStart").value;
+        const end = q("#absenceEnd").value;
+        if (autoReturn && end) q("#absenceReturn").value = firstWorkdayAfter(end);
+        const total = calendarDays(start, end);
+        q("#absencePreview").textContent = total ? `${total} día(s) calendario · reintegro ${A.formatDate(q("#absenceReturn").value)}` : "Revisá el rango de fechas.";
+    }
+
+    q("#absenceForm").addEventListener("submit", event => {
         event.preventDefault();
-        const id = document.querySelector("#absenceId").value;
-        const startDate = document.querySelector("#absenceStart").value;
-        const endDate = document.querySelector("#absenceEnd").value;
-        const returnDate = document.querySelector("#absenceReturn").value;
-        if (!calendarDays(startDate, endDate)) { A.notify("La fecha final no puede ser anterior a la inicial.", "error"); return; }
-        if (A.parseDate(returnDate) <= A.parseDate(endDate)) { A.notify("El reintegro debe ser posterior al último día de ausencia.", "error"); return; }
-        const current = absences.find(item => String(item.id) === String(id));
+        const id = q("#absenceId").value;
+        if (!calendarDays(q("#absenceStart").value, q("#absenceEnd").value)) return A.notify("El rango de fechas no es válido.", "error");
+        if (A.parseDate(q("#absenceReturn").value) <= A.parseDate(q("#absenceEnd").value)) return A.notify("El reintegro debe ser posterior al último día.", "error");
+        const current = absences.find(item => item.id === id);
         const next = normalizeAbsence({
             ...current,
-            id: current?.id || A.createId(),
-            employeeId: elements.absenceEmployee.value,
-            type: document.querySelector("#absenceType").value,
-            startDate,
-            endDate,
-            returnDate,
-            note: document.querySelector("#absenceNote").value,
+            id: current?.id || String(A.createId()),
+            employeeId: q("#absenceEmployee").value,
+            type: q("#absenceType").value,
+            startDate: q("#absenceStart").value,
+            endDate: q("#absenceEnd").value,
+            returnDate: q("#absenceReturn").value,
+            note: q("#absenceNote").value,
             updatedAt: new Date().toISOString()
         });
-        absences = current ? absences.map(item => String(item.id) === String(current.id) ? next : item) : [...absences, next];
+        absences = current ? absences.map(item => item.id === id ? next : item) : [next, ...absences];
         saveAbsences();
-        closeAbsenceDialog();
+        q("#absenceDialog").close();
         renderAll();
-        A.notify(current ? "Ausencia actualizada." : "Ausencia registrada.");
+        A.notify(current ? "Novedad actualizada." : "Novedad registrada.");
     });
 
-    elements.absenceList.addEventListener("click", event => {
-        const button = event.target.closest("button[data-action]");
-        if (!button) return;
-        const item = absences.find(entry => String(entry.id) === String(button.dataset.id));
-        if (!item) return;
-        if (button.dataset.action === "edit") openAbsence(item);
-        if (button.dataset.action === "return") {
-            if (!confirm(`¿Confirmar que ${personById(item.employeeId)?.fullName || "el funcionario"} se reintegró hoy?`)) return;
-            item.actualReturnDate = A.localDate();
-            item.updatedAt = new Date().toISOString();
-            saveAbsences(); renderAll(); A.notify("Reintegro confirmado.");
-        }
-        if (button.dataset.action === "delete") {
-            if (!confirm("¿Eliminar definitivamente este registro de ausencia?")) return;
-            absences = absences.filter(entry => String(entry.id) !== String(item.id));
-            saveAbsences(); renderAll(); A.notify("Registro eliminado.");
-        }
-    });
-
-    elements.employeeList.addEventListener("click", event => {
-        const button = event.target.closest("button[data-person-action]");
-        if (!button) return;
-        const item = personById(button.dataset.id);
-        if (!item) return;
-        if (button.dataset.personAction === "edit") openEmployee(item);
-        if (button.dataset.personAction === "toggle") {
-            item.active = !item.active;
-            item.updatedAt = new Date().toISOString();
-            savePeople(); renderAll(); A.notify(item.active ? "Funcionario reactivado." : "Funcionario desactivado.");
-        }
-    });
-
-    document.querySelector("#openEmployeeDialog").addEventListener("click", () => openEmployee());
-    document.querySelector("#openAbsenceDialog").addEventListener("click", () => openAbsence());
-    ["#closeEmployeeDialog", "#cancelEmployee"].forEach(selector => document.querySelector(selector).addEventListener("click", closeEmployeeDialog));
-    ["#closeAbsenceDialog", "#cancelAbsence"].forEach(selector => document.querySelector(selector).addEventListener("click", closeAbsenceDialog));
-    [elements.search, elements.statusFilter, elements.typeFilter].forEach(control => control.addEventListener(control === elements.search ? "input" : "change", renderAbsences));
-    elements.absenceEmployee.addEventListener("change", () => updateAbsencePreview(true));
-    document.querySelector("#absenceStart").addEventListener("change", () => updateAbsencePreview(false));
-    document.querySelector("#absenceEnd").addEventListener("change", () => updateAbsencePreview(true));
-    document.querySelector("#absenceReturn").addEventListener("change", () => updateAbsencePreview(false));
-    [elements.employeeDialog, elements.absenceDialog].forEach(dialog => dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); }));
-
-    function initIpsConverter() {
-        const PATRONAL = "0005-82-01080";
-        const input = document.querySelector("#ipsScreenshot");
-        const dropZone = document.querySelector(".ips-drop-zone");
-        const progress = document.querySelector("#ipsProgress");
-        const progressBar = document.querySelector("#ipsProgressBar");
-        const progressText = document.querySelector("#ipsProgressText");
-        const result = document.querySelector("#ipsResult");
-        const summary = document.querySelector("#ipsResultSummary");
-        const body = document.querySelector("#ipsReviewRows");
-        const download = document.querySelector("#ipsDownload");
-        const clear = document.querySelector("#ipsClear");
-        let records = [];
-        let worker = null;
-
-        const normalizeText = value => String(value || "").replace(/\s+/g, " ").trim().toUpperCase();
-        const digitsOnly = value => String(value || "").replace(/\D/g, "");
-        const normalizeDate = value => {
-            const raw = String(value || "").trim().replace(/[|Il]/g, "1");
-            const separated = raw.match(/(\d{1,2})\D+(\d{1,2})\D+(\d{4})/);
-            let parts = separated ? separated.slice(1) : null;
-            if (!parts) {
-                const digits = digitsOnly(raw);
-                if (digits.length === 8) parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)];
-            }
-            if (!parts) return raw;
-            const day = Number(parts[0]);
-            const month = Number(parts[1]);
-            const year = Number(parts[2]);
-            if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2000 || year > 2100) return raw;
-            return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
-        };
-        const validDate = value => /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/20\d{2}$/.test(value);
-        const rowValid = item => /^\d{5,12}$/.test(item.ci) && item.names && item.surnames && validDate(item.start) && validDate(item.end) && validDate(item.documentDate) && /^\d{5,12}$/.test(item.id);
-
-        function parseTSV(tsv, width, height) {
-            const columns = [
-                [0.067, 0.128, "id"], [0.128, 0.188, "ci"], [0.188, 0.327, "names"],
-                [0.327, 0.500, "surnames"], [0.500, 0.568, "start"], [0.568, 0.642, "end"],
-                [0.642, 0.825, "reason"], [0.825, 0.922, "type"], [0.922, 1.001, "documentDate"]
-            ];
-            const lineGroups = new Map();
-            String(tsv || "").split(/\r?\n/).slice(1).forEach(line => {
-                const cells = line.split("\t");
-                if (cells.length < 12 || cells[0] !== "5") return;
-                const text = cells.slice(11).join(" ").trim();
-                if (!text) return;
-                const lineKey = cells.slice(1, 5).join(":");
-                if (!lineGroups.has(lineKey)) lineGroups.set(lineKey, []);
-                lineGroups.get(lineKey).push({
-                    text,
-                    left: Number(cells[6]), top: Number(cells[7]),
-                    width: Number(cells[8]), height: Number(cells[9])
-                });
-            });
-
-            const rows = [];
-            lineGroups.forEach(words => {
-                const averageY = words.reduce((sum, word) => sum + word.top + word.height / 2, 0) / words.length;
-                if (averageY < height * 0.045) return;
-                const parts = {};
-                words.forEach(word => {
-                    const x = (word.left + word.width / 2) / width;
-                    const column = columns.find(([from, to]) => x >= from && x < to);
-                    if (!column) return;
-                    const key = column[2];
-                    parts[key] = `${parts[key] || ""} ${word.text}`.trim();
-                });
-                if (parts.id || parts.ci || parts.names) rows.push(parts);
-            });
-
-            return rows.map(item => ({
-                id: digitsOnly(item.id),
-                ci: digitsOnly(item.ci),
-                names: normalizeText(item.names),
-                surnames: normalizeText(item.surnames),
-                start: normalizeDate(item.start),
-                end: normalizeDate(item.end),
-                documentDate: normalizeDate(item.documentDate),
-                reason: normalizeText(item.reason),
-                type: normalizeText(item.type)
-            }));
-        }
-
-        function eligible(item) {
-            const classification = `${item.type} ${item.reason}`;
-            const excluded = /REPOSO|MATERNIDAD|SANCION|SANCIÓN|LICENCIA/.test(classification);
-            return !excluded && /PERMISO/.test(item.type || item.reason);
-        }
-
-        function dedupe(items) {
-            const seen = new Set();
-            return items.filter(item => {
-                const key = [item.ci, item.start, item.end, item.documentDate, item.id].join("|");
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            });
-        }
-
-        function renderReview(allRows) {
-            const included = dedupe(allRows.filter(eligible));
-            const excluded = allRows.length - included.length;
-            records = included;
-            result.hidden = false;
-            if (!included.length) {
-                summary.className = "ips-result-summary warning";
-                summary.innerHTML = `<strong>0 permisos listos.</strong> Se detectaron ${allRows.length} registro(s) y se excluyeron ${excluded} por no ser permisos. No se generará un CSV vacío.`;
-                body.innerHTML = '<tr><td colspan="8"><div class="empty-state">Esta captura no contiene movimientos de tipo PERMISO.</div></td></tr>';
-                download.disabled = true;
-                return;
-            }
-            summary.className = "ips-result-summary success";
-            summary.innerHTML = `<strong>${included.length} permiso(s) detectado(s).</strong> ${excluded} registro(s) excluido(s). Revisá las celdas marcadas antes de descargar.`;
-            body.innerHTML = included.map((item, index) => {
-                const valid = rowValid(item);
-                return `<tr data-index="${index}" class="${valid ? "" : "ips-row-invalid"}">
-                    ${["ci", "names", "surnames", "start", "end", "documentDate", "id"].map(key => `<td><input data-field="${key}" value="${A.escapeHTML(item[key])}" aria-label="${key}"></td>`).join("")}
-                    <td><span class="ips-state ${valid ? "ok" : "review"}">${valid ? "Listo" : "Revisar"}</span></td>
-                </tr>`;
-            }).join("");
-            download.disabled = included.some(item => !rowValid(item));
-        }
-
-        function updateFromTable(event) {
-            const field = event.target.dataset.field;
-            if (!field) return;
-            const row = event.target.closest("tr[data-index]");
-            const item = records[Number(row.dataset.index)];
-            if (!item) return;
-            let value = event.target.value.trim();
-            if (field === "ci" || field === "id") value = digitsOnly(value);
-            if (["start", "end", "documentDate"].includes(field)) value = normalizeDate(value);
-            if (field === "names" || field === "surnames") value = normalizeText(value);
-            item[field] = value;
-            event.target.value = value;
-            const valid = rowValid(item);
-            row.classList.toggle("ips-row-invalid", !valid);
-            const state = row.querySelector(".ips-state");
-            state.className = `ips-state ${valid ? "ok" : "review"}`;
-            state.textContent = valid ? "Listo" : "Revisar";
-            download.disabled = !records.length || records.some(record => !rowValid(record));
-        }
-
-        async function dimensions(file) {
-            const bitmap = await createImageBitmap(file);
-            const size = { width: bitmap.width, height: bitmap.height };
-            bitmap.close();
-            return size;
-        }
-
-        async function readScreenshot(file) {
-            if (!file || !file.type.startsWith("image/")) { A.notify("Subí una captura en formato de imagen.", "error"); return; }
-            progress.hidden = false;
-            result.hidden = true;
-            progressBar.style.width = "2%";
-            progressText.textContent = "Preparando el lector…";
-            try {
-                if (!window.Tesseract) throw new Error("El lector de imágenes no se cargó.");
-                if (!worker) {
-                    worker = await window.Tesseract.createWorker("spa", 1, {
-                        workerPath: "vendor/tesseract-worker.min.js",
-                        corePath: "vendor/tesseract-core",
-                        langPath: "vendor/tessdata",
-                        logger(message) {
-                            const percent = Math.max(2, Math.round((message.progress || 0) * 100));
-                            progressBar.style.width = `${percent}%`;
-                            progressText.textContent = message.status === "recognizing text" ? `Leyendo la tabla… ${percent}%` : "Preparando reconocimiento…";
-                        }
-                    });
-                }
-                const size = await dimensions(file);
-                const response = await worker.recognize(file, {}, { tsv: true });
-                progressBar.style.width = "100%";
-                progressText.textContent = "Lectura terminada.";
-                renderReview(parseTSV(response.data.tsv, size.width, size.height));
-            } catch (error) {
-                console.error("IPS OCR", error);
-                result.hidden = false;
-                summary.className = "ips-result-summary warning";
-                summary.textContent = "No se pudo leer la captura. Confirmá que sea una imagen completa del listado REOP e intentá nuevamente.";
-                body.innerHTML = "";
-                download.disabled = true;
-            } finally {
-                window.setTimeout(() => { progress.hidden = true; }, 600);
-                input.value = "";
-            }
-        }
-
-        function downloadCSV() {
-            if (!records.length || records.some(item => !rowValid(item))) { A.notify("Revisá todos los campos antes de descargar.", "error"); return; }
-            const lines = records.map(item => [PATRONAL, item.ci, item.names, item.surnames, "11", item.start, item.end, item.documentDate, item.id, "PERMISO"].join(";"));
-            const contents = lines.join("\r\n");
-            const blob = new Blob([contents], { type: "text/csv;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const anchor = document.createElement("a");
-            anchor.href = url;
-            anchor.download = `IPS_PERMISOS_${A.localDate().split("-").reverse().join("-")}.csv`;
-            document.body.appendChild(anchor);
-            anchor.click();
-            anchor.remove();
-            URL.revokeObjectURL(url);
-            A.notify(`CSV generado con ${records.length} registro(s).`);
-        }
-
-        input.addEventListener("change", event => readScreenshot(event.target.files[0]));
-        ["dragenter", "dragover"].forEach(name => dropZone.addEventListener(name, event => { event.preventDefault(); dropZone.classList.add("dragging"); }));
-        ["dragleave", "drop"].forEach(name => dropZone.addEventListener(name, event => { event.preventDefault(); dropZone.classList.remove("dragging"); }));
-        dropZone.addEventListener("drop", event => readScreenshot(event.dataTransfer.files[0]));
-        body.addEventListener("change", updateFromTable);
-        download.addEventListener("click", downloadCSV);
-        clear.addEventListener("click", () => { records = []; result.hidden = true; body.innerHTML = ""; download.disabled = true; });
+    function renderAll() {
+        renderSummary();
+        renderPeople();
+        renderAbsences();
     }
 
-    window.setInterval(() => {
-        const today = A.localDate();
-        if (today !== renderedDate) { renderedDate = today; renderAll(); }
-    }, 60000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) renderAll(); });
-    initIpsConverter();
+    [q("#openEmployeeDialog"), q("#openEmployeeDialogInline")].forEach(button => button?.addEventListener("click", () => openEmployee()));
+    q("#closeEmployeeDialog").addEventListener("click", closeEmployee);
+    q("#cancelEmployee").addEventListener("click", closeEmployee);
+    q("#openAbsenceDialog").addEventListener("click", () => openAbsence());
+    q("#closeAbsenceDialog").addEventListener("click", () => q("#absenceDialog").close());
+    q("#cancelAbsence").addEventListener("click", () => q("#absenceDialog").close());
+    q("#hrEmployeeList").addEventListener("click", event => {
+        const button = event.target.closest("[data-person-edit]");
+        if (button) openEmployee(personById(button.dataset.personEdit));
+    });
+    q("#hrAbsenceList").addEventListener("click", event => {
+        const edit = event.target.closest("[data-absence-edit]");
+        const returned = event.target.closest("[data-absence-return]");
+        const deleted = event.target.closest("[data-absence-delete]");
+        if (edit) openAbsence(absences.find(item => item.id === edit.dataset.absenceEdit));
+        if (returned) {
+            absences = absences.map(item => item.id === returned.dataset.absenceReturn ? { ...item, actualReturnDate: A.localDate(), updatedAt: new Date().toISOString() } : item);
+            saveAbsences(); renderAll();
+        }
+        if (deleted && window.confirm("¿Eliminar esta novedad?")) {
+            absences = absences.filter(item => item.id !== deleted.dataset.absenceDelete);
+            saveAbsences(); renderAll();
+        }
+    });
+    ["#hrPeopleSearch", "#hrPeopleStatus", "#hrPeopleClient"].forEach(selector => q(selector).addEventListener("input", () => { page = 1; renderPeople(); }));
+    ["#hrSearch", "#hrStatusFilter", "#hrTypeFilter"].forEach(selector => q(selector).addEventListener("input", renderAbsences));
+    q("#hrPeoplePrev").addEventListener("click", () => { page = Math.max(1, page - 1); renderPeople(); });
+    q("#hrPeopleNext").addEventListener("click", () => { page += 1; renderPeople(); });
+    q("#absenceEnd").addEventListener("change", () => updateAbsencePreview(true));
+    ["#absenceStart", "#absenceReturn"].forEach(selector => q(selector).addEventListener("change", () => updateAbsencePreview(false)));
+    window.addEventListener("atlas:hr-data-changed", event => {
+        if (event.detail?.type === "people-import") {
+            people = A.readArray(PEOPLE_KEY).map(normalizePerson);
+            renderAll();
+        }
+    });
+
+    window.AtlasHRPeople = {
+        all: () => people,
+        visible: scopedPeople,
+        byId: personById,
+        clientName,
+        normalize: normalizePerson,
+        refresh() {
+            people = A.readArray(PEOPLE_KEY).map(normalizePerson);
+            absences = A.readArray(ABSENCES_KEY).map(normalizeAbsence);
+            renderAll();
+        }
+    };
     renderAll();
 })();
