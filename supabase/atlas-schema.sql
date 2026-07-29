@@ -1,4 +1,4 @@
--- ATLAS SO v0.3 · ejecutar una sola vez en Supabase > SQL Editor.
+-- ATLAS SO v0.7 · esquema base. Ejecutar una sola vez en Supabase > SQL Editor.
 -- La publishable key puede usarse en el navegador porque estas políticas RLS
 -- son las que deciden qué filas puede leer o modificar cada cuenta.
 
@@ -278,6 +278,34 @@ revoke all on public.profiles from anon;
 revoke all on public.workspaces from anon;
 revoke all on public.workspace_members from anon;
 revoke all on public.app_data from anon;
+
+-- Marcaciones de RR. HH. a escala. Las políticas específicas para el
+-- administrador se aplican desde v0.7-rrhh-scale.sql después de v0.4.
+create table if not exists public.hr_attendance_records (
+    id text primary key,
+    workspace_id uuid not null references public.workspaces(id) on delete cascade,
+    company_id text not null,
+    client_id text,
+    employee_id text not null,
+    clock_id text,
+    source_name text,
+    work_date date not null,
+    time_in text,
+    time_out text,
+    raw_status text,
+    resolved_status text,
+    note text,
+    source_import_id text,
+    updated_by uuid references auth.users(id) on delete set null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (workspace_id, company_id, employee_id, work_date)
+);
+
+create index if not exists hr_attendance_period_idx
+    on public.hr_attendance_records (workspace_id, company_id, work_date);
+create index if not exists hr_attendance_client_period_idx
+    on public.hr_attendance_records (workspace_id, company_id, client_id, work_date);
 
 -- ATLAS SO v0.4 · administrador privado de Recursos Humanos.
 -- La primera cuenta creada queda fijada una sola vez como administradora.

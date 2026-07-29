@@ -1,0 +1,10 @@
+node_modules/
+www/
+android/
+*.zip
+*.apk
+
+node_modules/
+agents/
+codex/
+outputs/

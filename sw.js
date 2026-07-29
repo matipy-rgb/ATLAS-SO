@@ -1,4 +1,4 @@
-const CACHE_NAME = "atlas-so-v0.6.0";
+const CACHE_NAME = "atlas-so-v0.7.0";
 const APP_SHELL = [
     "./",
     "./app.html",
@@ -37,6 +37,10 @@ const APP_SHELL = [
     "./rrhh-super.js",
     "./rrhh-context.js",
     "./rrhh-import.js",
+    "./rrhh-calc.js",
+    "./rrhh-storage.js",
+    "./rrhh-contracts.js",
+    "./rrhh-ips.js",
     "./vendor/xlsx.full.min.js",
     "./vendor/tesseract.min.js",
     "./vendor/tesseract-worker.min.js",
@@ -96,6 +100,10 @@ self.addEventListener("fetch", event => {
         "/rrhh-super.js",
         "/rrhh-context.js",
         "/rrhh-import.js",
+        "/rrhh-calc.js",
+        "/rrhh-storage.js",
+        "/rrhh-contracts.js",
+        "/rrhh-ips.js",
         "/rrhh.css"
     ];
     if (networkFirstFiles.some(file => requestUrl.pathname.endsWith(file))) {

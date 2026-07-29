@@ -188,8 +188,11 @@
         await loadScript("atlas.js");
         const pageScript = document.body.dataset.script;
         if (pageScript) await loadScript(pageScript);
-        const extraScript = document.body.dataset.extraScript;
-        if (extraScript) await loadScript(extraScript);
+        const extraScripts = String(document.body.dataset.extraScript || "")
+            .split(",")
+            .map(source => source.trim())
+            .filter(Boolean);
+        for (const extraScript of extraScripts) await loadScript(extraScript);
         document.body.classList.add("auth-ready");
         window.dispatchEvent(new CustomEvent("atlas:app-ready"));
     }

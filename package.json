@@ -1,6 +1,6 @@
 {
     "name": "atlas-so",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "private": true,
     "description": "ATLAS SO · todo lo importante en un solo lugar",
     "scripts": {
@@ -9,7 +9,7 @@
         "mobile:init": "npm run mobile:prepare && npx cap add android",
         "mobile:sync": "npm run mobile:prepare && npx cap sync android",
         "mobile:open": "npx cap open android",
-        "check": "node scripts/check-project.mjs && node scripts/test-auth-recovery.mjs && node scripts/test-v05.mjs && node scripts/test-rrhh-v06.mjs"
+        "check": "node scripts/check-project.mjs && node scripts/test-auth-recovery.mjs && node scripts/test-v05.mjs && node scripts/test-rrhh-v07.mjs"
     },
     "dependencies": {
         "@capacitor/android": "8.4.2",

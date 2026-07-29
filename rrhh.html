@@ -17,288 +17,279 @@
     <script src="vendor/xlsx.full.min.js" defer></script>
     <script src="app-bootstrap.js" defer></script>
 </head>
-<body data-page="rrhh" data-script="rrhh-context.js" data-extra-script="rrhh.js" data-context="Administración integral y privada del personal" data-protected>
+<body
+    data-page="rrhh"
+    data-script="rrhh-context.js"
+    data-extra-script="rrhh-calc.js,rrhh-storage.js,rrhh.js,rrhh-super.js,rrhh-import.js,rrhh-contracts.js,rrhh-ips.js"
+    data-context="Administración integral y privada del personal"
+    data-protected>
     <div class="app-frame"><div class="app-workspace">
         <main class="page-content">
             <section class="page-hero">
                 <div>
                     <p class="page-eyebrow">RECURSOS HUMANOS</p>
-                    <h1>Centro operativo de RR. HH.</h1>
-                    <p>Funcionarios, clientes, horarios, marcaciones, novedades, liquidación y cumplimiento laboral en un solo lugar privado.</p>
+                    <h1>Gestión completa de personas y horas</h1>
+                    <p>Empresa, clientes, nómina, horarios, marcaciones, cálculos, contratos y cumplimiento sin mezclar identidades.</p>
                 </div>
                 <div class="page-hero-actions">
-                    <button id="openAbsenceDialog" class="primary-button" type="button">＋ Registrar ausencia</button>
-                    <button id="openEmployeeDialog" class="secondary-button" type="button">＋ Funcionario</button>
+                    <button id="openAbsenceDialog" class="secondary-button" type="button">＋ Novedad</button>
+                    <button id="openEmployeeDialog" class="primary-button" type="button">＋ Funcionario</button>
                 </div>
             </section>
 
             <section class="hr-context-bar" aria-label="Contexto de Recursos Humanos">
                 <div class="hr-context-current">
-                    <span class="hr-context-mark">RR</span>
-                    <div><small>ESPACIO DE TRABAJO ACTUAL</small><strong id="hrContextTitle">A Support · Arcor</strong><span id="hrContextCaption">Datos separados y protegidos por cliente</span></div>
+                    <img id="hrContextLogo" class="hr-context-logo" alt="" hidden>
+                    <span id="hrContextMark" class="hr-context-mark">AS</span>
+                    <div>
+                        <small>EMPRESA Y VISTA ACTUAL</small>
+                        <strong id="hrContextTitle">A Support · Nómina general</strong>
+                        <span id="hrContextCaption">Vista consolidada de la empresa</span>
+                    </div>
                 </div>
                 <div class="hr-context-actions">
+                    <button id="hrChangeCompany" class="secondary-button" type="button">Cambiar empresa</button>
                     <button id="hrChangeClient" class="secondary-button" type="button">Cambiar cliente</button>
-                    <button id="hrManageCompanies" class="secondary-button" type="button">Empresas administradas</button>
+                    <button id="hrManageCompanies" class="icon-button" type="button" title="Administrar identidades" aria-label="Administrar empresas y clientes">✎</button>
                 </div>
             </section>
 
             <nav class="hr-module-nav" aria-label="Módulos de Recursos Humanos">
                 <button class="active" data-hr-tab="overview" type="button">Panel</button>
                 <button data-hr-tab="people" type="button">Funcionarios</button>
-                <button data-hr-tab="structure" type="button">Clientes y sucursales</button>
                 <button data-hr-tab="schedules" type="button">Horarios</button>
-                <button data-hr-tab="attendance" type="button">Marcaciones</button>
+                <button data-hr-tab="calculations" type="button">Cálculo de horas</button>
                 <button data-hr-tab="news" type="button">Novedades</button>
+                <button data-hr-tab="contracts" type="button">Contratos</button>
                 <button data-hr-tab="payroll" type="button">Liquidación</button>
                 <button data-hr-tab="compliance" type="button">IPS y MTESS</button>
                 <button data-hr-tab="ips" type="button">CSV IPS</button>
             </nav>
 
             <section class="summary-grid" aria-label="Resumen de Recursos Humanos">
-                <article class="summary-item"><span>Funcionarios activos</span><strong id="hrPeopleCount">0</strong><small id="hrPeopleCaption">Sin funcionarios</small></article>
-                <article class="summary-item warning"><span>Ausentes hoy</span><strong id="hrActiveCount">0</strong><small id="hrActiveCaption">Sin ausencias activas</small></article>
-                <article class="summary-item purple"><span>Reintegros · 7 días</span><strong id="hrWeekReturns">0</strong><small id="hrNextReturn">Agenda despejada</small></article>
-                <article class="summary-item negative"><span>Reintegros pendientes</span><strong id="hrOverdueCount">0</strong><small>Requieren confirmación</small></article>
+                <article class="summary-item"><span>Activos</span><strong id="hrPeopleCount">0</strong><small id="hrPeopleCaption">Sin funcionarios</small></article>
+                <article class="summary-item warning"><span>Inactivos del mes</span><strong id="hrInactiveMonthCount">0</strong><small>Con movimiento en el periodo</small></article>
+                <article class="summary-item purple"><span>Ausentes hoy</span><strong id="hrActiveCount">0</strong><small id="hrActiveCaption">Sin ausencias activas</small></article>
+                <article class="summary-item negative"><span>Reintegros pendientes</span><strong id="hrOverdueCount">0</strong><small id="hrNextReturn">Sin pendientes</small></article>
             </section>
-
             <section id="hrAttention" class="info-callout hr-attention" hidden></section>
 
             <section class="hr-super-grid" data-hr-panel="overview">
                 <article class="panel hr-command-card">
                     <p class="section-kicker">ALERTAS OPERATIVAS</p>
-                    <h2>Pendientes de hoy</h2>
+                    <h2>Pendientes</h2>
                     <div id="hrComplianceAlerts" class="hr-alert-stack"></div>
                 </article>
                 <article class="panel hr-command-card">
-                    <p class="section-kicker">PARÁMETROS 2026</p>
-                    <h2>Base salarial vigente</h2>
+                    <p class="section-kicker">PARÁMETROS DESDE 01/07/2026</p>
+                    <h2>Base salarial configurable</h2>
                     <div class="hr-rate-list">
-                        <span><small>Salario mínimo diurno</small><strong>G. 3.044.000</strong></span>
-                        <span><small>Salario mínimo nocturno</small><strong>G. 3.957.200</strong></span>
+                        <span><small>Mínimo mensual diurno</small><strong>G. 3.044.000</strong></span>
+                        <span><small>Mínimo mensual nocturno</small><strong>G. 3.957.200</strong></span>
                         <span><small>Extra diurna</small><strong>+50 %</strong></span>
                         <span><small>Extra nocturna</small><strong>+100 %</strong></span>
                     </div>
-                    <p class="hr-legal-note">Vigencia: 1 de julio de 2026. Los valores quedan parametrizados para futuras actualizaciones.</p>
+                    <p class="hr-legal-note">Los valores se guardan con vigencia; un cambio futuro no modifica periodos cerrados.</p>
                 </article>
                 <article class="panel hr-command-card">
                     <p class="section-kicker">FLUJO MENSUAL</p>
-                    <h2>Del reloj al pago</h2>
+                    <h2>Del reloj al control</h2>
                     <ol class="hr-flow">
-                        <li>Asignar cliente, sucursal y horario.</li>
-                        <li>Importar o registrar marcaciones.</li>
-                        <li>Revisar faltas, extras y novedades.</li>
-                        <li>Calcular y controlar la liquidación.</li>
+                        <li>Asignar un horario vigente.</li>
+                        <li>Importar el archivo del reloj.</li>
+                        <li>Justificar FALTA y revisar incompletas.</li>
+                        <li>Calcular y exportar el periodo.</li>
                     </ol>
                 </article>
             </section>
 
-            <section class="panel hr-super-panel" data-hr-panel="structure" hidden>
+            <section class="panel hr-super-panel" data-hr-panel="people" hidden>
                 <header class="panel-header">
-                    <div><p class="section-kicker">ESTRUCTURA OPERATIVA</p><h2>Clientes y sucursales</h2><p>Una sucursal pertenece a un cliente y puede tener horarios propios.</p></div>
+                    <div><p class="section-kicker">NÓMINA SIN CUPO ARTIFICIAL</p><h2>Funcionarios</h2><p id="hrPeopleListCaption">0 registros</p></div>
+                    <div class="hr-filter-row">
+                        <input id="hrPeopleSearch" type="search" placeholder="Buscar nombre, CI, reloj o cargo">
+                        <select id="hrPeopleStatus"><option value="active">Activos</option><option value="inactive-month">Inactivos del mes</option><option value="inactive">Inactivos</option><option value="all">Todos</option></select>
+                        <select id="hrPeopleClient"><option value="all">Todos los clientes</option></select>
+                    </div>
                 </header>
-                <div class="hr-two-forms">
-                    <form id="hrClientForm" class="hr-inline-form">
-                        <h3>Nuevo cliente</h3>
-                        <input id="hrClientName" placeholder="Nombre del cliente" maxlength="100" required>
-                        <input id="hrClientCode" placeholder="Código / centro de costo" maxlength="40">
-                        <button class="primary-button" type="submit">Guardar cliente</button>
-                    </form>
-                    <form id="hrBranchForm" class="hr-inline-form">
-                        <h3>Nueva sucursal</h3>
-                        <select id="hrBranchClient" required><option value="">Seleccionar cliente</option></select>
-                        <input id="hrBranchName" placeholder="Nombre de la sucursal" maxlength="100" required>
-                        <input id="hrBranchAddress" placeholder="Dirección o ciudad" maxlength="140">
-                        <button class="primary-button" type="submit">Guardar sucursal</button>
-                    </form>
+                <div class="hr-people-actions">
+                    <label class="secondary-button hr-file-button">Importar Excel<input id="hrPeopleExcel" type="file" accept=".xlsx,.xls,.xlsm" hidden></label>
+                    <button id="hrExportPeople" class="secondary-button" type="button">Exportar nómina</button>
+                    <button id="openEmployeeDialogInline" class="primary-button" type="button">＋ Funcionario</button>
                 </div>
-                <div id="hrStructureList" class="hr-data-list"></div>
+                <div id="hrImportResult" class="hr-import-result" hidden>
+                    <div id="hrImportSummary" class="hr-mini-summary"></div>
+                    <div id="hrImportErrors" class="hr-import-errors"></div>
+                    <div id="hrImportPreview" class="hr-table-shell"></div>
+                    <div class="dialog-actions">
+                        <button id="hrImportCancel" class="secondary-button" type="button">Cancelar</button>
+                        <button id="hrImportProcess" class="primary-button" type="button" disabled>Procesar</button>
+                    </div>
+                </div>
+                <div id="hrEmployeeList" class="hr-table-shell"></div>
+                <div class="hr-pagination">
+                    <button id="hrPeoplePrev" class="secondary-button" type="button">Anterior</button>
+                    <span id="hrPeoplePage">Página 1</span>
+                    <button id="hrPeopleNext" class="secondary-button" type="button">Siguiente</button>
+                </div>
             </section>
 
             <section class="panel hr-super-panel" data-hr-panel="schedules" hidden>
                 <header class="panel-header">
-                    <div><p class="section-kicker">JORNADAS CONFIGURABLES</p><h2>Tipos de horario</h2><p>Admite turnos diurnos, nocturnos, mixtos y cruces de medianoche.</p></div>
+                    <div><p class="section-kicker">HORARIO PREVISTO + MARCACIÓN REAL</p><h2>Horarios y marcaciones</h2><p>La denominación identifica el turno; sus horas se mantienen versionadas por vigencia.</p></div>
                 </header>
-                <form id="hrScheduleForm" class="hr-schedule-form">
-                    <label><span>Nombre</span><input id="hrScheduleName" placeholder="Ej: BDP CDE tarde" required></label>
-                    <label><span>Entrada</span><input id="hrScheduleStart" type="time" required></label>
-                    <label><span>Salida</span><input id="hrScheduleEnd" type="time" required></label>
-                    <label><span>Descanso (min)</span><input id="hrScheduleBreak" type="number" min="0" max="240" value="0"></label>
-                    <label><span>Tolerancia (min)</span><input id="hrScheduleTolerance" type="number" min="0" max="120" value="0"></label>
-                    <button class="primary-button" type="submit">Crear horario</button>
-                </form>
-                <div id="hrScheduleList" class="hr-data-list"></div>
+                <details class="hr-editor" open>
+                    <summary>Crear o editar tipo de horario</summary>
+                    <form id="hrScheduleForm" class="hr-schedule-form">
+                        <input id="hrScheduleId" type="hidden">
+                        <label><span>Denominación</span><input id="hrScheduleName" placeholder="Ej: Turno mañana" required></label>
+                        <label><span>Entrada</span><input id="hrScheduleStart" type="time" required></label>
+                        <label><span>Salida</span><input id="hrScheduleEnd" type="time" required></label>
+                        <label><span>Descanso (min)</span><input id="hrScheduleBreak" type="number" min="0" max="300" value="0"></label>
+                        <label><span>Tolerancia (min)</span><input id="hrScheduleTolerance" type="number" min="0" max="120" value="0"></label>
+                        <label><span>Vigente desde</span><input id="hrScheduleFrom" type="date" required></label>
+                        <label class="hr-wide"><span>Observación</span><input id="hrScheduleNote" maxlength="180"></label>
+                        <fieldset class="hr-wide workday-fieldset">
+                            <legend>Días de trabajo</legend>
+                            <div class="workday-options" id="hrScheduleDays">
+                                <label><input type="checkbox" value="1" checked><span>Lun</span></label><label><input type="checkbox" value="2" checked><span>Mar</span></label>
+                                <label><input type="checkbox" value="3" checked><span>Mié</span></label><label><input type="checkbox" value="4" checked><span>Jue</span></label>
+                                <label><input type="checkbox" value="5" checked><span>Vie</span></label><label><input type="checkbox" value="6" checked><span>Sáb</span></label>
+                                <label><input type="checkbox" value="0"><span>Dom</span></label>
+                            </div>
+                        </fieldset>
+                        <button class="primary-button" type="submit">Guardar horario</button>
+                        <button id="hrScheduleCancel" class="secondary-button" type="button" hidden>Cancelar edición</button>
+                    </form>
+                    <div id="hrScheduleList" class="hr-data-list"></div>
+                </details>
+
+                <details class="hr-editor" open>
+                    <summary>Asignar horarios a funcionarios</summary>
+                    <form id="hrAssignmentForm" class="hr-schedule-form">
+                        <label><span>Funcionario</span><select id="hrAssignmentEmployee" required></select></label>
+                        <label><span>Horario</span><select id="hrAssignmentSchedule" required></select></label>
+                        <label><span>Desde</span><input id="hrAssignmentFrom" type="date" required></label>
+                        <label><span>Hasta (opcional)</span><input id="hrAssignmentTo" type="date"></label>
+                        <label class="hr-wide"><span>Observación</span><input id="hrAssignmentNote" maxlength="180"></label>
+                        <button class="primary-button" type="submit">Asignar</button>
+                    </form>
+                    <div class="hr-people-actions">
+                        <button id="hrExportAssignments" class="secondary-button" type="button">Exportar asignaciones</button>
+                        <label class="secondary-button hr-file-button">Importar asignaciones<input id="hrAssignmentFile" type="file" accept=".xlsx,.xls" hidden></label>
+                    </div>
+                    <div id="hrAssignmentList" class="hr-table-shell"></div>
+                </details>
+
+                <details class="hr-editor" open>
+                    <summary>Importar y revisar marcaciones</summary>
+                    <div class="hr-attendance-toolbar">
+                        <label><span>Periodo</span><input id="hrAttendancePeriod" type="month"></label>
+                        <label class="primary-button hr-file-button">Importar reloj<input id="hrAttendanceFile" type="file" accept=".xlsx,.xls,.csv,text/csv" hidden></label>
+                        <button id="hrExportAttendance" class="secondary-button" type="button">Exportar periodo</button>
+                    </div>
+                    <div id="hrAttendanceImportResult" hidden>
+                        <div id="hrAttendanceImportSummary" class="hr-mini-summary"></div>
+                        <div id="hrAttendanceUnknown" class="hr-import-errors"></div>
+                        <div id="hrAttendancePreview" class="hr-table-shell"></div>
+                        <div class="dialog-actions"><button id="hrAttendanceCancel" class="secondary-button" type="button">Cancelar</button><button id="hrAttendanceProcess" class="primary-button" type="button" disabled>Guardar marcaciones</button></div>
+                    </div>
+                    <form id="hrAttendanceForm" class="hr-schedule-form">
+                        <label><span>Funcionario</span><select id="hrAttendanceEmployee" required></select></label>
+                        <label><span>Fecha</span><input id="hrAttendanceDate" type="date" required></label>
+                        <label><span>Entrada</span><input id="hrAttendanceIn" type="time"></label>
+                        <label><span>Salida</span><input id="hrAttendanceOut" type="time"></label>
+                        <label><span>Clasificación</span><select id="hrAttendanceStatus"><option value="worked">Trabajó</option><option value="raw_missing">FALTA pendiente</option><option value="unexcused">Ausencia injustificada</option><option value="medical">Reposo</option><option value="permission">Permiso</option><option value="vacation">Vacaciones</option><option value="maternity">Maternidad</option><option value="holiday">Feriado</option></select></label>
+                        <button class="secondary-button" type="submit">Guardar manual</button>
+                    </form>
+                    <div id="hrAttendanceSummary" class="hr-mini-summary"></div>
+                    <div id="hrAttendanceList" class="hr-table-shell"></div>
+                </details>
             </section>
 
-            <section class="panel hr-super-panel" data-hr-panel="attendance" hidden>
+            <section class="panel hr-super-panel" data-hr-panel="calculations" hidden>
                 <header class="panel-header">
-                    <div><p class="section-kicker">ENTRADAS Y SALIDAS</p><h2>Marcaciones</h2><p>Registrá una jornada o importá un CSV con Nombre, ID, Fecha, Entrada y Salida.</p></div>
-                    <label class="secondary-button hr-file-button">Importar CSV<input id="hrAttendanceFile" type="file" accept=".csv,text/csv" hidden></label>
+                    <div><p class="section-kicker">REEMPLAZA LAS FÓRMULAS ROTAS DEL EXCEL</p><h2>Cálculo de horas</h2><p>Desglose auditable por funcionario y periodo, sin copiar errores #VALUE! ni #N/A.</p></div>
+                    <div class="hr-attendance-toolbar">
+                        <label><span>Periodo</span><input id="hrCalculationPeriod" type="month"></label>
+                        <button id="hrRunCalculation" class="primary-button" type="button">Calcular</button>
+                        <button id="hrExportCalculation" class="secondary-button" type="button" disabled>Exportar Excel</button>
+                    </div>
                 </header>
-                <form id="hrAttendanceForm" class="hr-schedule-form">
-                    <label><span>Funcionario</span><select id="hrAttendanceEmployee" required></select></label>
-                    <label><span>Fecha</span><input id="hrAttendanceDate" type="date" required></label>
-                    <label><span>Entrada</span><input id="hrAttendanceIn" type="time"></label>
-                    <label><span>Salida</span><input id="hrAttendanceOut" type="time"></label>
-                    <label><span>Estado</span><select id="hrAttendanceStatus"><option value="worked">Trabajó</option><option value="missing">FALTA</option><option value="holiday">FERIADO</option><option value="leave">Ausencia justificada</option></select></label>
-                    <button class="primary-button" type="submit">Guardar marcación</button>
+                <div id="hrCalculationWarnings" class="hr-import-errors"></div>
+                <div id="hrCalculationSummary" class="hr-mini-summary"></div>
+                <div id="hrCalculationList" class="hr-table-shell"></div>
+            </section>
+
+            <section class="panel hr-super-panel" data-hr-panel="news" hidden>
+                <header class="panel-header">
+                    <div><p class="section-kicker">JUSTIFICACIONES Y REINTEGROS</p><h2>Novedades</h2><p id="hrListCaption">0 registros</p></div>
+                    <div class="hr-filter-row">
+                        <input id="hrSearch" type="search" placeholder="Buscar nombre, CI o cliente">
+                        <select id="hrStatusFilter"><option value="open">Abiertas</option><option value="all">Todas</option><option value="active">Ausentes hoy</option><option value="upcoming">Programadas</option><option value="return">Reintegros</option><option value="completed">Finalizadas</option></select>
+                        <select id="hrTypeFilter"><option value="all">Todos los tipos</option><option value="vacation">Vacaciones</option><option value="medical">Reposo médico</option><option value="maternity">Maternidad</option><option value="permission">Permiso</option><option value="suspension">Suspensión</option><option value="other">Otro</option></select>
+                    </div>
+                </header>
+                <div id="hrAbsenceList" class="hr-absence-list"></div>
+            </section>
+
+            <section class="panel hr-super-panel" data-hr-panel="contracts" hidden>
+                <header class="panel-header">
+                    <div><p class="section-kicker">MODELO SEGÚN CLIENTE</p><h2>Contratos y documentos</h2><p>El modelo se vincula al identificador estable del cliente; renombrarlo no rompe la asignación. Revisá jurídicamente las cláusulas antes de firmar.</p></div>
+                </header>
+                <form id="hrContractForm" class="hr-contract-form">
+                    <label><span>Funcionario</span><select id="hrContractEmployee" required></select></label>
+                    <label><span>Documento</span><select id="hrContractType"><option value="contract">Contrato de trabajo</option><option value="certificate">Certificado de trabajo</option><option value="addendum1">Adenda 1</option><option value="addendum2">Adenda 2</option></select></label>
+                    <label><span>Fecha del documento</span><input id="hrContractDate" type="date" required></label>
+                    <label><span>Fin del contrato (opcional)</span><input id="hrContractEnd" type="date"></label>
+                    <label class="hr-wide"><span>Observación / condición adicional</span><textarea id="hrContractNote" rows="3" maxlength="500"></textarea></label>
+                    <div class="hr-wide hr-contract-actions">
+                        <button id="hrPreviewContract" class="secondary-button" type="button">Vista previa</button>
+                        <button id="hrDownloadContract" class="primary-button" type="submit">Generar Word</button>
+                        <button id="hrPrintContract" class="secondary-button" type="button">Imprimir / PDF</button>
+                    </div>
                 </form>
-                <div id="hrAttendanceSummary" class="hr-mini-summary"></div>
-                <div id="hrAttendanceList" class="hr-table-shell"></div>
+                <div id="hrContractValidation" class="hr-import-errors"></div>
+                <article id="hrContractPreview" class="hr-contract-preview" contenteditable="true" spellcheck="true" aria-label="Vista previa editable del documento"></article>
+                <h3>Historial del funcionario</h3>
+                <div id="hrContractHistory" class="hr-table-shell"></div>
             </section>
 
             <section class="panel hr-super-panel" data-hr-panel="payroll" hidden>
-                <header class="panel-header">
-                    <div><p class="section-kicker">SIMULADOR Y CONTROL</p><h2>Liquidación de horas</h2><p>Desglose visible de ordinarias, nocturnas, extras, domingos, feriados y ausencias.</p></div>
-                </header>
+                <header class="panel-header"><div><p class="section-kicker">SIMULACIÓN</p><h2>Liquidación</h2><p>Estimación separada del cierre definitivo de horas.</p></div></header>
                 <form id="hrPayrollForm" class="hr-payroll-form">
-                    <label><span>Tipo de trabajador</span><select id="hrWorkerType"><option value="monthly">Mensualizado</option><option value="parttime">Tiempo parcial</option></select></label>
-                    <label><span>Salario mensual (G.)</span><input id="hrSalary" type="number" min="0" value="3044000"></label>
-                    <label><span>Horas ordinarias diurnas</span><input id="hrDayHours" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Horas ordinarias nocturnas</span><input id="hrNightHours" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Horas extra diurnas</span><input id="hrExtraDay" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Horas extra nocturnas</span><input id="hrExtraNight" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Horas domingo / feriado</span><input id="hrHolidayHours" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Días de ausencia</span><input id="hrAbsentDays" type="number" min="0" step="1" value="0"></label>
-                    <button class="primary-button" type="submit">Calcular liquidación</button>
+                    <label><span>Tipo</span><select id="hrWorkerType"><option value="monthly">Mensualizado</option><option value="daily">Jornalero</option><option value="parttime">Tiempo parcial</option></select></label>
+                    <label><span>Salario mensual</span><input id="hrSalary" type="number" min="0" value="3044000"></label>
+                    <label><span>Nocturnas 30 %</span><input id="hrNightHours" type="number" min="0" step="0.01" value="0"></label>
+                    <label><span>Extras 50 %</span><input id="hrExtraDay" type="number" min="0" step="0.01" value="0"></label>
+                    <label><span>Extras 100 %</span><input id="hrExtraNight" type="number" min="0" step="0.01" value="0"></label>
+                    <label><span>Domingo / feriado</span><input id="hrHolidayHours" type="number" min="0" step="0.01" value="0"></label>
+                    <label><span>Ausencias injustificadas</span><input id="hrAbsentDays" type="number" min="0" step="1" value="0"></label>
+                    <button class="primary-button" type="submit">Simular</button>
                 </form>
                 <div id="hrPayrollResult" class="hr-payroll-result"></div>
             </section>
 
             <section class="panel hr-super-panel" data-hr-panel="compliance" hidden>
-                <header class="panel-header">
-                    <div><p class="section-kicker">CUMPLIMIENTO LABORAL</p><h2>IPS y MTESS</h2><p>Al ingresar o retirar funcionarios, ATLAS genera los controles pendientes.</p></div>
-                </header>
+                <header class="panel-header"><div><p class="section-kicker">CONTROL DE COMUNICACIONES</p><h2>IPS y MTESS</h2><p>Altas, bajas, permisos, vacaciones, reposos y vencimientos pendientes.</p></div></header>
                 <div id="hrComplianceList" class="hr-table-shell"></div>
             </section>
 
-            <section class="panel ips-panel" aria-labelledby="ipsTitle" data-hr-panel="ips" hidden>
+            <section class="panel ips-panel" data-hr-panel="ips" hidden>
                 <header class="panel-header ips-panel-header">
-                    <div>
-                        <p class="section-kicker">IPS · MOVIMIENTOS POR LOTE</p>
-                        <h2 id="ipsTitle">Captura REOP a CSV de permisos</h2>
-                        <p>Leé la captura, revisá los datos detectados y descargá el archivo listo para IPS.</p>
-                    </div>
+                    <div><p class="section-kicker">IPS · MOVIMIENTOS POR LOTE</p><h2>Captura REOP a CSV de permisos</h2><p>Leé la captura, revisá los datos detectados y descargá el archivo.</p></div>
                     <span class="ips-patronal">Patronal · 0005-82-01080</span>
                 </header>
-
                 <div class="ips-import-grid">
-                    <label class="ips-drop-zone" for="ipsScreenshot">
-                        <input id="ipsScreenshot" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-                        <span class="ips-drop-icon">⇧</span>
-                        <strong>Subir captura del REOP</strong>
-                        <small>PNG, JPG o WebP · mismo formato de la tabla de permisos</small>
-                    </label>
-                    <div class="ips-import-copy">
-                        <strong>Reglas activas</strong>
-                        <ul>
-                            <li>Solo registros cuyo tipo sea PERMISO.</li>
-                            <li>Código 11, observación PERMISO e ID como documento.</li>
-                            <li>Fecha Alta como fecha del documento.</li>
-                            <li>CSV UTF-8 sin BOM, separado por punto y coma y sin encabezados.</li>
-                        </ul>
-                    </div>
+                    <label class="ips-drop-zone" for="ipsScreenshot"><input id="ipsScreenshot" type="file" accept="image/png,image/jpeg,image/webp" hidden><span class="ips-drop-icon">⇧</span><strong>Subir captura del REOP</strong><small>PNG, JPG o WebP</small></label>
+                    <div class="ips-import-copy"><strong>Reglas activas</strong><ul><li>Solo registros PERMISO.</li><li>Código 11 y documento como ID.</li><li>Fecha Alta como fecha del documento.</li><li>CSV UTF-8 separado por punto y coma.</li></ul></div>
                 </div>
-
-                <div id="ipsProgress" class="ips-progress" hidden>
-                    <span><i id="ipsProgressBar"></i></span>
-                    <strong id="ipsProgressText">Preparando lectura…</strong>
-                </div>
-
+                <div id="ipsProgress" class="ips-progress" hidden><span><i id="ipsProgressBar"></i></span><strong id="ipsProgressText">Preparando lectura…</strong></div>
                 <div id="ipsResult" hidden>
                     <div id="ipsResultSummary" class="ips-result-summary"></div>
-                    <div class="ips-table-wrap">
-                        <table class="ips-review-table">
-                            <thead><tr><th>CI</th><th>Nombres</th><th>Apellidos</th><th>Desde</th><th>Hasta</th><th>Fecha documento</th><th>ID</th><th>Estado</th></tr></thead>
-                            <tbody id="ipsReviewRows"></tbody>
-                        </table>
-                    </div>
-                    <div class="ips-actions">
-                        <button id="ipsClear" class="secondary-button" type="button">Limpiar</button>
-                        <button id="ipsDownload" class="primary-button" type="button" disabled>Descargar CSV IPS</button>
-                    </div>
-                    <p class="ips-privacy">La captura se procesa dentro de este dispositivo. Antes de descargar, confirmá visualmente cada dato.</p>
-                </div>
-            </section>
-
-            <section class="hr-layout" data-hr-panel="news" hidden>
-                <article class="panel hr-main-panel">
-                    <header class="panel-header">
-                        <div>
-                            <p class="section-kicker">SEGUIMIENTO DIARIO</p>
-                            <h2>Ausencias y reintegros</h2>
-                            <p id="hrListCaption">0 registros</p>
-                        </div>
-                        <div class="hr-filter-row">
-                            <input id="hrSearch" type="search" placeholder="Buscar nombre, CI o cliente" aria-label="Buscar registros">
-                            <select id="hrStatusFilter" aria-label="Filtrar por estado">
-                                <option value="open">Abiertas</option>
-                                <option value="all">Todas</option>
-                                <option value="active">Ausentes hoy</option>
-                                <option value="upcoming">Programadas</option>
-                                <option value="return">Reintegros</option>
-                                <option value="completed">Finalizadas</option>
-                            </select>
-                            <select id="hrTypeFilter" aria-label="Filtrar por tipo">
-                                <option value="all">Todos los tipos</option>
-                                <option value="vacation">Vacaciones</option>
-                                <option value="medical">Reposo médico</option>
-                                <option value="maternity">Maternidad</option>
-                                <option value="permission">Permiso</option>
-                                <option value="suspension">Suspensión</option>
-                                <option value="other">Otro</option>
-                            </select>
-                        </div>
-                    </header>
-                    <div id="hrAbsenceList" class="hr-absence-list"></div>
-                </article>
-
-                <aside class="panel hr-directory-panel" data-hr-panel="people">
-                    <header class="panel-header">
-                        <div>
-                            <p class="section-kicker">DIRECTORIO</p>
-                            <h2>Funcionarios</h2>
-                            <p>Datos mínimos para identificar cada novedad.</p>
-                        </div>
-                    </header>
-                    <div id="hrEmployeeList" class="hr-employee-list"></div>
-                </aside>
-            </section>
-
-            <section id="hrImportPanel" class="panel hr-import-panel" data-hr-panel="people" hidden>
-                <header class="panel-header">
-                    <div>
-                        <p class="section-kicker">CARGA MASIVA CONTROLADA</p>
-                        <h2>Importar funcionarios desde Excel</h2>
-                        <p>ATLAS analiza primero. Nada se guarda hasta que revises los resultados y presiones Procesar.</p>
-                    </div>
-                    <div class="hr-import-header-actions">
-                        <a class="secondary-button" href="outputs/atlas_rrhh_20260728/ATLAS_RRHH_FUNCIONARIOS.xlsx" download>Descargar plantilla</a>
-                        <button id="hrExportPeople" class="secondary-button" type="button">Exportar nómina</button>
-                    </div>
-                </header>
-                <div class="hr-import-drop-row">
-                    <label class="hr-excel-drop" for="hrPeopleExcel">
-                        <input id="hrPeopleExcel" type="file" accept=".xlsx,.xls,.xlsm" hidden>
-                        <span>⇧</span><strong>Seleccionar Excel de funcionarios</strong>
-                        <small>ATLAS_RRHH_FUNCIONARIOS.xlsx, .xls o .xlsm</small>
-                    </label>
-                    <div class="hr-import-rules">
-                        <strong>Control automático</strong>
-                        <span>✓ Cédulas repetidas dentro del archivo</span>
-                        <span>✓ Cédulas que ya existen en este cliente</span>
-                        <span>✓ Filas sin nombre o cédula</span>
-                        <span>✓ Vista previa antes de guardar</span>
-                    </div>
-                </div>
-                <div id="hrImportResult" hidden>
-                    <div id="hrImportSummary" class="hr-mini-summary"></div>
-                    <div id="hrImportErrors" class="hr-import-errors"></div>
-                    <div id="hrImportPreview" class="hr-table-shell"></div>
-                    <div class="ips-actions">
-                        <button id="hrImportCancel" class="secondary-button" type="button">Cancelar importación</button>
-                        <button id="hrImportProcess" class="primary-button" type="button" disabled>Procesar funcionarios</button>
-                    </div>
+                    <div class="ips-table-wrap"><table class="ips-review-table"><thead><tr><th>CI</th><th>Nombres</th><th>Apellidos</th><th>Desde</th><th>Hasta</th><th>Fecha documento</th><th>ID</th><th>Estado</th></tr></thead><tbody id="ipsReviewRows"></tbody></table></div>
+                    <div class="ips-actions"><button id="ipsClear" class="secondary-button" type="button">Limpiar</button><button id="ipsDownload" class="primary-button" type="button" disabled>Descargar CSV IPS</button></div>
+                    <p class="ips-privacy">La captura se procesa dentro de este dispositivo. Confirmá visualmente cada dato.</p>
                 </div>
             </section>
         </main>
@@ -307,34 +298,29 @@
     <dialog id="employeeDialog">
         <form id="employeeForm">
             <input id="employeeId" type="hidden">
-            <div class="dialog-heading">
-                <div><p class="section-kicker">LEGAJO BÁSICO</p><h2 id="employeeDialogTitle">Nuevo funcionario</h2><p>Guardá solo lo necesario para el seguimiento.</p></div>
-                <button id="closeEmployeeDialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
-            </div>
+            <div class="dialog-heading"><div><p class="section-kicker">LEGAJO</p><h2 id="employeeDialogTitle">Nuevo funcionario</h2><p>Los campos alimentan nómina, cálculo y contratos.</p></div><button id="closeEmployeeDialog" class="icon-button" type="button">×</button></div>
             <div class="form-grid">
-                <label class="field span-4"><span>Cédula</span><input id="employeeCI" type="text" inputmode="numeric" maxlength="20" placeholder="Sin puntos" required></label>
-                <label class="field span-6"><span>Nombre y apellido</span><input id="employeeName" type="text" maxlength="100" required></label>
-                <label class="field span-2"><span>ID del reloj</span><input id="employeeClockId" type="text" maxlength="30"></label>
-                <label class="field span-4"><span>Cliente / área</span><select id="employeeClient"><option value="">Sin cliente asignado</option></select></label>
-                <label class="field span-4"><span>Sucursal</span><select id="employeeBranch"><option value="">Sin sucursal asignada</option></select></label>
-                <label class="field span-4"><span>Cargo</span><input id="employeePosition" type="text" maxlength="80"></label>
-                <label class="field span-3"><span>Fecha de ingreso</span><input id="employeeStartDate" type="date"></label>
-                <label class="field span-3"><span>Fecha de salida</span><input id="employeeEndDate" type="date"></label>
-                <label class="field span-3"><span>Tipo</span><select id="employeeWorkerType"><option value="monthly">Mensualizado</option><option value="daily">Jornalero</option><option value="parttime">Tiempo parcial</option></select></label>
-                <label class="field span-3"><span>Salario (G.)</span><input id="employeeSalary" type="number" min="0" value="3044000"></label>
-                <label class="field span-6"><span>Horario asignado</span><select id="employeeSchedule"><option value="">Sin horario asignado</option></select></label>
-                <fieldset class="field span-12 workday-fieldset">
-                    <legend>Días habituales de trabajo</legend>
-                    <div class="workday-options">
-                        <label><input type="checkbox" name="workday" value="1" checked><span>Lun</span></label>
-                        <label><input type="checkbox" name="workday" value="2" checked><span>Mar</span></label>
-                        <label><input type="checkbox" name="workday" value="3" checked><span>Mié</span></label>
-                        <label><input type="checkbox" name="workday" value="4" checked><span>Jue</span></label>
-                        <label><input type="checkbox" name="workday" value="5" checked><span>Vie</span></label>
-                        <label><input type="checkbox" name="workday" value="6" checked><span>Sáb</span></label>
-                        <label><input type="checkbox" name="workday" value="0"><span>Dom</span></label>
-                    </div>
-                </fieldset>
+                <label class="field span-3"><span>Cédula</span><input id="employeeCI" inputmode="numeric" maxlength="20" required></label>
+                <label class="field span-6"><span>Apellidos y nombres</span><input id="employeeName" maxlength="120" required></label>
+                <label class="field span-3"><span>ID del reloj</span><input id="employeeClockId" maxlength="30"></label>
+                <label class="field span-4"><span>Cliente</span><select id="employeeClient" required></select></label>
+                <label class="field span-4"><span>Cargo</span><input id="employeePosition" maxlength="100"></label>
+                <label class="field span-4"><span>Centro de costo</span><input id="employeeCostCenter" maxlength="80"></label>
+                <label class="field span-3"><span>Ingreso</span><input id="employeeStartDate" type="date"></label>
+                <label class="field span-3"><span>Salida</span><input id="employeeEndDate" type="date"></label>
+                <label class="field span-3"><span>Estado</span><select id="employeeStatus"><option value="active">Activo</option><option value="inactive-month">Inactivo del mes</option><option value="inactive">Inactivo</option></select></label>
+                <label class="field span-3"><span>Modalidad</span><select id="employeeWorkerType"><option value="monthly">Mensualizado</option><option value="daily">Jornalero</option><option value="parttime">Tiempo parcial</option></select></label>
+                <label class="field span-3"><span>Salario</span><input id="employeeSalary" type="number" min="0" value="3044000"></label>
+                <label class="field span-3"><span>Nacimiento</span><input id="employeeBirthDate" type="date"></label>
+                <label class="field span-3"><span>Sexo</span><select id="employeeSex"><option value="">Sin indicar</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select></label>
+                <label class="field span-3"><span>Estado civil</span><input id="employeeCivilStatus" maxlength="50"></label>
+                <label class="field span-4"><span>Nacionalidad</span><input id="employeeNationality" maxlength="60" value="Paraguaya"></label>
+                <label class="field span-4"><span>Profesión</span><input id="employeeProfession" maxlength="80"></label>
+                <label class="field span-4"><span>Ciudad</span><input id="employeeCity" maxlength="80"></label>
+                <label class="field span-6"><span>Dirección</span><input id="employeeAddress" maxlength="180"></label>
+                <label class="field span-3"><span>Teléfono</span><input id="employeePhone" maxlength="40"></label>
+                <label class="field span-3"><span>E-mail</span><input id="employeeEmail" type="email" maxlength="100"></label>
+                <label class="field span-12"><span>Motivo / observación de estado</span><textarea id="employeeStatusNote" rows="2" maxlength="300"></textarea></label>
             </div>
             <div class="dialog-actions"><button id="cancelEmployee" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar funcionario</button></div>
         </form>
@@ -343,34 +329,48 @@
     <dialog id="absenceDialog">
         <form id="absenceForm">
             <input id="absenceId" type="hidden">
-            <div class="dialog-heading">
-                <div><p class="section-kicker">NOVEDAD DEL PERSONAL</p><h2 id="absenceDialogTitle">Registrar ausencia</h2><p>El último día es inclusivo; el reintegro se calcula según su jornada.</p></div>
-                <button id="closeAbsenceDialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
-            </div>
+            <div class="dialog-heading"><div><p class="section-kicker">NOVEDAD</p><h2 id="absenceDialogTitle">Registrar ausencia</h2><p>La novedad luego puede justificar una FALTA.</p></div><button id="closeAbsenceDialog" class="icon-button" type="button">×</button></div>
             <div class="form-grid">
                 <label class="field span-7"><span>Funcionario</span><select id="absenceEmployee" required></select></label>
-                <label class="field span-5"><span>Tipo</span><select id="absenceType" required><option value="vacation">Vacaciones</option><option value="medical">Reposo médico</option><option value="maternity">Reposo por maternidad</option><option value="permission">Permiso</option><option value="suspension">Suspensión</option><option value="other">Otro</option></select></label>
+                <label class="field span-5"><span>Tipo</span><select id="absenceType"><option value="vacation">Vacaciones</option><option value="medical">Reposo médico</option><option value="maternity">Maternidad</option><option value="permission">Permiso</option><option value="suspension">Suspensión</option><option value="other">Otro</option></select></label>
                 <label class="field span-4"><span>Desde</span><input id="absenceStart" type="date" required></label>
                 <label class="field span-4"><span>Hasta inclusive</span><input id="absenceEnd" type="date" required></label>
-                <label class="field span-4"><span>Debe presentarse</span><input id="absenceReturn" type="date" required></label>
-                <label class="field span-12"><span>Observación administrativa</span><textarea id="absenceNote" rows="3" maxlength="350" placeholder="Ej: certificado recibido, ID de permiso o dato operativo. Evitá diagnósticos médicos."></textarea></label>
+                <label class="field span-4"><span>Reintegro</span><input id="absenceReturn" type="date" required></label>
+                <label class="field span-12"><span>Observación</span><textarea id="absenceNote" rows="3" maxlength="350"></textarea></label>
             </div>
-            <div id="absencePreview" class="absence-preview">Elegí las fechas para calcular la duración.</div>
-            <div class="dialog-actions"><button id="cancelAbsence" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar ausencia</button></div>
+            <div id="absencePreview" class="absence-preview"></div>
+            <div class="dialog-actions"><button id="cancelAbsence" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar novedad</button></div>
         </form>
     </dialog>
 
     <dialog id="hrContextDialog" class="hr-context-dialog">
         <form method="dialog">
-            <div class="dialog-heading">
-                <div><p class="section-kicker">EMPRESA Y CLIENTE</p><h2>Elegí dónde vas a trabajar</h2><p>Cada espacio mantiene separados sus funcionarios, horarios, marcaciones y gestiones.</p></div>
-                <button class="icon-button" value="cancel" aria-label="Cerrar">×</button>
-            </div>
+            <div class="dialog-heading"><div><p class="section-kicker">EMPRESA Y CLIENTE</p><h2 id="hrContextCompanyStep">Elegí la empresa administrada</h2><div id="hrContextClientStep" hidden><h2>Elegí la vista o el cliente</h2><p id="hrContextSelectedCompany"></p></div></div><button class="icon-button" value="cancel">×</button></div>
+            <button id="hrContextBack" class="hr-back-link" type="button">← Volver a empresas</button>
             <div id="hrCompanyList" class="hr-company-list"></div>
-            <div class="hr-add-company">
-                <input id="hrNewCompanyName" type="text" maxlength="90" placeholder="Nombre de otra empresa administrada">
-                <button id="hrAddCompany" class="secondary-button" type="button">Agregar empresa</button>
+            <div id="hrClientList" class="hr-company-list"></div>
+            <div class="hr-context-footer"><button id="hrAddCompany" class="secondary-button" type="button">＋ Empresa</button><button id="hrAddClient" class="secondary-button" type="button">＋ Cliente en esta empresa</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="hrIdentityDialog">
+        <form id="hrIdentityForm">
+            <div class="dialog-heading"><div><p class="section-kicker">IDENTIDAD EDITABLE</p><h2 id="hrIdentityTitle">Editar</h2></div><button class="icon-button" data-close type="button">×</button></div>
+            <div class="hr-identity-editor">
+                <label class="hr-logo-editor"><span id="hrIdentityLogoPreview"><span>?</span></span><strong>Cambiar logo</strong><input id="hrIdentityLogo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+                <div class="form-grid">
+                    <label class="field span-12"><span>Nombre</span><input id="hrIdentityName" required maxlength="100"></label>
+                    <label class="field span-12" data-identity-for="client"><span>Descripción</span><input id="hrIdentityDetail" maxlength="120"></label>
+                    <label class="field span-12" data-identity-for="company"><span>Razón social para documentos</span><input id="hrIdentityLegalName" maxlength="140"></label>
+                    <label class="field span-4" data-identity-for="company"><span>RUC</span><input id="hrIdentityRuc" maxlength="40"></label>
+                    <label class="field span-5" data-identity-for="company"><span>Representante</span><input id="hrIdentityRepresentative" maxlength="120"></label>
+                    <label class="field span-3" data-identity-for="company"><span>CI representante</span><input id="hrIdentityRepresentativeCI" maxlength="40"></label>
+                    <label class="field span-6" data-identity-for="client"><span>Lugar de trabajo</span><input id="hrIdentityWorkplace" maxlength="160"></label>
+                    <label class="field span-6" data-identity-for="client"><span>Centro de costo</span><input id="hrIdentityCostCenter" maxlength="80"></label>
+                    <label class="field span-12" data-identity-for="client"><span>Modelo contractual</span><select id="hrIdentityContract"><option value="">Sin modelo asignado</option><option value="amancer">Contrato AMANCER</option><option value="bdp">Contrato BDP</option><option value="arcor">Contrato ARCOR</option><option value="polo">Contrato POLO</option><option value="geomax">Contrato GEOMAX</option></select></label>
+                </div>
             </div>
+            <div class="dialog-actions"><button id="hrIdentityCancel" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar cambios</button></div>
         </form>
     </dialog>
 </body>

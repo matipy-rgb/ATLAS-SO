@@ -206,3 +206,33 @@
     .hr-context-actions button, .hr-import-header-actions > * { width: 100%; text-align: center; }
     .hr-import-rules { min-width: 0; }
 }
+
+/* RR. HH. v0.7 · empresa, cliente, nómina y cálculo a escala */
+.hr-context-logo,.hr-context-mark{width:48px;height:48px;border-radius:14px;object-fit:contain;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+.hr-context-logo{padding:5px}
+.hr-context-footer,.hr-people-actions,.hr-attendance-toolbar,.hr-pagination,.hr-contract-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.hr-context-footer{justify-content:flex-end;margin-top:18px}.hr-people-actions{margin:0 0 16px}.hr-pagination{justify-content:center;margin-top:18px}.hr-pagination button:disabled{opacity:.45;cursor:not-allowed}
+.hr-back-link{border:0;background:transparent;color:#78a7ff;padding:0 0 12px;cursor:pointer}
+.hr-context-dialog[data-mode="company"] #hrContextBack,.hr-context-dialog[data-mode="company"] #hrClientList,.hr-context-dialog[data-mode="client"] #hrCompanyList{display:none}
+.hr-company-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.hr-identity-card{display:grid;grid-template-columns:1fr auto;align-items:stretch;overflow:hidden;border:1px solid rgba(148,163,184,.2);background:rgba(15,23,42,.64);border-radius:16px}
+.hr-identity-card.selected{border-color:#10b981;box-shadow:0 0 0 2px rgba(16,185,129,.14)}
+.hr-identity-card>button:first-child{display:flex;align-items:center;gap:12px;border:0;padding:14px;text-align:left;color:inherit;background:transparent;cursor:pointer}
+.hr-identity-card>button:first-child span:not(.hr-identity-logo){display:grid;gap:3px}.hr-identity-card small{color:#94a3b8}
+.hr-identity-logo{width:42px;height:42px;flex:0 0 42px;object-fit:contain;border-radius:12px;padding:4px;background:rgba(255,255,255,.06)}
+.hr-logo-placeholder{display:grid!important;place-items:center;font-weight:800}.hr-identity-edit{width:42px;border:0;border-left:1px solid rgba(148,163,184,.2);color:#a8b0c0;background:transparent;cursor:pointer}
+.hr-identity-editor{display:grid;grid-template-columns:180px 1fr;gap:20px}.hr-logo-editor{display:grid;align-content:start;gap:8px;text-align:center;cursor:pointer}
+.hr-logo-editor>span{display:grid;place-items:center;min-height:150px;border:1px dashed rgba(148,163,184,.3);border-radius:18px;background:rgba(255,255,255,.035);font-size:32px;font-weight:800}
+.hr-logo-editor img{max-width:140px;max-height:130px;object-fit:contain}.hr-logo-editor input{max-width:180px;font-size:12px}
+.hr-editor{margin-top:16px;padding:4px 16px 16px;border:1px solid #e2e8f0;border-radius:18px;background:#f8fafc}.hr-editor>summary{padding:14px 0;cursor:pointer;font-weight:800}
+.hr-schedule-form .hr-wide,.hr-contract-form .hr-wide{grid-column:1/-1}.hr-attendance-toolbar{justify-content:flex-end}.hr-attendance-toolbar label:not(.primary-button){display:grid;gap:4px;color:#64748b;font-size:12px}
+.hr-clock-map{display:grid;grid-template-columns:minmax(180px,1fr) minmax(240px,2fr);gap:12px;align-items:center;margin:8px 0}.hr-import-result{margin:16px 0;padding:14px;border:1px solid #e2e8f0;border-radius:16px}
+.hr-table-note{margin:0 0 10px;color:#64748b}.hr-simple-table small{display:block;color:#64748b;margin-top:2px}.hr-row-inactive{opacity:.72}.hr-row-error{background:rgba(239,68,68,.06)}
+.hr-person-status{display:inline-flex;padding:4px 8px;border-radius:999px;background:rgba(16,185,129,.13);color:#047857;font-size:12px;white-space:nowrap}.hr-person-status.inactive-month{background:#fff7ed;color:#c2410c}.hr-person-status.inactive{background:#f1f5f9;color:#64748b}
+.hr-calculation-table{min-width:1550px}.hr-contract-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.hr-contract-form label{display:grid;gap:6px}.hr-contract-form label>span{color:#64748b;font-size:12px}
+.hr-contract-preview{min-height:180px;margin:20px auto;padding:44px;max-width:850px;background:#fff;color:#151515;border:1px solid #dbe3ee;border-radius:8px;font-family:Arial,sans-serif;line-height:1.5}.hr-contract-preview:empty{display:none}
+.contract-document h1{text-align:center;font-size:22px;margin:0}.contract-document h2{text-align:center;font-size:15px;margin-top:28px}.contract-document p{text-align:justify}.contract-document .subtitle{text-align:center;margin-top:2px}
+.contract-document .document-logo{display:block;max-width:140px;max-height:80px;margin:0 auto 20px;object-fit:contain}.contract-document .signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:80px;text-align:center}.contract-document .signatures.single{grid-template-columns:1fr;margin-left:50%}
+.contract-document footer{margin-top:45px;padding-top:10px;border-top:1px solid #bbb;color:#666;font-size:11px;text-align:center}
+@media(max-width:820px){.hr-context-actions{width:100%}.hr-context-actions button:not(.icon-button){flex:1}.hr-identity-editor{grid-template-columns:1fr}.hr-logo-editor{justify-items:center}.hr-contract-form{grid-template-columns:1fr 1fr}.hr-clock-map{grid-template-columns:1fr}.hr-contract-preview{padding:24px 18px}}
+@media(max-width:560px){.hr-company-list,.hr-contract-form{grid-template-columns:1fr}.hr-contract-form .hr-wide{grid-column:auto}.contract-document .signatures{grid-template-columns:1fr;gap:60px}}
