@@ -134,9 +134,16 @@ self.addEventListener("fetch", event => {
             fetch(event.request)
                 .then(response => {
                     if (response.ok) {
-                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
-                    }
-                    return response;
+    const responseCopy = response.clone();
+
+    caches.open(CACHE_NAME)
+        .then(cache => cache.put(event.request, responseCopy))
+        .catch(error => {
+            console.warn("No se pudo actualizar la caché:", error.message);
+        });
+}
+
+return response;
                 })
                 .catch(() => caches.match(event.request))
         );
@@ -159,8 +166,17 @@ self.addEventListener("fetch", event => {
     event.respondWith(
         caches.match(event.request).then(cached => {
             const network = fetch(event.request).then(response => {
-                if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
-                return response;
+                if (response.ok) {
+    const responseCopy = response.clone();
+
+    caches.open(CACHE_NAME)
+        .then(cache => cache.put(event.request, responseCopy))
+        .catch(error => {
+            console.warn("No se pudo actualizar la caché:", error.message);
+        });
+}
+
+return response;
             }).catch(() => cached);
             return cached || network;
         })
