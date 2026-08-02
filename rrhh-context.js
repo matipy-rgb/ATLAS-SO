@@ -34,27 +34,20 @@
     }
 
     const initialCompany = {
-        id: "a-support",
-        name: "A Support",
-        legalName: "Gestión y Cambio E.A.S.",
-        rosterName: "Nómina general",
-        logo: "",
-        ruc: "80120408-9",
-        patronalNumber: "0005-82-01080",
-        representative: "Marcelo Gul Pavoni",
-        representativeCI: "4.322.427",
-        documentCity: "Asunción",
-        address: "Aviadores del Chaco Nº 3207, Edificio Trading Park, Asunción",
-        active: true,
-        clients: [
-            { id: "arcor", name: "Arcor", logo: "", contractTemplateId: "arcor", active: true },
-            { id: "bdp", name: "BDP", detail: "Bebidas del Paraguay", logo: "", contractTemplateId: "bdp", active: true },
-            { id: "servieri", name: "Servieri", logo: "", contractTemplateId: "", active: true },
-            { id: "geomax", name: "Geomax", logo: "", contractTemplateId: "geomax", active: true },
-            { id: "polo-este", name: "Polo Este", logo: "", contractTemplateId: "polo", active: true },
-            { id: "amancer", name: "AMANCER", logo: "", contractTemplateId: "amancer", active: true }
-        ]
-    };
+    id: "empresa-inicial",
+    name: "Mi empresa",
+    legalName: "",
+    rosterName: "Nómina general",
+    logo: "",
+    ruc: "",
+    patronalNumber: "",
+    representative: "",
+    representativeCI: "",
+    documentCity: "",
+    address: "",
+    active: true,
+    clients: []
+};
 
     function slug(value, fallback = "registro") {
         const clean = String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")

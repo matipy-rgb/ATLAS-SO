@@ -420,7 +420,26 @@ async function testRRHHCore() {
     window.CSS = { escape: value => String(value).replaceAll('"', '\\"') };
     window.HTMLAnchorElement.prototype.click = function () {};
     window.eval(await read("rrhh-calc.js"));
-    window.eval(await read("rrhh.js"));
+
+Object.assign(window.AtlasHRContext.company, {
+    name: "Empresa de prueba",
+    legalName: "Empresa de prueba E.A.S.",
+    ruc: "80000000-0",
+    representative: "Representante de prueba",
+    representativeCI: "1.000.000",
+    address: "Dirección de prueba",
+    documentCity: "Ciudad de prueba"
+});
+
+window.AtlasHRContext.company.clients.push({
+    id: "cliente-prueba",
+    name: "Cliente de prueba",
+    workplace: "Lugar de trabajo de prueba",
+    contractTemplateId: "arcor",
+    active: true
+});
+
+window.eval(await read("rrhh.js"));
 
     click(window, "#openEmployeeDialog");
     assert.equal(document.querySelector("#employeeSalary").value, "0", "RRHH no debe inventar un salario");
@@ -430,14 +449,16 @@ async function testRRHHCore() {
     document.querySelector("#employeeWorkerType").value = "monthly";
     document.querySelector("#employeeCI").value = "4.000.001";
     document.querySelector("#employeeName").value = "Persona de Prueba";
-    document.querySelector("#employeeClient").value = "arcor";
+    document.querySelector("#employeeClient").value = "cliente-prueba";
     document.querySelector("#employeePosition").value = "Operador";
     document.querySelector("#employeeStartDate").value = localDate();
     document.querySelector("#employeeSalary").value = "5000000";
     submit(window, "#employeeForm");
-    const peopleKey = "atlasHRPeople__a-support";
-    const absencesKey = "atlasHRAbsences__a-support";
-    const complianceKey = "atlasHRCompliance__a-support";
+    const companyId = window.AtlasHRContext?.company?.id;
+assert.ok(companyId, "Debe existir una empresa activa");
+const peopleKey = `atlasHRPeople__${companyId}`;
+const absencesKey = `atlasHRAbsences__${companyId}`;
+const complianceKey = `atlasHRCompliance__${companyId}`;
     assert.equal(data.get(peopleKey).length, 1);
     assert.equal(data.get(complianceKey).length, 1);
 
@@ -474,8 +495,8 @@ async function testRRHHCore() {
     saturdayRule.querySelector("[data-rule-break]").value = "0";
     submit(window, "#hrScheduleForm");
 
-    const schedulesKey = "atlasHRSchedules__a-support";
-    const assignmentsKey = "atlasHRScheduleAssignments__a-support";
+    const schedulesKey = `atlasHRSchedules__${companyId}`;
+    const assignmentsKey = `atlasHRScheduleAssignments__${companyId}`;
     assert.equal(data.get(schedulesKey).length, 1);
     assert.equal(data.get(schedulesKey)[0].revisions[0].rules.length, 6);
     assert.equal(data.get(schedulesKey)[0].revisions[0].rules.find(rule => rule.day === 6).end, "12:00");
@@ -496,7 +517,7 @@ async function testRRHHCore() {
     submit(window, "#hrAttendanceForm");
     await settle();
     const period = localDate().slice(0, 7);
-    const attendanceKey = `atlasHRAttendanceFallback__a-support__${period}`;
+    const attendanceKey = `atlasHRAttendanceFallback__${companyId}__${period}`;
     assert.equal(data.get(attendanceKey).length, 1);
     assert.match(document.querySelector("#hrAttendanceSummary").textContent, /1 registro/);
 
@@ -516,7 +537,7 @@ async function testRRHHCore() {
     assert.match(document.querySelector("#hrContractPreview").textContent, /Turno operativo/);
     document.querySelector("#hrContractPreview").insertAdjacentHTML("beforeend", '<script>window.__unsafe = true</script><img src="x" onerror="window.__unsafe = true">');
     submit(window, "#hrContractForm");
-    const historyKey = "atlasHRContractHistory__a-support";
+    const historyKey = `atlasHRContractHistory__${companyId}`;
     assert.equal(data.get(historyKey).length, 1);
     assert.ok(!/<script|onerror=/i.test(data.get(historyKey)[0].snapshot), "El historial contractual debe sanear HTML editable");
 
