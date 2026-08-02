@@ -6,43 +6,15 @@
     const q = selector => document.querySelector(selector);
     const esc = A.escapeHTML;
     const HISTORY_KEY = "atlasHRContractHistory";
-    const MODELS = {
-        amancer: {
-            label: "Contrato AMANCER",
-            role: "Operario de fábrica",
-            workplace: "Gral. Aquino 1731, Luque",
-            term: "determined",
-            extra: "Cuando las necesidades operativas o las temporadas de alta demanda requieran servicios en sábados o domingos, las horas serán remuneradas conforme a la legislación vigente."
-        },
-        bdp: {
-            label: "Contrato BDP",
-            role: "Operario logístico",
-            workplace: "Complejo Industrial San Juan, km 8 Acaray, Ciudad del Este",
-            term: "determined",
-            extra: "Por necesidades operativas, trabajos de urgencia o alta demanda, la empresa podrá requerir servicios extraordinarios dentro de los límites legales."
-        },
-        arcor: {
-            label: "Contrato ARCOR",
-            role: "Operario de Planta Logística",
-            workplace: "Parque Industrial Ruta II Mariscal Estigarribia",
-            term: "determined",
-            extra: "Los servicios extraordinarios en sábados, domingos o feriados se regirán y remunerarán conforme al Código del Trabajo."
-        },
-        polo: {
-            label: "Contrato POLO",
-            role: "Operario logístico",
-            workplace: "Centro Logístico Autopista Silvio Pettirossi, Luque",
-            term: "indefinite",
-            extra: "Los servicios extraordinarios serán prestados dentro de los límites legales y remunerados conforme a la legislación vigente."
-        },
-        geomax: {
-            label: "Contrato GEOMAX",
-            role: "Ejecutivo Comercial de Telemática tercerizado en GEOMAX",
-            workplace: "Asunción y Gran Asunción",
-            term: "indefinite",
-            extra: "Las condiciones variables o comisiones adicionales deberán constar en una adenda firmada por ambas partes."
-        }
-    };
+const MODELS = {
+    general: {
+        label: "Contrato general",
+        role: "Cargo indicado en la ficha del funcionario",
+        workplace: "Lugar de prestación indicado por la empresa",
+        term: "indefinite",
+        extra: "Las horas extraordinarias, descansos y feriados se regirán conforme a la normativa aplicable."
+    }
+};
     let lastDocument = null;
 
     function people() { return window.AtlasHRPeople?.visible() || C.visible(A.readArray("atlasHRPeople")); }

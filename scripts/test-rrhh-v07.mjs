@@ -30,7 +30,13 @@ const staticChecks = [
     [html.includes('id="hrIdentityPatronal"') && context.includes("patronalNumber") && ipsSource.includes("C?.company?.patronalNumber") && !ipsSource.includes("const PATRONAL ="), "El CSV IPS todavía usa un número patronal fijo."],
     [superSource.includes("Vinculá estos ID del reloj una sola vez"), "Falta la vinculación estable del ID del reloj."],
     [superSource.includes("Store.mergeRecords"), "Las reimportaciones no comparan cambios."],
-    [contracts.includes("Contrato BDP") && contracts.includes("Contrato GEOMAX"), "Faltan modelos contractuales del Excel base."],
+    [
+    contracts.includes("general:")
+        && contracts.includes("Contrato general")
+        && !contracts.includes("Contrato BDP")
+        && !contracts.includes("Contrato GEOMAX"),
+    "El modelo contractual neutral no quedó configurado correctamente."
+],
     [contracts.includes("Art. 46") && !contracts.includes("Art. 48") && !contracts.includes("sesenta (60) días"), "El contrato conserva una referencia legal o un periodo de prueba automático incorrecto."],
     [context.includes("documentCity") && html.includes('id="hrIdentityDocumentCity"'), "La ciudad de celebración del contrato sigue fija."],
     [schema.includes("hr_attendance_records") && schema.includes("is_hr_admin()"), "Marcaciones a escala no están protegidas por RR. HH."],

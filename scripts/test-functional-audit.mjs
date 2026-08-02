@@ -435,7 +435,7 @@ window.AtlasHRContext.company.clients.push({
     id: "cliente-prueba",
     name: "Cliente de prueba",
     workplace: "Lugar de trabajo de prueba",
-    contractTemplateId: "arcor",
+    contractTemplateId: "general",
     active: true
 });
 
