@@ -2,7 +2,7 @@
 
 ## Dato fijo
 
-- Número patronal: `0005-82-01080`
+- Número patronal: `0000-00-00000`
 
 ## Columnas en orden exacto
 
@@ -27,7 +27,7 @@
 - Fechas en formato `dd/mm/aaaa`.
 - Separar nombres y apellidos según las columnas de la fuente.
 - Cédula solo con números, sin puntos ni comas.
-- Conservar el número patronal exactamente como `0005-82-01080`.
+- Conservar el número patronal exactamente como `0000-00-00000`.
 - CSV UTF-8 sin BOM.
 - Separador: punto y coma (`;`).
 - Sin fila de encabezados.
@@ -65,11 +65,11 @@
 - El código `11` está en la columna 5.
 - Cada línea contiene exactamente 10 columnas.
 - No hay BOM ni caracteres ocultos antes del número patronal.
-- Cada línea comienza directamente con `0005-82-01080`.
+- Cada línea comienza directamente con `0000-00-00000`.
 - Informar la cantidad final de registros.
 
 ## Ejemplo
 
 ```text
-0005-82-01080;5469180;EDGAR;LUGO ARMOA;11;20/07/2026;20/07/2026;20/07/2026;1989608;PERMISO
+0000-00-00000;5469180;EDGAR;LUGO ARMOA;11;20/07/2026;20/07/2026;20/07/2026;1989608;PERMISO
 ```
