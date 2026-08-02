@@ -5,6 +5,7 @@
     let projects = A.readArray(KEY).map(normalizeProject);
     let filter = "active";
     let search = "";
+    let writingProjects = false;
 
     const dialog = document.querySelector("#projectDialog");
     const form = document.querySelector("#projectForm");
@@ -26,7 +27,19 @@
         };
     }
 
-    function save() { A.writeJSON(KEY, projects); }
+    function save() {
+        writingProjects = true;
+        try {
+            A.writeJSON(KEY, projects);
+        } finally {
+            writingProjects = false;
+        }
+    }
+
+    function reload() {
+        projects = A.readArray(KEY).map(normalizeProject);
+        render();
+    }
 
     function statusInfo(item) {
         const days = A.daysUntil(item.deadline);
@@ -71,11 +84,11 @@
                 const complete = item.status === "completed" || item.progress >= 100;
                 const overdueClass = A.daysUntil(item.deadline) < 0 && !complete ? "overdue" : "";
                 return `<article class="project-card ${overdueClass} ${complete ? "completed" : ""}">
-                    <div class="project-top"><div><h3>${A.escapeHTML(item.name)}</h3><p>${areaLabels[item.area] || A.escapeHTML(item.area)}${item.deadline ? ` · ${A.formatDate(item.deadline)}` : ""}</p></div><span class="tag ${status.className}">${status.label}</span></div>
+                    <div class="project-top"><div><h3>${A.escapeHTML(item.name)}</h3><p>${A.escapeHTML(areaLabels[item.area] || item.area)}${item.deadline ? ` · ${A.formatDate(item.deadline)}` : ""}</p></div><span class="tag ${status.className}">${status.label}</span></div>
                     <div class="project-progress-row"><span>Avance</span><strong>${item.progress}%</strong></div>
                     <div class="progress-track"><div class="progress-bar" style="width:${item.progress}%"></div></div>
                     <div class="project-next"><strong>Siguiente acción</strong>${A.escapeHTML(item.nextAction)}</div>
-                    <div class="project-actions">${!complete ? `<button class="small-button" data-action="advance" data-id="${item.id}" type="button">＋10%</button><button class="small-button" data-action="complete" data-id="${item.id}" type="button">Completar</button>` : `<button class="small-button" data-action="reopen" data-id="${item.id}" type="button">Reabrir</button>`}<button class="small-button" data-action="edit" data-id="${item.id}" type="button">Editar</button><button class="danger-button" data-action="delete" data-id="${item.id}" type="button">Eliminar</button></div>
+                    <div class="project-actions">${!complete ? `<button class="small-button" data-action="advance" data-id="${A.escapeHTML(String(item.id))}" type="button">＋10%</button><button class="small-button" data-action="complete" data-id="${A.escapeHTML(String(item.id))}" type="button">Completar</button>` : `<button class="small-button" data-action="reopen" data-id="${A.escapeHTML(String(item.id))}" type="button">Reabrir</button>`}<button class="small-button" data-action="edit" data-id="${A.escapeHTML(String(item.id))}" type="button">Editar</button><button class="danger-button" data-action="delete" data-id="${A.escapeHTML(String(item.id))}" type="button">Eliminar</button></div>
                 </article>`;
             }).join("");
         }
@@ -118,13 +131,22 @@
         const id = document.querySelector("#projectId").value;
         let progress = Number(progressInput.value);
         let status = document.querySelector("#projectStatus").value;
+        const name = document.querySelector("#projectName").value.trim();
+        const nextAction = document.querySelector("#projectNextAction").value.trim();
+        const deadline = document.querySelector("#projectDeadline").value;
+        if (!name || !nextAction || !deadline) {
+            A.notify("Completá nombre, próxima acción y fecha objetivo.", "error");
+            return;
+        }
         if (status === "completed") progress = 100;
         if (progress === 100) status = "completed";
         const project = normalizeProject({
-            id: id ? Number(id) : A.createId(), name: document.querySelector("#projectName").value.trim(),
-            area: document.querySelector("#projectArea").value, nextAction: document.querySelector("#projectNextAction").value.trim(),
-            deadline: document.querySelector("#projectDeadline").value, progress, status,
-            notes: document.querySelector("#projectNotes").value.trim(), updatedAt: new Date().toISOString()
+            id: id || A.createId(), name,
+            area: document.querySelector("#projectArea").value, nextAction,
+            deadline, progress, status,
+            notes: document.querySelector("#projectNotes").value.trim(),
+            completedAt: status === "completed" ? (projects.find(item => String(item.id) === String(id))?.completedAt || new Date().toISOString()) : "",
+            updatedAt: new Date().toISOString()
         });
         const index = projects.findIndex(item => String(item.id) === String(id));
         if (index >= 0) projects[index] = { ...projects[index], ...project };
@@ -146,7 +168,10 @@
             if (!confirm(`¿Eliminar “${item.name}”?`)) return;
             projects = projects.filter(project => project !== item);
         }
-        if (action === "advance") item.progress = Math.min(100, item.progress + 10);
+        if (action === "advance") {
+            item.progress = Math.min(100, item.progress + 10);
+            if (item.progress === 100) item.completedAt = new Date().toISOString();
+        }
         if (action === "complete") { item.progress = 100; item.status = "completed"; item.completedAt = new Date().toISOString(); }
         if (action === "reopen") { item.progress = Math.min(90, item.progress); item.status = "active"; item.completedAt = ""; }
         if (item.progress === 100) item.status = "completed";
@@ -157,4 +182,12 @@
     document.querySelector("#projectSearch").addEventListener("input", event => { search = event.target.value.trim().toLowerCase(); render(); });
     document.querySelector("#projectStatusFilter").addEventListener("change", event => { filter = event.target.value; render(); });
     render();
+    window.addEventListener("atlas:data-changed", event => {
+        if (!writingProjects && event.detail?.key === KEY) reload();
+    });
+    window.addEventListener("storage", event => {
+        if (A.storageKeyMatches(event.key, KEY)) reload();
+    });
+    window.addEventListener("pageshow", reload);
+    window.addEventListener("focus", reload);
 })();

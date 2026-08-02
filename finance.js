@@ -23,6 +23,7 @@ const obligationsList = document.querySelector("#obligationsList");
 
 const transactionForm = document.querySelector("#transactionForm");
 const transactionType = document.querySelector("#transactionType");
+const transactionDate = document.querySelector("#transactionDate");
 const transactionDescription = document.querySelector("#transactionDescription");
 const transactionAmount = document.querySelector("#transactionAmount");
 const transactionsList = document.querySelector("#transactionsList");
@@ -48,17 +49,22 @@ const closeReceiptDialog = document.querySelector("#closeReceiptDialog");
 const doneReceiptDialog = document.querySelector("#doneReceiptDialog");
 
 let activeReceiptUrl = "";
+let writingFinanceData = false;
 
-let transactions = loadArray(TRANSACTIONS_KEY);
+let transactions = loadArray(TRANSACTIONS_KEY).map(normalizeTransaction);
 let obligations = loadArray(OBLIGATIONS_KEY).map(normalizeObligation);
 
 function reloadStoredData() {
-    transactions = loadArray(TRANSACTIONS_KEY);
+    transactions = loadArray(TRANSACTIONS_KEY).map(normalizeTransaction);
     obligations = loadArray(OBLIGATIONS_KEY).map(normalizeObligation);
 }
 
 function loadArray(key) {
     return window.Atlas?.readArray(key) || [];
+}
+
+function receiptRecordId(paymentId) {
+    return `${window.AtlasStore?.workspaceId || "local"}:${String(paymentId)}`;
 }
 
 function openReceiptDatabase() {
@@ -93,7 +99,9 @@ async function saveReceipt(paymentId, file) {
         const store = transaction.objectStore(RECEIPT_STORE_NAME);
 
         store.put({
-            paymentId,
+            paymentId: receiptRecordId(paymentId),
+            originalPaymentId: paymentId,
+            workspaceId: window.AtlasStore?.workspaceId || "local",
             name: file.name,
             type: file.type || "application/octet-stream",
             size: file.size,
@@ -124,7 +132,7 @@ async function saveReceipt(paymentId, file) {
     });
     if (error) {
         console.warn("El comprobante quedó solo en este dispositivo:", error.message);
-        return "";
+        return null;
     }
     return path;
 }
@@ -135,7 +143,7 @@ async function getReceipt(paymentId, cloudPath = "") {
             .from("atlas-files")
             .download(cloudPath);
         if (!error && data) {
-            const payment = obligations.flatMap(item => item.payments || []).find(item => Number(item.id) === Number(paymentId));
+            const payment = obligations.flatMap(item => item.payments || []).find(item => String(item.id) === String(paymentId));
             return {
                 paymentId,
                 name: payment?.receipt?.name || cloudPath.split("/").pop() || "comprobante",
@@ -146,15 +154,17 @@ async function getReceipt(paymentId, cloudPath = "") {
         }
     }
     const database = await openReceiptDatabase();
-
-    return new Promise((resolve, reject) => {
+    const read = key => new Promise((resolve, reject) => {
         const transaction = database.transaction(RECEIPT_STORE_NAME, "readonly");
-        const request = transaction.objectStore(RECEIPT_STORE_NAME).get(paymentId);
-
+        const request = transaction.objectStore(RECEIPT_STORE_NAME).get(key);
         request.onsuccess = () => resolve(request.result || null);
         request.onerror = () => reject(request.error);
-        transaction.oncomplete = () => database.close();
     });
+    try {
+        return await read(receiptRecordId(paymentId)) || await read(paymentId);
+    } finally {
+        database.close();
+    }
 }
 
 async function deleteReceipt(paymentId, cloudPath = "") {
@@ -166,8 +176,9 @@ async function deleteReceipt(paymentId, cloudPath = "") {
 
     return new Promise((resolve, reject) => {
         const transaction = database.transaction(RECEIPT_STORE_NAME, "readwrite");
-
-        transaction.objectStore(RECEIPT_STORE_NAME).delete(paymentId);
+        const store = transaction.objectStore(RECEIPT_STORE_NAME);
+        store.delete(receiptRecordId(paymentId));
+        store.delete(paymentId);
 
         transaction.oncomplete = () => {
             database.close();
@@ -203,25 +214,68 @@ function isAllowedReceipt(file) {
 }
 
 function normalizeObligation(obligation) {
-    const payments = Array.isArray(obligation.payments) ? obligation.payments : [];
+    const payments = Array.isArray(obligation?.payments)
+        ? obligation.payments.map(payment => ({
+            ...payment,
+            id: validIdentifier(payment?.id),
+            amount: positiveNumber(payment?.amount),
+            date: String(payment?.date || ""),
+            reference: String(payment?.reference || ""),
+            note: String(payment?.note || "")
+        }))
+        : [];
     const paidFromHistory = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const allowedFrequencies = new Set(["once", "monthly", "installment"]);
 
     return {
         ...obligation,
-        amount: Number(obligation.amount || 0),
+        id: validIdentifier(obligation?.id),
+        name: String(obligation?.name || "").trim(),
+        amount: positiveNumber(obligation?.amount),
         payments,
-        paidAmount: paidFromHistory || Number(obligation.paidAmount || 0),
-        frequency: obligation.frequency || "once"
+        paidAmount: payments.length ? paidFromHistory : positiveNumber(obligation?.paidAmount),
+        dueDate: String(obligation?.dueDate || ""),
+        frequency: allowedFrequencies.has(obligation?.frequency) ? obligation.frequency : "once",
+        installmentNumber: positiveInteger(obligation?.installmentNumber),
+        installmentTotal: positiveInteger(obligation?.installmentTotal)
     };
 }
 
-function saveData() {
-    window.Atlas?.writeJSON(TRANSACTIONS_KEY, transactions);
-    window.Atlas?.writeJSON(OBLIGATIONS_KEY, obligations);
+function normalizeTransaction(transaction) {
+    return {
+        ...transaction,
+        id: validIdentifier(transaction?.id),
+        description: String(transaction?.description || "").trim(),
+        amount: positiveNumber(transaction?.amount),
+        type: transaction?.type === "income" ? "income" : "expense",
+        createdAt: String(transaction?.createdAt || "")
+    };
+}
 
-    window.dispatchEvent(new CustomEvent("atlas:data-changed", {
-        detail: { key: OBLIGATIONS_KEY }
-    }));
+function validIdentifier(value) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && value.length <= 128) return value;
+    return createId();
+}
+
+function positiveNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function positiveInteger(value) {
+    const number = Math.trunc(Number(value));
+    return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function saveData() {
+    writingFinanceData = true;
+    try {
+        window.Atlas?.writeJSON(TRANSACTIONS_KEY, transactions);
+        window.Atlas?.writeJSON(OBLIGATIONS_KEY, obligations);
+    } finally {
+        writingFinanceData = false;
+    }
 }
 
 function createId() {
@@ -240,8 +294,17 @@ function parseLocalDate(dateString) {
     return new Date(`${dateString}T00:00:00`);
 }
 
+function isValidISODate(dateString) {
+    const match = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return false;
+    const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    return date.getUTCFullYear() === Number(match[1])
+        && date.getUTCMonth() === Number(match[2]) - 1
+        && date.getUTCDate() === Number(match[3]);
+}
+
 function formatDate(dateString) {
-    if (!dateString) return "Sin fecha";
+    if (!isValidISODate(dateString)) return "Fecha no válida";
 
     return new Intl.DateTimeFormat("es-PY", {
         day: "2-digit",
@@ -272,9 +335,16 @@ function getRemaining(obligation) {
 }
 
 function daysUntil(dateString) {
+    if (!isValidISODate(dateString)) return Number.POSITIVE_INFINITY;
     const today = parseLocalDate(getTodayISO());
     const dueDate = parseLocalDate(dateString);
     return Math.round((dueDate - today) / 86400000);
+}
+
+function formatTransactionDate(dateString) {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "Fecha no válida";
+    return new Intl.DateTimeFormat("es-PY", { dateStyle: "medium" }).format(date);
 }
 
 function getObligationStatus(obligation) {
@@ -417,7 +487,7 @@ function renderObligations() {
                     <button
                         class="receipt-button"
                         data-action="view-receipt"
-                        data-payment-id="${payment.id}"
+                        data-payment-id="${escapeHTML(String(payment.id))}"
                         type="button"
                     >
                         📎 Ver comprobante
@@ -459,14 +529,14 @@ function renderObligations() {
 
                 <div class="obligation-actions">
                     ${payments.length > 0
-                        ? `<button class="small-button" data-action="undo-payment" data-id="${obligation.id}" type="button">Anular último pago</button>`
+                        ? `<button class="small-button" data-action="undo-payment" data-id="${escapeHTML(String(obligation.id))}" type="button">Anular último pago</button>`
                         : ""
                     }
                     ${remaining > 0
-                        ? `<button class="primary-button" data-action="pay" data-id="${obligation.id}" type="button">Registrar pago</button>`
+                        ? `<button class="primary-button" data-action="pay" data-id="${escapeHTML(String(obligation.id))}" type="button">Registrar pago</button>`
                         : ""
                     }
-                    <button class="danger-button" data-action="delete-obligation" data-id="${obligation.id}" type="button">Eliminar</button>
+                    <button class="danger-button" data-action="delete-obligation" data-id="${escapeHTML(String(obligation.id))}" type="button">Eliminar</button>
                 </div>
 
                 ${payments.length > 0
@@ -504,7 +574,7 @@ function renderTransactions() {
                 <div class="transaction-info">
                     <strong>${escapeHTML(transaction.description)}</strong>
                     <small>
-                        ${new Intl.DateTimeFormat("es-PY", { dateStyle: "medium" }).format(new Date(transaction.createdAt))}
+                        ${formatTransactionDate(transaction.createdAt)}
                         ${isAutomatic ? '<span class="automatic-badge">Pago automático</span>' : ""}
                     </small>
                 </div>
@@ -515,7 +585,7 @@ function renderTransactions() {
                     </span>
                     ${isAutomatic
                         ? ""
-                        : `<button class="danger-button" data-action="delete-transaction" data-id="${transaction.id}" type="button">Eliminar</button>`
+                        : `<button class="danger-button" data-action="delete-transaction" data-id="${escapeHTML(String(transaction.id))}" type="button">Eliminar</button>`
                     }
                 </div>
             </article>
@@ -580,7 +650,7 @@ function generateNextObligation(obligation) {
 }
 
 function openPayment(obligationId) {
-    const obligation = obligations.find((item) => item.id === obligationId);
+    const obligation = obligations.find((item) => String(item.id) === String(obligationId));
     if (!obligation) return;
 
     const remaining = getRemaining(obligation);
@@ -616,11 +686,11 @@ function closeDialog() {
 }
 
 async function undoLastPayment(obligationId) {
-    const obligation = obligations.find((item) => item.id === obligationId);
+    const obligation = obligations.find((item) => String(item.id) === String(obligationId));
     if (!obligation || !obligation.payments?.length) return;
 
     if (obligation.nextObligationId) {
-        const nextObligation = obligations.find((item) => item.id === obligation.nextObligationId);
+        const nextObligation = obligations.find((item) => String(item.id) === String(obligation.nextObligationId));
         const nextHasActivity = nextObligation && Number(nextObligation.paidAmount || 0) > 0;
 
         if (nextHasActivity) {
@@ -628,7 +698,7 @@ async function undoLastPayment(obligationId) {
             return;
         }
 
-        obligations = obligations.filter((item) => item.id !== obligation.nextObligationId);
+        obligations = obligations.filter((item) => String(item.id) !== String(obligation.nextObligationId));
         delete obligation.nextObligationId;
     }
 
@@ -641,7 +711,7 @@ async function undoLastPayment(obligationId) {
         return sum + Number(payment.amount || 0);
     }, 0);
 
-    transactions = transactions.filter((transaction) => transaction.paymentId !== lastPayment.id);
+    transactions = transactions.filter((transaction) => String(transaction.paymentId) !== String(lastPayment.id));
 
     if (lastPayment.receipt) {
         try {
@@ -675,8 +745,9 @@ async function viewReceipt(paymentId) {
     }
 
     try {
-        const payment = obligations.flatMap(item => item.payments || []).find(item => Number(item.id) === Number(paymentId));
-        const receipt = await getReceipt(paymentId, payment?.receipt?.path || "");
+        const payment = obligations.flatMap(item => item.payments || []).find(item => String(item.id) === String(paymentId));
+        const storedPaymentId = payment?.id ?? paymentId;
+        const receipt = await getReceipt(storedPaymentId, payment?.receipt?.path || "");
 
         if (!receipt?.file) {
             alert("El comprobante no está disponible en este dispositivo.");
@@ -767,9 +838,10 @@ transactionForm.addEventListener("submit", (event) => {
 
     const description = transactionDescription.value.trim();
     const amount = Math.round(Number(transactionAmount.value));
+    const date = transactionDate.value;
 
-    if (!description || !Number.isFinite(amount) || amount <= 0) {
-        alert("Completá una descripción y un monto válido.");
+    if (!description || !date || !Number.isFinite(amount) || amount <= 0) {
+        alert("Completá la fecha, una descripción y un monto válido.");
         return;
     }
 
@@ -778,12 +850,13 @@ transactionForm.addEventListener("submit", (event) => {
         description,
         amount,
         type: transactionType.value,
-        createdAt: new Date().toISOString()
+        createdAt: `${date}T12:00:00`
     });
 
     saveData();
     transactionForm.reset();
     transactionType.value = "expense";
+    transactionDate.value = getTodayISO();
     renderAll();
 });
 
@@ -817,8 +890,8 @@ paymentReceipt?.addEventListener("change", () => {
 paymentForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const obligationId = Number(paymentObligationId.value);
-    const obligation = obligations.find((item) => item.id === obligationId);
+    const obligationId = paymentObligationId.value;
+    const obligation = obligations.find((item) => String(item.id) === String(obligationId));
     if (!obligation) return;
 
     const amount = Math.round(Number(paymentAmount.value));
@@ -863,7 +936,9 @@ paymentForm.addEventListener("submit", async (event) => {
 
     if (receiptFile) {
         try {
-            payment.receipt.path = await saveReceipt(payment.id, receiptFile);
+            const path = await saveReceipt(payment.id, receiptFile);
+            if (path === null) payment.receipt.cloudPending = true;
+            else payment.receipt.path = path;
         } catch (error) {
             console.error("No se pudo guardar el comprobante:", error);
             alert("No se pudo guardar el archivo. El pago todavía no fue registrado.");
@@ -896,6 +971,12 @@ paymentForm.addEventListener("submit", async (event) => {
     saveData();
     closeDialog();
     renderAll();
+    window.Atlas?.notify(
+        payment.receipt?.cloudPending
+            ? "Pago registrado. El comprobante quedó solo en este dispositivo."
+            : "Pago registrado.",
+        payment.receipt?.cloudPending ? "warning" : "success"
+    );
 
     submitButton.disabled = false;
     submitButton.textContent = "Confirmar pago";
@@ -908,11 +989,11 @@ obligationsList.addEventListener("click", (event) => {
     const action = button.dataset.action;
 
     if (action === "view-receipt") {
-        viewReceipt(Number(button.dataset.paymentId));
+        viewReceipt(button.dataset.paymentId);
         return;
     }
 
-    const obligationId = Number(button.dataset.id);
+    const obligationId = button.dataset.id;
 
     if (action === "pay") {
         openPayment(obligationId);
@@ -925,7 +1006,7 @@ obligationsList.addEventListener("click", (event) => {
     }
 
     if (action === "delete-obligation") {
-        const obligation = obligations.find((item) => item.id === obligationId);
+        const obligation = obligations.find((item) => String(item.id) === String(obligationId));
         if (!obligation) return;
 
         if (obligation.payments?.length) {
@@ -936,10 +1017,10 @@ obligationsList.addEventListener("click", (event) => {
         const confirmed = confirm(`¿Eliminar la cuenta “${obligation.name}”?`);
         if (!confirmed) return;
 
-        obligations = obligations.filter((item) => item.id !== obligationId);
+        obligations = obligations.filter((item) => String(item.id) !== String(obligationId));
 
         if (obligation.parentObligationId) {
-            const parent = obligations.find((item) => item.id === obligation.parentObligationId);
+            const parent = obligations.find((item) => String(item.id) === String(obligation.parentObligationId));
             if (parent) delete parent.nextObligationId;
         }
 
@@ -952,11 +1033,11 @@ transactionsList.addEventListener("click", (event) => {
     const button = event.target.closest('button[data-action="delete-transaction"]');
     if (!button) return;
 
-    const transactionId = Number(button.dataset.id);
+    const transactionId = button.dataset.id;
     const confirmed = confirm("¿Eliminar este movimiento?");
     if (!confirmed) return;
 
-    transactions = transactions.filter((transaction) => transaction.id !== transactionId);
+    transactions = transactions.filter((transaction) => String(transaction.id) !== String(transactionId));
     saveData();
     renderAll();
 });
@@ -982,7 +1063,12 @@ function synchronizeFinancePage() {
 window.addEventListener("pageshow", synchronizeFinancePage);
 
 window.addEventListener("storage", (event) => {
-    if (event.key === TRANSACTIONS_KEY || event.key === OBLIGATIONS_KEY) {
+    if (window.Atlas.storageKeyMatches(event.key, TRANSACTIONS_KEY) || window.Atlas.storageKeyMatches(event.key, OBLIGATIONS_KEY)) {
+        synchronizeFinancePage();
+    }
+});
+window.addEventListener("atlas:data-changed", event => {
+    if (!writingFinanceData && [TRANSACTIONS_KEY, OBLIGATIONS_KEY].includes(event.detail?.key)) {
         synchronizeFinancePage();
     }
 });
@@ -999,6 +1085,9 @@ if (obligationDueDate) {
 
 if (paymentDate) {
     paymentDate.value = getTodayISO();
+}
+if (transactionDate) {
+    transactionDate.value = getTodayISO();
 }
 
 synchronizeFinancePage();

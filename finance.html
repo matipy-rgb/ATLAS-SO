@@ -37,8 +37,8 @@
                     <article class="panel finance-card">
                         <header class="panel-header"><div><p class="section-kicker">COMPROMISOS</p><h2>Cuentas por pagar</h2><p>Vencimientos, cuotas, pagos parciales e historial.</p></div></header>
                         <form id="obligationForm" class="finance-form obligation-form">
-                            <label class="field field-wide"><span>Cuenta o compromiso</span><input id="obligationName" type="text" maxlength="80" placeholder="Ej: Cuota de la moto" required></label>
-                            <label class="field"><span>Monto de esta cuota</span><input id="obligationAmount" type="number" min="1" step="1" placeholder="550000" required></label>
+                            <label class="field field-wide"><span>Cuenta o compromiso</span><input id="obligationName" type="text" maxlength="80" placeholder="Ej: Alquiler del mes" required></label>
+                            <label class="field"><span>Monto de esta cuota</span><input id="obligationAmount" type="number" min="1" step="1" placeholder="350000" required></label>
                             <label class="field"><span>Vencimiento</span><input id="obligationDueDate" type="date" required></label>
                             <label class="field"><span>Frecuencia</span><select id="obligationFrequency"><option value="once">Pago único</option><option value="monthly">Mensual</option><option value="installment">En cuotas</option></select></label>
                             <div id="installmentFields" class="installment-fields" hidden>
@@ -56,6 +56,7 @@
                         <header class="panel-header"><div><p class="section-kicker">MOVIMIENTOS</p><h2>Ingresos y gastos</h2><p>Los pagos de cuentas se agregan automáticamente.</p></div></header>
                         <form id="transactionForm" class="finance-form transaction-form">
                             <label class="field"><span>Tipo</span><select id="transactionType"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
+                            <label class="field"><span>Fecha</span><input id="transactionDate" type="date" required></label>
                             <label class="field field-wide"><span>Descripción</span><input id="transactionDescription" type="text" maxlength="80" placeholder="Ej: Compra del supermercado" required></label>
                             <label class="field"><span>Monto</span><input id="transactionAmount" type="number" min="1" step="1" placeholder="150000" required></label>
                             <button class="primary-button form-button" type="submit">Registrar</button>

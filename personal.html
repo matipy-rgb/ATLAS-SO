@@ -19,7 +19,7 @@
     <div class="app-frame"><div class="app-workspace">
         <main class="page-content">
             <section class="page-hero">
-                <div><p class="page-eyebrow">PERSONAL</p><h1>Sistema de hábitos</h1><p>Marcá hechos, no intenciones. La semana muestra rápidamente dónde hay constancia y dónde hay excusas.</p></div>
+                <div><p class="page-eyebrow">PERSONAL</p><h1>Sistema de hábitos</h1><p>Marcá cada hábito cuando lo completes. La semana te muestra la constancia y los días que podés retomar.</p></div>
                 <div class="page-hero-actions"><button id="openHabitDialog" class="primary-button" type="button">＋ Nuevo hábito</button></div>
             </section>
 
@@ -44,7 +44,7 @@
                         <header class="panel-header"><div><p class="section-kicker">ÚLTIMOS 7 DÍAS</p><h2>Consistencia</h2></div></header>
                         <div id="habitWeek" class="habit-week"></div>
                     </article>
-                    <div class="info-callout"><strong>Regla simple:</strong> si un hábito no ayuda a una meta concreta o no se puede medir con sí/no, probablemente está mal definido.</div>
+                    <div class="info-callout"><strong>Sugerencia:</strong> elegí una acción concreta que puedas marcar como hecha o pendiente.</div>
                 </aside>
             </section>
         </main>
@@ -52,12 +52,13 @@
 
     <dialog id="habitDialog">
         <form id="habitForm">
-            <div class="dialog-heading"><div><p class="section-kicker">NUEVO SISTEMA</p><h2>Agregar hábito</h2><p>Usá una acción clara: “Tomar creatina”, no “Ser saludable”.</p></div><button id="closeHabitDialog" class="icon-button" type="button">×</button></div>
+            <input id="habitId" type="hidden">
+            <div class="dialog-heading"><div><p class="section-kicker">ACCIÓN CONCRETA</p><h2 id="habitDialogTitle">Agregar hábito</h2><p>Usá una acción clara, por ejemplo: “Caminar 20 minutos”.</p></div><button id="closeHabitDialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
             <div class="form-grid">
                 <label class="field span-8"><span>Hábito</span><input id="habitName" type="text" maxlength="90" placeholder="Ej: Entrenar" required></label>
                 <label class="field span-4"><span>Área</span><select id="habitArea"><option value="health">Salud</option><option value="study">Estudios</option><option value="finance">Finanzas</option><option value="personal">Personal</option><option value="work">Trabajo</option></select></label>
             </div>
-            <div class="dialog-actions"><button id="cancelHabitDialog" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Agregar hábito</button></div>
+            <div class="dialog-actions"><button id="cancelHabitDialog" class="secondary-button" type="button">Cancelar</button><button id="habitSaveButton" class="primary-button" type="submit">Agregar hábito</button></div>
         </form>
     </dialog>
 </body>

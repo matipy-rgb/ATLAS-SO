@@ -24,7 +24,11 @@
     ];
 
     const pendingSync = new Map();
+    const durablePending = new Map();
     let syncTimer = null;
+    let retryTimer = null;
+    let retryDelay = 1500;
+    let pendingVersion = 0;
     let workspaceId = "";
     let userId = "";
 
@@ -50,36 +54,95 @@
         return localStorage.getItem(scopedKey(key)) !== null;
     }
 
+    function pendingStorageKey() {
+        return `atlas:pending:${workspaceId}`;
+    }
+
+    function persistPending() {
+        if (!workspaceId) return;
+        if (!durablePending.size) {
+            localStorage.removeItem(pendingStorageKey());
+            return;
+        }
+        localStorage.setItem(pendingStorageKey(), JSON.stringify(Object.fromEntries(durablePending)));
+    }
+
+    function loadPending() {
+        pendingSync.clear();
+        durablePending.clear();
+        try {
+            const parsed = JSON.parse(localStorage.getItem(pendingStorageKey()) || "{}");
+            Object.entries(parsed && typeof parsed === "object" ? parsed : {}).forEach(([key, version]) => {
+                if (!key || typeof version !== "string") return;
+                durablePending.set(key, version);
+                pendingSync.set(key, version);
+            });
+        } catch {
+            localStorage.removeItem(pendingStorageKey());
+        }
+    }
+
+    function rememberPending(key) {
+        const version = `${Date.now()}-${pendingVersion += 1}`;
+        pendingSync.set(key, version);
+        durablePending.set(key, version);
+        persistPending();
+    }
+
     async function flush() {
         if (!pendingSync.size || !window.AtlasAuth?.client || !workspaceId) return;
-        const rows = Array.from(pendingSync, ([data_key, value]) => ({
+        const batch = Array.from(pendingSync);
+        batch.forEach(([key, version]) => {
+            if (pendingSync.get(key) === version) pendingSync.delete(key);
+        });
+        const rows = batch.map(([data_key]) => ({
             workspace_id: workspaceId,
             data_key,
-            value,
+            value: readLocal(data_key, null),
             updated_by: userId,
             updated_at: new Date().toISOString()
         }));
-        pendingSync.clear();
 
-        const { error } = await window.AtlasAuth.client
-            .from("app_data")
-            .upsert(rows, { onConflict: "workspace_id,data_key" });
+        let error = null;
+        try {
+            ({ error } = await window.AtlasAuth.client
+                .from("app_data")
+                .upsert(rows, { onConflict: "workspace_id,data_key" }));
+        } catch (caught) {
+            error = caught;
+        }
 
         if (error) {
-            rows.forEach(row => pendingSync.set(row.data_key, row.value));
+            batch.forEach(([key, version]) => {
+                if (!pendingSync.has(key)) pendingSync.set(key, version);
+            });
             window.dispatchEvent(new CustomEvent("atlas:sync-status", {
                 detail: { status: "offline", message: "Cambios guardados en este dispositivo" }
             }));
+            window.clearTimeout(retryTimer);
+            retryTimer = window.setTimeout(() => flush().catch(console.error), retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 30000);
             return;
         }
 
+        batch.forEach(([key, version]) => {
+            if (durablePending.get(key) === version) durablePending.delete(key);
+        });
+        persistPending();
+        window.clearTimeout(retryTimer);
+        retryDelay = 1500;
         window.dispatchEvent(new CustomEvent("atlas:sync-status", {
             detail: { status: "synced", message: "Sincronizado" }
         }));
+        if (pendingSync.size) {
+            window.clearTimeout(syncTimer);
+            syncTimer = window.setTimeout(() => flush().catch(console.error), 0);
+        }
     }
 
     function queueSync(key, value) {
-        pendingSync.set(key, value);
+        void value;
+        rememberPending(key);
         window.dispatchEvent(new CustomEvent("atlas:sync-status", {
             detail: { status: "syncing", message: "Sincronizando…" }
         }));
@@ -108,12 +171,12 @@
             try {
                 const value = JSON.parse(raw);
                 writeLocal(key, value);
-                pendingSync.set(key, value);
+                rememberPending(key);
                 migrated += 1;
             } catch (error) {
                 if (key === "atlasQuickNotes") {
                     writeLocal(key, raw);
-                    pendingSync.set(key, raw);
+                    rememberPending(key);
                     migrated += 1;
                 }
             }
@@ -127,6 +190,7 @@
         const workspace = await window.AtlasAuth.getWorkspace();
         workspaceId = workspace.id;
         userId = window.AtlasAuth.user.id;
+        loadPending();
         localStorage.setItem("atlasActiveUserId", userId);
         localStorage.setItem("atlasActiveWorkspaceId", workspaceId);
 
@@ -137,12 +201,16 @@
 
         if (error) {
             console.warn("ATLAS SO inició con la copia local:", error.message);
+            if (pendingSync.size) window.setTimeout(() => flush().catch(console.error), retryDelay);
             return;
         }
 
         const rows = Array.isArray(data) ? data : [];
         await migrateLegacy(rows);
-        rows.forEach(row => writeLocal(row.data_key, row.value));
+        rows.forEach(row => {
+            if (!durablePending.has(row.data_key)) writeLocal(row.data_key, row.value);
+        });
+        if (pendingSync.size) await flush();
     }
 
     function loadScript(source) {
@@ -197,15 +265,25 @@
         window.dispatchEvent(new CustomEvent("atlas:app-ready"));
     }
 
+    window.addEventListener("online", () => flush().catch(console.error));
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) flush().catch(console.error);
+    });
+
     start().catch(error => {
         console.error(error);
         document.body.classList.add("auth-ready");
-        document.body.innerHTML = `
-            <main class="boot-error">
-                <strong>No pudimos abrir ATLAS SO.</strong>
-                <p>${String(error.message || error)}</p>
-                <a href="login.html">Volver al inicio de sesión</a>
-            </main>
-        `;
+        document.body.replaceChildren();
+        const main = document.createElement("main");
+        main.className = "boot-error";
+        const title = document.createElement("strong");
+        title.textContent = "No pudimos abrir ATLAS SO.";
+        const detail = document.createElement("p");
+        detail.textContent = String(error.message || error);
+        const link = document.createElement("a");
+        link.href = "login.html";
+        link.textContent = "Volver al inicio de sesión";
+        main.append(title, detail, link);
+        document.body.appendChild(main);
     });
 })();

@@ -38,15 +38,16 @@
             <section class="module-layout">
                 <div class="module-stack">
                     <article class="panel">
-                        <header class="panel-header"><div><p class="section-kicker">NUEVA JORNADA</p><h2>Registrar trabajo</h2><p>Los valores habituales se cargan automáticamente.</p></div></header>
+                        <header class="panel-header"><div><p class="section-kicker">NUEVA JORNADA</p><h2 id="workFormTitle">Registrar trabajo</h2><p>Configurá tus valores habituales una vez y después solo cargá cada jornada.</p></div></header>
                         <form id="workForm" class="module-form form-grid">
+                            <input id="workId" type="hidden">
                             <label class="field span-3"><span>Fecha</span><input id="workDate" type="date" required></label>
-                            <label class="field span-5"><span>Descripción / cliente</span><input id="workDescription" type="text" maxlength="90" placeholder="Ej: Reemplazo RRHH ASUPOR" required></label>
-                            <label class="field span-2"><span>Horas</span><input id="workHoursInput" type="number" min="0.5" max="24" step="0.5" value="4" required></label>
-                            <label class="field span-2"><span>Tarifa por hora</span><input id="workRate" type="number" min="0" step="1" value="14635" required></label>
-                            <label class="field span-3"><span>Descuento %</span><input id="workDiscountRate" type="number" min="0" max="100" step="0.1" value="9"></label>
+                            <label class="field span-5"><span>Descripción / cliente</span><input id="workDescription" type="text" maxlength="90" placeholder="Ej: Jornada para Cliente Norte" required></label>
+                            <label class="field span-2"><span>Horas</span><input id="workHoursInput" type="number" min="0.5" max="24" step="0.5" value="8" required></label>
+                            <label class="field span-2"><span>Tarifa por hora (opcional)</span><input id="workRate" type="number" min="0" step="1" placeholder="0 si solo registrás horas"></label>
+                            <label class="field span-3"><span>Descuento %</span><input id="workDiscountRate" type="number" min="0" max="100" step="0.1" value="0"></label>
                             <label class="field span-9"><span>Nota</span><input id="workNote" type="text" maxlength="180" placeholder="Opcional: turno, horas extra o incidencia"></label>
-                            <div class="span-12 form-actions"><button class="primary-button" type="submit">Guardar jornada</button></div>
+                            <div class="span-12 form-actions"><button id="workSaveButton" class="primary-button" type="submit">Guardar jornada</button><button id="workCancelEdit" class="secondary-button" type="button" hidden>Cancelar edición</button></div>
                         </form>
                     </article>
 

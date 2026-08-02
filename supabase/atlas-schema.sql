@@ -1,4 +1,4 @@
--- ATLAS SO v0.7 · esquema base. Ejecutar una sola vez en Supabase > SQL Editor.
+-- ATLAS SO v0.7.1 · esquema base completo. Ejecutar una sola vez en Supabase > SQL Editor.
 -- La publishable key puede usarse en el navegador porque estas políticas RLS
 -- son las que deciden qué filas puede leer o modificar cada cuenta.
 
@@ -79,6 +79,22 @@ as $$
         where workspace_id = target_workspace
           and user_id = auth.uid()
           and role in ('owner', 'admin', 'editor')
+    );
+$$;
+
+create or replace function public.can_manage_workspace(target_workspace uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+    select exists (
+        select 1
+        from public.workspace_members
+        where workspace_id = target_workspace
+          and user_id = auth.uid()
+          and role in ('owner', 'admin')
     );
 $$;
 
@@ -233,15 +249,36 @@ create policy "workspaces_select_member" on public.workspaces
 
 drop policy if exists "workspaces_update_admin" on public.workspaces;
 create policy "workspaces_update_admin" on public.workspaces
-    for update to authenticated using (public.can_edit_workspace(id)) with check (public.can_edit_workspace(id));
+    for update to authenticated using (public.can_manage_workspace(id)) with check (public.can_manage_workspace(id));
 
 drop policy if exists "members_select_member" on public.workspace_members;
 create policy "members_select_member" on public.workspace_members
     for select to authenticated using (public.is_workspace_member(workspace_id));
 
 drop policy if exists "members_manage_admin" on public.workspace_members;
-create policy "members_manage_admin" on public.workspace_members
-    for all to authenticated using (public.can_edit_workspace(workspace_id)) with check (public.can_edit_workspace(workspace_id));
+drop policy if exists "members_insert_admin" on public.workspace_members;
+create policy "members_insert_admin" on public.workspace_members
+    for insert to authenticated with check (
+        public.can_manage_workspace(workspace_id)
+        and role in ('admin', 'editor', 'viewer')
+    );
+
+drop policy if exists "members_update_admin" on public.workspace_members;
+create policy "members_update_admin" on public.workspace_members
+    for update to authenticated using (
+        public.can_manage_workspace(workspace_id)
+        and role <> 'owner'
+    ) with check (
+        public.can_manage_workspace(workspace_id)
+        and role in ('admin', 'editor', 'viewer')
+    );
+
+drop policy if exists "members_delete_admin" on public.workspace_members;
+create policy "members_delete_admin" on public.workspace_members
+    for delete to authenticated using (
+        public.can_manage_workspace(workspace_id)
+        and role <> 'owner'
+    );
 
 drop policy if exists "app_data_select_member" on public.app_data;
 create policy "app_data_select_member" on public.app_data
@@ -263,13 +300,20 @@ create policy "app_data_delete_admin" on public.app_data
     for delete to authenticated using (public.can_edit_workspace(workspace_id));
 
 grant usage on schema public to authenticated;
-grant select, update on public.profiles to authenticated;
-grant select, update on public.workspaces to authenticated;
-grant select, insert, update, delete on public.workspace_members to authenticated;
+grant select on public.profiles to authenticated;
+revoke update on public.profiles from authenticated;
+grant update (full_name, avatar_url, updated_at) on public.profiles to authenticated;
+grant select on public.workspaces to authenticated;
+revoke update on public.workspaces from authenticated;
+grant update (name, slug, updated_at) on public.workspaces to authenticated;
+grant select, insert, delete on public.workspace_members to authenticated;
+revoke update on public.workspace_members from authenticated;
+grant update (role) on public.workspace_members to authenticated;
 grant select, insert, update, delete on public.app_data to authenticated;
 grant execute on function public.create_personal_workspace() to authenticated;
 grant execute on function public.is_workspace_member(uuid) to authenticated;
 grant execute on function public.can_edit_workspace(uuid) to authenticated;
+grant execute on function public.can_manage_workspace(uuid) to authenticated;
 
 revoke all on function public.create_personal_workspace_for(uuid) from public, anon, authenticated;
 revoke all on function public.handle_new_atlas_user() from public, anon, authenticated;
@@ -279,8 +323,7 @@ revoke all on public.workspaces from anon;
 revoke all on public.workspace_members from anon;
 revoke all on public.app_data from anon;
 
--- Marcaciones de RR. HH. a escala. Las políticas específicas para el
--- administrador se aplican desde v0.7-rrhh-scale.sql después de v0.4.
+-- Marcaciones de RR. HH. a escala.
 create table if not exists public.hr_attendance_records (
     id text primary key,
     workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -306,6 +349,8 @@ create index if not exists hr_attendance_period_idx
     on public.hr_attendance_records (workspace_id, company_id, work_date);
 create index if not exists hr_attendance_client_period_idx
     on public.hr_attendance_records (workspace_id, company_id, client_id, work_date);
+create index if not exists hr_attendance_clock_idx
+    on public.hr_attendance_records (workspace_id, company_id, clock_id);
 
 -- ATLAS SO v0.4 · administrador privado de Recursos Humanos.
 -- La primera cuenta creada queda fijada una sola vez como administradora.
@@ -321,6 +366,27 @@ from auth.users
 order by created_at asc
 limit 1
 on conflict (singleton) do nothing;
+
+create or replace function public.assign_first_hr_admin()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    insert into public.atlas_system_settings (singleton, hr_admin_user_id)
+    values (true, new.id)
+    on conflict (singleton) do nothing;
+    return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_atlas_hr_admin on auth.users;
+create trigger on_auth_user_created_atlas_hr_admin
+    after insert on auth.users
+    for each row execute procedure public.assign_first_hr_admin();
+
+revoke all on function public.assign_first_hr_admin() from public, anon, authenticated;
 
 alter table public.atlas_system_settings enable row level security;
 
@@ -386,3 +452,46 @@ create policy "app_data_delete_admin" on public.app_data
     );
 
 grant execute on function public.can_access_app_data(uuid, text) to authenticated;
+
+alter table public.hr_attendance_records enable row level security;
+
+drop policy if exists "hr_attendance_select_admin" on public.hr_attendance_records;
+create policy "hr_attendance_select_admin" on public.hr_attendance_records
+for select to authenticated
+using (
+    public.is_hr_admin()
+    and public.is_workspace_member(workspace_id)
+);
+
+drop policy if exists "hr_attendance_insert_admin" on public.hr_attendance_records;
+create policy "hr_attendance_insert_admin" on public.hr_attendance_records
+for insert to authenticated
+with check (
+    public.is_hr_admin()
+    and public.can_edit_workspace(workspace_id)
+    and updated_by = auth.uid()
+);
+
+drop policy if exists "hr_attendance_update_admin" on public.hr_attendance_records;
+create policy "hr_attendance_update_admin" on public.hr_attendance_records
+for update to authenticated
+using (
+    public.is_hr_admin()
+    and public.can_edit_workspace(workspace_id)
+)
+with check (
+    public.is_hr_admin()
+    and public.can_edit_workspace(workspace_id)
+    and updated_by = auth.uid()
+);
+
+drop policy if exists "hr_attendance_delete_admin" on public.hr_attendance_records;
+create policy "hr_attendance_delete_admin" on public.hr_attendance_records
+for delete to authenticated
+using (
+    public.is_hr_admin()
+    and public.can_edit_workspace(workspace_id)
+);
+
+grant select, insert, update, delete on public.hr_attendance_records to authenticated;
+revoke all on public.hr_attendance_records from anon;

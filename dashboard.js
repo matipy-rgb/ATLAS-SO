@@ -112,7 +112,7 @@
                 <button class="empty-focus" data-focus-action="edit" type="button">
                     <span>＋</span>
                     <strong>Elegí tu prioridad de hoy</strong>
-                    <small>Una sola cosa importante para no dispersarte.</small>
+                    <small>Elegí una prioridad clara para hoy.</small>
                 </button>
             `;
             return;
@@ -122,7 +122,7 @@
                 <button data-focus-action="toggle" type="button" aria-label="${focus.completed ? "Reabrir prioridad" : "Completar prioridad"}">${focus.completed ? "✓" : ""}</button>
                 <div>
                     <strong>${A.escapeHTML(focus.text)}</strong>
-                    <span>${focus.completed ? "Listo. Hoy ya avanzaste en lo que importaba." : "Terminá esto antes de repartir tu energía."}</span>
+                    <span>${focus.completed ? "Listo. La prioridad de hoy está completada." : "Esta es la prioridad que elegiste para hoy."}</span>
                 </div>
             </div>
         `;
@@ -378,14 +378,15 @@
         taskList.innerHTML = visible.map(item => {
             const days = A.daysUntil(item.dueDate);
             const dateText = item.dueDate ? dueLabel(days, item.dueDate) : "Sin fecha";
+            const safeId = A.escapeHTML(String(item.id));
             return `
                 <article class="task-item ${item.completed ? "completed" : ""}">
-                    <input data-action="toggle" data-id="${item.id}" type="checkbox" ${item.completed ? "checked" : ""} aria-label="Completar tarea">
+                    <input data-action="toggle" data-id="${safeId}" type="checkbox" ${item.completed ? "checked" : ""} aria-label="Completar tarea">
                     <div class="task-copy">
                         <strong>${A.escapeHTML(item.text)}</strong>
-                        <small><span>${categoryLabels[item.category]}</span><span class="${days < 0 ? "overdue-text" : ""}">${dateText}</span>${item.priority === "high" ? "<span>Prioridad alta</span>" : ""}</small>
+                        <small><span>${A.escapeHTML(categoryLabels[item.category] || "Personal")}</span><span class="${days < 0 ? "overdue-text" : ""}">${A.escapeHTML(dateText)}</span>${item.priority === "high" ? "<span>Prioridad alta</span>" : ""}</small>
                     </div>
-                    <button class="task-delete" data-action="delete" data-id="${item.id}" type="button" aria-label="Eliminar tarea">×</button>
+                    <button class="task-delete" data-action="delete" data-id="${safeId}" type="button" aria-label="Eliminar tarea">×</button>
                 </article>
             `;
         }).join("");
@@ -579,6 +580,316 @@
         renderAll();
     });
 
+    const BACKUP_KEYS = [
+        "atlasTasks",
+        "atlasQuickNotes",
+        "atlasPreferences",
+        "atlasDailyFocus",
+        "atlasTransactions",
+        "atlasObligations",
+        "atlasStudyEvents",
+        "atlasHealthRecords",
+        "atlasProjects",
+        "atlasWorkRecords",
+        "atlasWorkSettings",
+        "atlasHabits",
+        "atlasHRWorkspaces",
+        "atlasHRActiveContext",
+        "atlasHRMigrationV07"
+    ];
+    const HR_COMPANY_KEYS = [
+        "atlasHRPeople",
+        "atlasHRAbsences",
+        "atlasHRBranches",
+        "atlasHRSchedules",
+        "atlasHRScheduleAssignments",
+        "atlasHRAttendance",
+        "atlasHRAttendanceImports",
+        "atlasHRAttendanceDeletes",
+        "atlasHRCompliance",
+        "atlasHRPayrollSettings",
+        "atlasHRHolidays",
+        "atlasHRContractTemplates",
+        "atlasHRContractHistory"
+    ];
+
+    function allowedBackupKey(key) {
+        const text = String(key || "");
+        if (BACKUP_KEYS.includes(text)) return true;
+        if (!window.ATLAS_IS_HR_ADMIN || !text.startsWith("atlasHR")) return false;
+        return /^atlasHR[A-Za-z0-9]+(?:__[A-Za-z0-9_-]+){0,2}$/.test(text);
+    }
+
+    function safeBackupValue(value) {
+        return JSON.parse(JSON.stringify(value, (key, item) =>
+            ["__proto__", "prototype", "constructor"].includes(key) ? undefined : item
+        ));
+    }
+
+    function exportAppEntries() {
+        const entries = {};
+        const keys = new Set(BACKUP_KEYS);
+        if (window.ATLAS_IS_HR_ADMIN) {
+            const companies = A.readArray("atlasHRWorkspaces");
+            companies.forEach(company => {
+                HR_COMPANY_KEYS.forEach(key => keys.add(`${key}__${company.id}`));
+            });
+        }
+        keys.forEach(key => {
+            if (!allowedBackupKey(key) || !window.AtlasStore?.has(key)) return;
+            entries[key] = safeBackupValue(A.readJSON(key, null));
+        });
+        return entries;
+    }
+
+    function storedDataKeys() {
+        const workspaceId = window.AtlasStore?.workspaceId;
+        if (!workspaceId) return [];
+        const prefix = `atlas:${workspaceId}:`;
+        const keys = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const storageKey = localStorage.key(index);
+            if (storageKey?.startsWith(prefix)) keys.push(storageKey.slice(prefix.length));
+        }
+        return keys;
+    }
+
+    function clearCurrentEntries() {
+        const keys = new Set([...BACKUP_KEYS, ...storedDataKeys()]);
+        keys.forEach(key => {
+            if (key.startsWith("atlasHRAttendanceFallback__")) return;
+            if (allowedBackupKey(key)) A.writeJSON(key, null);
+        });
+    }
+
+    function openAttendanceDatabase() {
+        return new Promise((resolve, reject) => {
+            if (!("indexedDB" in window)) return resolve(null);
+            const request = indexedDB.open("atlas-so-rrhh", 1);
+            request.onupgradeneeded = () => {
+                if (!request.result.objectStoreNames.contains("attendance")) {
+                    request.result.createObjectStore("attendance", { keyPath: "id" });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    function normalizeAttendanceBackup(item, companyId = "") {
+        const resolvedCompany = String(companyId || item?.companyId || "");
+        const employeeId = String(item?.employeeId || "");
+        const clockId = String(item?.clockId || "");
+        const date = String(item?.date || "").slice(0, 10);
+        return {
+            companyId: resolvedCompany,
+            id: String(item?.id || `restored-${resolvedCompany}-${employeeId || clockId}-${date}`),
+            employeeId,
+            clientId: String(item?.clientId || ""),
+            clockId,
+            sourceName: String(item?.sourceName || ""),
+            date,
+            in: String(item?.in || ""),
+            out: String(item?.out || ""),
+            rawStatus: String(item?.rawStatus || ""),
+            resolvedStatus: String(item?.resolvedStatus || ""),
+            note: String(item?.note || ""),
+            sourceImportId: String(item?.sourceImportId || ""),
+            updatedAt: item?.updatedAt || new Date().toISOString()
+        };
+    }
+
+    function fallbackAttendanceKeys() {
+        const workspaceId = window.AtlasStore?.workspaceId;
+        if (!workspaceId) return [];
+        const scopedPrefix = `atlas:${workspaceId}:`;
+        const keys = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const storageKey = localStorage.key(index);
+            if (!storageKey?.startsWith(`${scopedPrefix}atlasHRAttendanceFallback__`)) continue;
+            const dataKey = storageKey.slice(scopedPrefix.length);
+            if (/^atlasHRAttendanceFallback__(.+)__(\d{4}-\d{2})$/.test(dataKey)) keys.push(dataKey);
+        }
+        return keys;
+    }
+
+    function fallbackAttendanceRecords() {
+        const records = [];
+        fallbackAttendanceKeys().forEach(dataKey => {
+            const match = dataKey.match(/^atlasHRAttendanceFallback__(.+)__(\d{4}-\d{2})$/);
+            A.readArray(dataKey).forEach(item => records.push(normalizeAttendanceBackup(item, match[1])));
+        });
+        return records;
+    }
+
+    async function localAttendanceRecords() {
+        const fallback = fallbackAttendanceRecords();
+        const db = await openAttendanceDatabase();
+        if (!db) return fallback;
+        const buckets = await new Promise((resolve, reject) => {
+            const transaction = db.transaction("attendance", "readonly");
+            const request = transaction.objectStore("attendance").getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+        db.close();
+        const workspaceId = window.AtlasStore?.workspaceId;
+        return [
+            ...buckets
+            .filter(bucket => !workspaceId || bucket.workspaceId === workspaceId)
+            .flatMap(bucket => (bucket.records || []).map(item => normalizeAttendanceBackup(item, bucket.companyId))),
+            ...fallback
+        ];
+    }
+
+    async function cloudAttendanceRecords() {
+        if (!window.ATLAS_IS_HR_ADMIN || !window.AtlasAuth?.client || !window.AtlasStore?.workspaceId) return [];
+        const records = [];
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+            const { data, error } = await window.AtlasAuth.client
+                .from("hr_attendance_records")
+                .select("id,company_id,employee_id,client_id,clock_id,source_name,work_date,time_in,time_out,raw_status,resolved_status,note,source_import_id,updated_at")
+                .eq("workspace_id", window.AtlasStore.workspaceId)
+                .range(offset, offset + pageSize - 1);
+            if (error) {
+                if (!["42P01", "PGRST205"].includes(error.code)) throw error;
+                break;
+            }
+            (data || []).forEach(row => records.push(normalizeAttendanceBackup({
+                id: row.id,
+                employeeId: row.employee_id,
+                clientId: row.client_id,
+                clockId: row.clock_id,
+                sourceName: row.source_name,
+                date: row.work_date,
+                in: row.time_in,
+                out: row.time_out,
+                rawStatus: row.raw_status,
+                resolvedStatus: row.resolved_status,
+                note: row.note,
+                sourceImportId: row.source_import_id,
+                updatedAt: row.updated_at
+            }, row.company_id)));
+            if ((data || []).length < pageSize) break;
+        }
+        return records;
+    }
+
+    async function exportAttendanceRecords() {
+        if (!window.ATLAS_IS_HR_ADMIN) return [];
+        const [local, cloud] = await Promise.all([localAttendanceRecords(), cloudAttendanceRecords()]);
+        const merged = new Map();
+        [...cloud, ...local].forEach(item => {
+            const key = `${item.companyId}:${item.employeeId || item.clockId}:${item.date}`;
+            const previous = merged.get(key);
+            if (!previous || Date.parse(item.updatedAt) >= Date.parse(previous.updatedAt)) merged.set(key, item);
+        });
+        const deletedByCompany = new Map();
+        return Array.from(merged.values()).filter(item => {
+            if (!deletedByCompany.has(item.companyId)) {
+                deletedByCompany.set(item.companyId, new Set(A.readArray(`atlasHRAttendanceDeletes__${item.companyId}`).map(String)));
+            }
+            return !deletedByCompany.get(item.companyId).has(String(item.id));
+        });
+    }
+
+    async function replaceCloudAttendance(records) {
+        if (!window.AtlasAuth?.client || !window.AtlasStore?.workspaceId) return;
+        const currentIds = [];
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+            const { data, error } = await window.AtlasAuth.client
+                .from("hr_attendance_records")
+                .select("id")
+                .eq("workspace_id", window.AtlasStore.workspaceId)
+                .range(offset, offset + pageSize - 1);
+            if (error) {
+                if (["42P01", "PGRST205"].includes(error.code)) return;
+                throw error;
+            }
+            (data || []).forEach(item => currentIds.push(String(item.id)));
+            if ((data || []).length < pageSize) break;
+        }
+        const rows = records.map(item => ({
+            id: item.id,
+            workspace_id: window.AtlasStore.workspaceId,
+            company_id: item.companyId,
+            client_id: item.clientId || null,
+            employee_id: item.employeeId,
+            clock_id: item.clockId || null,
+            source_name: item.sourceName || null,
+            work_date: item.date,
+            time_in: item.in || null,
+            time_out: item.out || null,
+            raw_status: item.rawStatus || null,
+            resolved_status: item.resolvedStatus || null,
+            note: item.note || null,
+            source_import_id: item.sourceImportId || null,
+            updated_by: window.AtlasStore.userId,
+            updated_at: item.updatedAt
+        }));
+        for (let index = 0; index < rows.length; index += 500) {
+            const { error } = await window.AtlasAuth.client.from("hr_attendance_records")
+                .upsert(rows.slice(index, index + 500), { onConflict: "workspace_id,company_id,employee_id,work_date" });
+            if (error) throw error;
+        }
+        const restoredIds = new Set(rows.map(item => String(item.id)));
+        const obsoleteIds = currentIds.filter(id => !restoredIds.has(id));
+        for (let index = 0; index < obsoleteIds.length; index += 200) {
+            const { error } = await window.AtlasAuth.client
+                .from("hr_attendance_records")
+                .delete()
+                .eq("workspace_id", window.AtlasStore.workspaceId)
+                .in("id", obsoleteIds.slice(index, index + 200));
+            if (error) throw error;
+        }
+    }
+
+    async function restoreAttendanceRecords(records) {
+        if (!window.ATLAS_IS_HR_ADMIN || !Array.isArray(records)) return;
+        const grouped = new Map();
+        const normalized = records.map(item => normalizeAttendanceBackup(item)).filter(item =>
+            item.companyId && A.parseDate(item.date) && (item.employeeId || item.clockId)
+        );
+        await replaceCloudAttendance(normalized.filter(item => item.employeeId));
+        normalized.forEach(item => {
+            const period = item.date.slice(0, 7);
+            const key = `${item.companyId}:${period}`;
+            if (!grouped.has(key)) grouped.set(key, { companyId: item.companyId, period, records: [] });
+            const clean = { ...item };
+            delete clean.companyId;
+            grouped.get(key).records.push(clean);
+        });
+        fallbackAttendanceKeys().forEach(key => A.writeJSON(key, null));
+        const db = await openAttendanceDatabase();
+        if (!db) {
+            grouped.forEach(bucket => A.writeJSON(`atlasHRAttendanceFallback__${bucket.companyId}__${bucket.period}`, bucket.records));
+            return;
+        }
+        await new Promise((resolve, reject) => {
+            const transaction = db.transaction("attendance", "readwrite");
+            const store = transaction.objectStore("attendance");
+            const request = store.getAll();
+            request.onsuccess = () => {
+                (request.result || []).filter(bucket => bucket.workspaceId === window.AtlasStore.workspaceId)
+                    .forEach(bucket => store.delete(bucket.id));
+                grouped.forEach(bucket => store.put({
+                    id: `${window.AtlasStore.workspaceId}:${bucket.companyId}:${bucket.period}`,
+                    workspaceId: window.AtlasStore.workspaceId,
+                    companyId: bucket.companyId,
+                    period: bucket.period,
+                    records: bucket.records,
+                    updatedAt: new Date().toISOString()
+                }));
+            };
+            request.onerror = () => reject(request.error);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error);
+        });
+        db.close();
+    }
+
     function openReceiptDatabase() {
         return new Promise((resolve, reject) => {
             if (!("indexedDB" in window)) return resolve(null);
@@ -612,8 +923,17 @@
             request.onerror = () => reject(request.error);
         });
         db.close();
-        return Promise.all(records.map(async record => ({
-            paymentId: record.paymentId,
+        const workspaceId = window.AtlasStore?.workspaceId || "local";
+        const paymentIds = new Set(A.readArray("atlasObligations")
+            .flatMap(item => Array.isArray(item.payments) ? item.payments : [])
+            .map(item => String(item.id)));
+        const scoped = records.filter(record =>
+            record.workspaceId === workspaceId
+            || (!record.workspaceId && paymentIds.has(String(record.originalPaymentId ?? record.paymentId)))
+        );
+        return Promise.all(scoped.map(async record => ({
+            paymentId: record.originalPaymentId
+                ?? (String(record.paymentId).startsWith(`${workspaceId}:`) ? String(record.paymentId).slice(workspaceId.length + 1) : record.paymentId),
             name: record.name,
             type: record.type,
             size: record.size,
@@ -627,32 +947,17 @@
         button.disabled = true;
         backupStatus.textContent = "Preparando tu copia…";
         try {
-            const receipts = await exportReceipts();
+            const [receipts, attendance] = await Promise.all([
+                exportReceipts(),
+                exportAttendanceRecords()
+            ]);
             const backup = {
-                version: 5,
+                version: "7.1",
+                schema: "atlas-so-backup",
                 exportedAt: new Date().toISOString(),
-                data: {
-                    tasks: A.loadTasks(),
-                    notes: quickNotes.value,
-                    preferences: A.readJSON("atlasPreferences", {}),
-                    dailyFocus: A.readJSON("atlasDailyFocus", {}),
-                    transactions: A.readArray("atlasTransactions"),
-                    obligations: A.readArray("atlasObligations"),
-                    studyEvents: A.readArray("atlasStudyEvents"),
-                    healthRecords: A.readArray("atlasHealthRecords"),
-                    projects: A.readArray("atlasProjects"),
-                    workRecords: A.readArray("atlasWorkRecords"),
-                    workSettings: A.readJSON("atlasWorkSettings", {}),
-                    habits: A.readArray("atlasHabits"),
-                    hrPeople: A.readArray("atlasHRPeople"),
-                    hrAbsences: A.readArray("atlasHRAbsences"),
-                    hrClients: A.readArray("atlasHRClients"),
-                    hrBranches: A.readArray("atlasHRBranches"),
-                    hrSchedules: A.readArray("atlasHRSchedules"),
-                    hrAttendance: A.readArray("atlasHRAttendance"),
-                    hrCompliance: A.readArray("atlasHRCompliance"),
-                    hrPayrollSettings: A.readJSON("atlasHRPayrollSettings", {}),
-                    hrHolidays: A.readArray("atlasHRHolidays"),
+                workspace: {
+                    entries: exportAppEntries(),
+                    attendance,
                     receipts
                 }
             };
@@ -665,7 +970,7 @@
             link.click();
             link.remove();
             URL.revokeObjectURL(url);
-            backupStatus.textContent = `Copia lista con ${receipts.length} comprobante(s).`;
+            backupStatus.textContent = `Copia completa: ${Object.keys(backup.workspace.entries).length} grupos de datos, ${attendance.length} marcaciones y ${receipts.length} comprobante(s).`;
         } catch (error) {
             console.error(error);
             backupStatus.textContent = "No se pudo completar la copia.";
@@ -675,6 +980,9 @@
     }
 
     function dataURLToBlob(dataUrl) {
+        if (!/^data:(?:image\/(?:jpeg|png|webp)|application\/pdf);base64,/i.test(String(dataUrl || ""))) {
+            throw new Error("Comprobante no permitido en la copia.");
+        }
         const [header, data] = dataUrl.split(",");
         const type = header.match(/data:(.*?);/)?.[1] || "application/octet-stream";
         const binary = atob(data);
@@ -683,24 +991,49 @@
         return new Blob([bytes], { type });
     }
 
-    async function restoreReceipts(receipts) {
-        if (!Array.isArray(receipts) || !receipts.length) return;
+    async function restoreReceipts(receipts, obligations = A.readArray("atlasObligations")) {
+        if (!Array.isArray(receipts)) return;
+        const prepared = receipts.flatMap(record => {
+            if (!record?.dataUrl || String(record.dataUrl).length > 15 * 1024 * 1024) return [];
+            return [{
+                paymentId: record.paymentId,
+                name: String(record.name || "comprobante"),
+                type: String(record.type || "application/octet-stream"),
+                size: Number(record.size || 0),
+                savedAt: record.savedAt || new Date().toISOString(),
+                file: dataURLToBlob(record.dataUrl)
+            }];
+        });
         const db = await openReceiptDatabase();
         if (!db) return;
+        const workspaceId = window.AtlasStore?.workspaceId || "local";
+        const paymentIds = new Set([
+            ...A.readArray("atlasObligations"),
+            ...(Array.isArray(obligations) ? obligations : [])
+        ]
+            .flatMap(item => Array.isArray(item.payments) ? item.payments : [])
+            .map(item => String(item.id)));
         await new Promise((resolve, reject) => {
             const transaction = db.transaction("paymentReceipts", "readwrite");
             const store = transaction.objectStore("paymentReceipts");
-            receipts.forEach(record => {
-                if (!record.dataUrl) return;
-                store.put({
-                    paymentId: record.paymentId,
+            const request = store.getAll();
+            request.onsuccess = () => {
+                (request.result || []).filter(record =>
+                    record.workspaceId === workspaceId
+                    || (!record.workspaceId && paymentIds.has(String(record.originalPaymentId ?? record.paymentId)))
+                ).forEach(record => store.delete(record.paymentId));
+                prepared.forEach(record => store.put({
+                    paymentId: `${workspaceId}:${String(record.paymentId)}`,
+                    originalPaymentId: record.paymentId,
+                    workspaceId,
                     name: record.name,
                     type: record.type,
                     size: record.size,
                     savedAt: record.savedAt,
-                    file: dataURLToBlob(record.dataUrl)
-                });
-            });
+                    file: record.file
+                }));
+            };
+            request.onerror = () => reject(request.error);
             transaction.oncomplete = resolve;
             transaction.onerror = () => reject(transaction.error);
         });
@@ -709,49 +1042,75 @@
 
     async function importBackup(file) {
         if (!file || !confirm("La restauración reemplazará los datos actuales. ¿Continuar?")) return;
+        if (file.size > 250 * 1024 * 1024) {
+            backupStatus.textContent = "La copia supera el límite de 250 MB.";
+            backupFile.value = "";
+            return;
+        }
         backupStatus.textContent = "Restaurando información…";
         try {
             const parsed = JSON.parse(await file.text());
-            const data = parsed.data || parsed;
-            const arrayMapping = {
-                tasks: "atlasTasks",
-                transactions: "atlasTransactions",
-                obligations: "atlasObligations",
-                studyEvents: "atlasStudyEvents",
-                healthRecords: "atlasHealthRecords",
-                projects: "atlasProjects",
-                workRecords: "atlasWorkRecords",
-                habits: "atlasHabits",
-                hrPeople: "atlasHRPeople",
-                hrAbsences: "atlasHRAbsences",
-                hrClients: "atlasHRClients",
-                hrBranches: "atlasHRBranches",
-                hrSchedules: "atlasHRSchedules",
-                hrAttendance: "atlasHRAttendance",
-                hrCompliance: "atlasHRCompliance",
-                hrHolidays: "atlasHRHolidays"
-            };
-            Object.entries(arrayMapping).forEach(([property, key]) => {
-                if (Array.isArray(data[property])) A.writeJSON(key, data[property]);
-            });
-            const objectMapping = {
-                preferences: "atlasPreferences",
-                dailyFocus: "atlasDailyFocus",
-                workSettings: "atlasWorkSettings",
-                hrPayrollSettings: "atlasHRPayrollSettings"
-            };
-            Object.entries(objectMapping).forEach(([property, key]) => {
-                if (data[property] && typeof data[property] === "object") A.writeJSON(key, data[property]);
-            });
-            if (typeof data.notes === "string") A.writeJSON("atlasQuickNotes", data.notes);
-            await restoreReceipts(data.receipts);
+            if (parsed.schema === "atlas-so-backup" && parsed.workspace?.entries && typeof parsed.workspace.entries === "object") {
+                const entries = Object.entries(parsed.workspace.entries);
+                if (entries.some(([key]) => !allowedBackupKey(key))) {
+                    throw new Error("La copia contiene grupos de datos no permitidos.");
+                }
+                if (!Array.isArray(parsed.workspace.attendance) || !Array.isArray(parsed.workspace.receipts)) {
+                    throw new Error("La copia no contiene marcaciones o comprobantes válidos.");
+                }
+                const entryMap = Object.fromEntries(entries);
+                await restoreAttendanceRecords(parsed.workspace.attendance);
+                await restoreReceipts(parsed.workspace.receipts, entryMap.atlasObligations);
+                clearCurrentEntries();
+                entries.forEach(([key, value]) => A.writeJSON(key, safeBackupValue(value)));
+            } else {
+                const data = parsed.data || parsed;
+                if (!data || typeof data !== "object") throw new Error("Formato anterior no válido.");
+                await restoreReceipts(Array.isArray(data.receipts) ? data.receipts : [], data.obligations);
+                clearCurrentEntries();
+                const arrayMapping = {
+                    tasks: "atlasTasks",
+                    transactions: "atlasTransactions",
+                    obligations: "atlasObligations",
+                    studyEvents: "atlasStudyEvents",
+                    healthRecords: "atlasHealthRecords",
+                    projects: "atlasProjects",
+                    workRecords: "atlasWorkRecords",
+                    habits: "atlasHabits",
+                    hrPeople: "atlasHRPeople",
+                    hrAbsences: "atlasHRAbsences",
+                    hrClients: "atlasHRClients",
+                    hrBranches: "atlasHRBranches",
+                    hrSchedules: "atlasHRSchedules",
+                    hrAttendance: "atlasHRAttendance",
+                    hrCompliance: "atlasHRCompliance",
+                    hrHolidays: "atlasHRHolidays"
+                };
+                Object.entries(arrayMapping).forEach(([property, key]) => {
+                    if (Array.isArray(data[property]) && (!key.startsWith("atlasHR") || window.ATLAS_IS_HR_ADMIN)) {
+                        A.writeJSON(key, safeBackupValue(data[property]));
+                    }
+                });
+                const objectMapping = {
+                    preferences: "atlasPreferences",
+                    dailyFocus: "atlasDailyFocus",
+                    workSettings: "atlasWorkSettings",
+                    hrPayrollSettings: "atlasHRPayrollSettings"
+                };
+                Object.entries(objectMapping).forEach(([property, key]) => {
+                    if (data[property] && typeof data[property] === "object" && (!key.startsWith("atlasHR") || window.ATLAS_IS_HR_ADMIN)) {
+                        A.writeJSON(key, safeBackupValue(data[property]));
+                    }
+                });
+                if (typeof data.notes === "string") A.writeJSON("atlasQuickNotes", data.notes);
+            }
             quickNotes.value = A.readJSON("atlasQuickNotes", "") || "";
-            backupStatus.textContent = "Copia restaurada correctamente.";
+            backupStatus.textContent = "Copia restaurada. La sincronización continuará en segundo plano.";
             renderAll();
             A.notify("Tu espacio fue restaurado.");
         } catch (error) {
             console.error(error);
-            backupStatus.textContent = "El archivo no es una copia válida de ATLAS SO.";
+            backupStatus.textContent = `No se pudo restaurar la copia: ${String(error.message || "archivo no válido")}.`;
         } finally {
             backupFile.value = "";
         }

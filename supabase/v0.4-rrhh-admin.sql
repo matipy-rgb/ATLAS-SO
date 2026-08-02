@@ -11,6 +11,27 @@ insert into public.atlas_system_settings (singleton, hr_admin_user_id)
 select true, id from auth.users order by created_at asc limit 1
 on conflict (singleton) do nothing;
 
+create or replace function public.assign_first_hr_admin()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    insert into public.atlas_system_settings (singleton, hr_admin_user_id)
+    values (true, new.id)
+    on conflict (singleton) do nothing;
+    return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_atlas_hr_admin on auth.users;
+create trigger on_auth_user_created_atlas_hr_admin
+    after insert on auth.users
+    for each row execute procedure public.assign_first_hr_admin();
+
+revoke all on function public.assign_first_hr_admin() from public, anon, authenticated;
+
 alter table public.atlas_system_settings enable row level security;
 
 create or replace function public.is_hr_admin()

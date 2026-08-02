@@ -1,7 +1,7 @@
 (function () {
     window.ATLAS_CONFIG = {
         appName: "ATLAS SO",
-        version: "0.7.0",
+        version: "0.7.1",
 
         // Pegá aquí los dos valores públicos de Settings > API en Supabase.
         // La publishable key puede estar en el navegador; nunca uses la service_role key.

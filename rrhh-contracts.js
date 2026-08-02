@@ -33,7 +33,6 @@
             role: "Operario logístico",
             workplace: "Centro Logístico Autopista Silvio Pettirossi, Luque",
             term: "indefinite",
-            probation: "Las partes establecen un periodo de prueba de sesenta (60) días desde el inicio de la relación laboral, conforme al artículo 58 del Código del Trabajo.",
             extra: "Los servicios extraordinarios serán prestados dentro de los límites legales y remunerados conforme a la legislación vigente."
         },
         geomax: {
@@ -69,9 +68,17 @@
     function scheduleText(person, date) {
         const schedule = window.AtlasHRSchedules?.scheduleFor(person.id, date);
         if (!schedule) return "Horario pendiente de consignar";
-        const days = (schedule.rules || []).map(rule => ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"][Number(rule.day)]).join(", ");
-        const first = schedule.rules?.[0] || schedule;
-        return `${schedule.name}: ${days}, de ${first.start} a ${first.end}, con ${Number(first.breakMinutes || 0)} minutos de descanso`;
+        const dayNames = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+        const groups = new Map();
+        (schedule.rules || []).forEach(rule => {
+            const key = `${rule.start}|${rule.end}|${Number(rule.breakMinutes || 0)}`;
+            if (!groups.has(key)) groups.set(key, { ...rule, days: [] });
+            groups.get(key).days.push(dayNames[Number(rule.day)]);
+        });
+        const detail = Array.from(groups.values()).map(rule =>
+            `${rule.days.join(", ")}, de ${rule.start} a ${rule.end}, con ${Number(rule.breakMinutes || 0)} minutos de descanso`
+        ).join("; ");
+        return `${schedule.name}: ${detail}`;
     }
 
     function validate(person, type) {
@@ -79,20 +86,67 @@
         const warnings = [];
         const company = C.company;
         const client = clientFor(person);
+        const date = q("#hrContractDate").value;
+        const endDate = q("#hrContractEnd").value;
+        const note = q("#hrContractNote").value.trim();
+        const model = client?.contractTemplateId ? MODELS[client.contractTemplateId] : null;
         if (!person) errors.push("Seleccioná un funcionario.");
+        if (!date) errors.push("Indicá la fecha del documento.");
         if (person && !person.fullName) errors.push("Falta el nombre del funcionario.");
         if (person && !person.ci) errors.push("Falta la cédula del funcionario.");
         if (person && !client) errors.push("El funcionario no tiene un cliente válido.");
         if (!company.legalName && !company.name) errors.push("Falta la razón social de la empresa.");
         if (!company.ruc) errors.push("Falta el RUC de la empresa.");
         if (!company.representative) errors.push("Falta el representante de la empresa.");
+        if (type === "contract" && !company.address) errors.push("Falta el domicilio legal de la empresa.");
+        if (type === "contract" && !company.documentCity) errors.push("Falta la ciudad de celebración del contrato.");
         if (type === "contract" && client && !client.contractTemplateId) errors.push(`El cliente ${client.name} no tiene un modelo contractual asignado.`);
         if (type === "contract" && client?.contractTemplateId && !MODELS[client.contractTemplateId]) errors.push("El modelo contractual asignado no está disponible.");
+        if (type === "contract" && person && Number(person.salary || 0) <= 0) errors.push("Ingresá el salario nominal real del funcionario.");
+        if (type === "contract" && model?.term === "determined" && !endDate) errors.push("Este modelo requiere la fecha de fin del contrato.");
+        if (type === "contract" && model?.term === "determined") warnings.push("Confirmá que la naturaleza temporal o accidental del servicio justifique el plazo determinado.");
+        if (type === "contract" && date && endDate && endDate < date) errors.push("El fin del contrato no puede ser anterior a la fecha del documento.");
+        if ((type === "addendum1" || type === "addendum2") && !note) errors.push("Escribí la condición que se incorporará en la adenda.");
         if (person && !person.startDate) warnings.push("Falta la fecha de ingreso.");
         if (person && !person.address) warnings.push("Falta el domicilio del funcionario.");
         if (person && !person.birthDate) warnings.push("Falta la fecha de nacimiento; no se mostrará la edad.");
         if (person && !window.AtlasHRSchedules?.scheduleFor(person.id, q("#hrContractDate").value || A.localDate())) warnings.push("No hay un horario vigente asignado.");
         return { errors, warnings };
+    }
+
+    function documentFingerprint() {
+        return JSON.stringify({
+            employeeId: q("#hrContractEmployee").value,
+            type: q("#hrContractType").value,
+            date: q("#hrContractDate").value,
+            endDate: q("#hrContractEnd").value,
+            note: q("#hrContractNote").value.trim()
+        });
+    }
+
+    function sanitizeDocumentHTML(value) {
+        const template = document.createElement("template");
+        template.innerHTML = String(value || "");
+        const allowedTags = new Set(["ARTICLE", "H1", "H2", "P", "STRONG", "B", "EM", "U", "BR", "DIV", "FOOTER", "UL", "OL", "LI", "IMG"]);
+        const allowedClasses = new Set(["contract-document", "subtitle", "signatures", "single", "document-logo"]);
+        Array.from(template.content.querySelectorAll("*")).forEach(node => {
+            if (!allowedTags.has(node.tagName)) {
+                node.replaceWith(document.createTextNode(node.textContent || ""));
+                return;
+            }
+            const originalClass = node.getAttribute("class") || "";
+            const originalSource = node.getAttribute("src") || "";
+            Array.from(node.attributes).forEach(attribute => node.removeAttribute(attribute.name));
+            const classes = originalClass.split(/\s+/).filter(name => allowedClasses.has(name));
+            if (classes.length) node.className = classes.join(" ");
+            if (node.tagName === "IMG") {
+                if (/^data:image\/(?:png|jpe?g|webp);base64,/i.test(originalSource)) {
+                    node.src = originalSource;
+                    node.alt = "";
+                } else node.remove();
+            }
+        });
+        return template.innerHTML;
     }
 
     function contractBody(person, client, model, date, endDate, note) {
@@ -108,8 +162,8 @@
             : "por tiempo indefinido";
         return `
             <h1>CONTRATO INDIVIDUAL DE TRABAJO</h1>
-            <p class="subtitle">(en cumplimiento del Art. 48 del Código del Trabajo)</p>
-            <p>En Asunción, a los ${longDate(date)}, por una parte <strong>${esc(company.representative)}</strong>${company.representativeCI ? `, con C.I. N.º ${esc(company.representativeCI)}` : ""}, en representación de <strong>${esc(company.legalName || company.name)}</strong>, RUC ${esc(company.ruc)}, con domicilio en ${esc(company.address || "domicilio pendiente")}, en adelante “EL EMPLEADOR”; y por la otra <strong>${esc(person.fullName)}</strong>, con C.I. N.º ${esc(person.ci)}${age !== "" ? `, de ${age} años de edad` : ""}, ${person.sex ? `sexo ${esc(person.sex.toLowerCase())}, ` : ""}${person.civilStatus ? `estado civil ${esc(person.civilStatus.toLowerCase())}, ` : ""}${person.profession ? `profesión u oficio ${esc(person.profession)}, ` : ""}nacionalidad ${esc(person.nationality || "paraguaya")}, con domicilio en ${esc(person.address || "domicilio pendiente")}, en adelante “EL TRABAJADOR”, convienen el presente contrato.</p>
+            <p class="subtitle">(datos y cláusulas conforme al Art. 46 del Código del Trabajo)</p>
+            <p>En ${esc(company.documentCity)}, en fecha ${longDate(date)}, por una parte <strong>${esc(company.representative)}</strong>${company.representativeCI ? `, con C.I. N.º ${esc(company.representativeCI)}` : ""}, en representación de <strong>${esc(company.legalName || company.name)}</strong>, RUC ${esc(company.ruc)}, con domicilio en ${esc(company.address || "domicilio pendiente")}, en adelante “EL EMPLEADOR”; y por la otra <strong>${esc(person.fullName)}</strong>, con C.I. N.º ${esc(person.ci)}${age !== "" ? `, de ${age} años de edad` : ""}, ${person.sex ? `sexo ${esc(person.sex.toLowerCase())}, ` : ""}${person.civilStatus ? `estado civil ${esc(person.civilStatus.toLowerCase())}, ` : ""}${person.profession ? `profesión u oficio ${esc(person.profession)}, ` : ""}nacionalidad ${esc(person.nationality || "paraguaya")}, con domicilio en ${esc(person.address || "domicilio pendiente")}, en adelante “EL TRABAJADOR”, convienen el presente contrato.</p>
             <h2>MODALIDADES</h2>
             <p><strong>PRIMERA · Trabajo y lugar.</strong> EL TRABAJADOR prestará servicios como <strong>${esc(role)}</strong> para el cliente <strong>${esc(client.name)}</strong>, principalmente en ${esc(workplace)}. La relación con el cliente no altera la identidad del empleador.</p>
             <p><strong>SEGUNDA · Forma.</strong> La prestación se remunera por unidad de tiempo, bajo modalidad ${esc(person.workerType === "daily" ? "jornalera" : person.workerType === "parttime" ? "a tiempo parcial" : "mensualizada")}.</p>
@@ -170,7 +224,7 @@
         else body = addendumBody(person, date, type, q("#hrContractNote").value.trim());
         const logo = C.company.logo ? `<img class="document-logo" src="${esc(C.company.logo)}" alt="">` : "";
         const html = `<article class="contract-document">${logo}${body}<footer>Generado por ATLAS SO · ${esc(C.company.name)} · ${esc(typeLabel)}</footer></article>`;
-        lastDocument = { person, type, typeLabel, date, html };
+        lastDocument = { person, type, typeLabel, date, html, fingerprint: documentFingerprint() };
         q("#hrContractPreview").innerHTML = html;
         return lastDocument;
     }
@@ -185,12 +239,9 @@
     }
 
     function documentForOutput() {
-        const sameSelection = lastDocument
-            && lastDocument.person.id === q("#hrContractEmployee").value
-            && lastDocument.type === q("#hrContractType").value
-            && lastDocument.date === q("#hrContractDate").value;
+        const sameSelection = lastDocument && lastDocument.fingerprint === documentFingerprint();
         if (!sameSelection) return buildDocument();
-        const edited = q("#hrContractPreview").innerHTML.trim();
+        const edited = sanitizeDocumentHTML(q("#hrContractPreview").innerHTML.trim());
         if (edited) lastDocument.html = edited;
         return lastDocument;
     }
@@ -205,10 +256,10 @@
             typeLabel: doc.typeLabel,
             documentDate: doc.date,
             format,
-            snapshot: doc.html,
+            snapshot: sanitizeDocumentHTML(doc.html),
             generatedAt: new Date().toISOString()
         });
-        A.writeJSON(HISTORY_KEY, history);
+        A.writeJSON(HISTORY_KEY, history.slice(0, 500));
         renderHistory();
     }
 
@@ -266,7 +317,7 @@
         const button = event.target.closest("[data-history-preview]");
         if (!button) return;
         const item = A.readArray(HISTORY_KEY).find(entry => String(entry.id) === button.dataset.historyPreview);
-        if (item) q("#hrContractPreview").innerHTML = item.snapshot;
+        if (item) q("#hrContractPreview").innerHTML = sanitizeDocumentHTML(item.snapshot);
     });
     window.addEventListener("atlas:hr-data-changed", renderEmployees);
 

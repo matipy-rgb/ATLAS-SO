@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATLAS SO · Dashboard fixture</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../dashboard.css">
+</head>
+<body>
+    <script>
+        (async function () {
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const local = date => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const day = String(date.getDate()).padStart(2, "0");
+                return `${year}-${month}-${day}`;
+            };
+            const now = today.toISOString();
+            const data = new Map(Object.entries(new URLSearchParams(location.search).has("empty") ? {} : {
+                atlasPreferences: { onboardingDone: true, favoriteAreas: ["finance", "study", "health"] },
+                atlasTasks: [{ id: 1, text: "Enviar el informe", category: "work", priority: "high", dueDate: local(today), completed: false, createdAt: now }],
+                atlasObligations: [{ id: 2, name: "Factura de servicios", amount: 350000, dueDate: local(tomorrow), payments: [] }],
+                atlasTransactions: [{ id: 7, description: "Ingreso del mes", amount: 2400000, type: "income", createdAt: now }],
+                atlasStudyEvents: [{ id: 3, institution: "Universidad Central", subject: "Matemática", title: "Examen final", date: local(tomorrow), completed: false, progress: 40 }],
+                atlasHealthRecords: [{ date: local(today), water: 2.5, sleep: 8, workout: true }],
+                atlasProjects: [{ id: 4, name: "Renovar el espacio de trabajo", nextAction: "Pedir dos presupuestos", deadline: local(tomorrow), progress: 70, status: "active" }],
+                atlasHabits: [{ id: 5, name: "Entrenar", area: "health", history: [local(today)] }],
+                atlasWorkRecords: [{ id: 6, date: local(today), hours: 4, net: 53270 }],
+                atlasHRPeople: [],
+                atlasHRAbsences: []
+            }));
+
+            const source = await fetch("../app.html").then(response => response.text());
+            const parsed = new DOMParser().parseFromString(source, "text/html");
+            document.body.dataset.page = "dashboard";
+            document.body.dataset.context = "Tu día, tus prioridades y tu avance";
+            document.body.innerHTML = parsed.body.innerHTML;
+
+            window.AtlasStore = {
+                read: (key, fallback) => data.has(key) ? data.get(key) : fallback,
+                write: (key, value) => data.set(key, value),
+                has: key => data.has(key),
+                workspaceId: "fixture",
+                userId: "fixture-user"
+            };
+            window.AtlasAuth = {
+                user: { id: "fixture-user", email: "alex@example.com", user_metadata: { full_name: "Alex" } },
+                signOut: () => {}
+            };
+            window.ATLAS_IS_HR_ADMIN = false;
+
+            for (const source of ["../atlas.js", "../dashboard.js"]) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = source;
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+            document.body.classList.add("auth-ready");
+        })();
+    </script>
+</body>
+</html>

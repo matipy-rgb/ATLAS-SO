@@ -9,12 +9,51 @@
         area: item.area || item.category || "personal",
         history: Array.isArray(item.history) ? [...new Set(item.history.map(String))] : []
     }));
+    let writingHabits = false;
 
     const list = document.querySelector("#habitList");
     const dialog = document.querySelector("#habitDialog");
     const form = document.querySelector("#habitForm");
 
-    function save() { A.writeJSON(KEY, habits); }
+    function save() {
+        writingHabits = true;
+        try {
+            A.writeJSON(KEY, habits);
+        } finally {
+            writingHabits = false;
+        }
+    }
+
+    function reload() {
+        habits = A.readArray(KEY).map(item => ({
+            ...item,
+            id: item.id || A.createId(),
+            name: item.name || item.title || "Hábito",
+            area: item.area || item.category || "personal",
+            history: Array.isArray(item.history) ? [...new Set(item.history.map(String))] : []
+        }));
+        render();
+    }
+
+    function resetForm() {
+        form.reset();
+        document.querySelector("#habitId").value = "";
+        document.querySelector("#habitDialogTitle").textContent = "Agregar hábito";
+        document.querySelector("#habitSaveButton").textContent = "Agregar hábito";
+    }
+
+    function openHabit(item = null) {
+        resetForm();
+        if (item) {
+            document.querySelector("#habitId").value = item.id;
+            document.querySelector("#habitName").value = item.name;
+            document.querySelector("#habitArea").value = item.area;
+            document.querySelector("#habitDialogTitle").textContent = "Editar hábito";
+            document.querySelector("#habitSaveButton").textContent = "Guardar cambios";
+        }
+        dialog.showModal();
+        document.querySelector("#habitName").focus();
+    }
 
     function dateOffset(days) {
         const date = new Date();
@@ -60,9 +99,9 @@
             list.innerHTML = habits.map(item => {
                 const isDone = item.history.includes(today);
                 return `<article class="habit-item ${isDone ? "done" : ""}">
-                    <button class="habit-check" data-action="toggle" data-id="${item.id}" type="button" aria-label="${isDone ? "Desmarcar" : "Completar"}">✓</button>
-                    <div class="habit-copy"><strong>${A.escapeHTML(item.name)}</strong><span>${areaLabels[item.area] || item.area} · racha ${streak(item)} día(s)</span></div>
-                    <div class="record-actions"><button class="danger-button" data-action="delete" data-id="${item.id}" type="button">Eliminar</button></div>
+                    <button class="habit-check" data-action="toggle" data-id="${A.escapeHTML(String(item.id))}" type="button" aria-label="${isDone ? "Desmarcar" : "Completar"}">✓</button>
+                    <div class="habit-copy"><strong>${A.escapeHTML(item.name)}</strong><span>${A.escapeHTML(areaLabels[item.area] || item.area)} · racha ${streak(item)} día(s)</span></div>
+                    <div class="record-actions"><button class="small-button" data-action="edit" data-id="${A.escapeHTML(String(item.id))}" type="button">Editar</button><button class="danger-button" data-action="delete" data-id="${A.escapeHTML(String(item.id))}" type="button">Eliminar</button></div>
                 </article>`;
             }).join("");
         }
@@ -70,7 +109,7 @@
         const dayLabels = dates.map(date => new Intl.DateTimeFormat("es-PY", { weekday: "narrow" }).format(A.parseDate(date)));
         document.querySelector("#habitWeek").innerHTML = habits.length ? `
             <div class="habit-week-row habit-week-header"><strong>Hábito</strong>${dayLabels.map(label => `<span>${label}</span>`).join("")}</div>
-            ${habits.map(item => `<div class="habit-week-row"><strong>${A.escapeHTML(item.name)}</strong>${dates.map(date => `<span class="habit-dot ${item.history.includes(date) ? "done" : ""}">${item.history.includes(date) ? "✓" : "·"}</span>`).join("")}</div>`).join("")}
+            ${habits.map(item => `<div class="habit-week-row"><strong>${A.escapeHTML(item.name)}</strong>${dates.map(date => `<button class="habit-dot ${item.history.includes(date) ? "done" : ""}" data-history-id="${A.escapeHTML(String(item.id))}" data-history-date="${date}" type="button" title="${A.formatDate(date)}">${item.history.includes(date) ? "✓" : "·"}</button>`).join("")}</div>`).join("")}
         ` : '<div class="empty-state">La matriz semanal aparecerá cuando agregues hábitos.</div>';
         A.updateNavCounts();
     }
@@ -79,12 +118,24 @@
         event.preventDefault();
         const name = document.querySelector("#habitName").value.trim();
         if (!name) return;
-        habits.push({ id: A.createId(), name, area: document.querySelector("#habitArea").value, history: [], createdAt: new Date().toISOString() });
+        const id = document.querySelector("#habitId").value;
+        const current = habits.find(item => String(item.id) === id);
+        const next = {
+            ...current,
+            id: current?.id || A.createId(),
+            name,
+            area: document.querySelector("#habitArea").value,
+            history: current?.history || [],
+            createdAt: current?.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        if (current) habits = habits.map(item => item === current ? next : item);
+        else habits.push(next);
         save();
-        form.reset();
+        resetForm();
         dialog.close();
         render();
-        A.notify("Hábito agregado.");
+        A.notify(current ? "Hábito actualizado." : "Hábito agregado.");
     });
 
     list.addEventListener("click", event => {
@@ -92,6 +143,10 @@
         if (!button) return;
         const habit = habits.find(item => String(item.id) === button.dataset.id);
         if (!habit) return;
+        if (button.dataset.action === "edit") {
+            openHabit(habit);
+            return;
+        }
         if (button.dataset.action === "toggle") {
             const today = A.localDate();
             if (habit.history.includes(today)) habit.history = habit.history.filter(date => date !== today);
@@ -105,8 +160,28 @@
         render();
     });
 
-    document.querySelector("#openHabitDialog").addEventListener("click", () => { dialog.showModal(); document.querySelector("#habitName").focus(); });
+    document.querySelector("#habitWeek").addEventListener("click", event => {
+        const button = event.target.closest("[data-history-id][data-history-date]");
+        if (!button) return;
+        const habit = habits.find(item => String(item.id) === button.dataset.historyId);
+        if (!habit) return;
+        const date = button.dataset.historyDate;
+        if (habit.history.includes(date)) habit.history = habit.history.filter(item => item !== date);
+        else habit.history.push(date);
+        save();
+        render();
+    });
+
+    document.querySelector("#openHabitDialog").addEventListener("click", () => openHabit());
     document.querySelector("#closeHabitDialog").addEventListener("click", () => dialog.close());
-    document.querySelector("#cancelHabitDialog").addEventListener("click", () => dialog.close());
+    document.querySelector("#cancelHabitDialog").addEventListener("click", () => { resetForm(); dialog.close(); });
     render();
+    window.addEventListener("atlas:data-changed", event => {
+        if (!writingHabits && event.detail?.key === KEY) reload();
+    });
+    window.addEventListener("storage", event => {
+        if (A.storageKeyMatches(event.key, KEY)) reload();
+    });
+    window.addEventListener("pageshow", reload);
+    window.addEventListener("focus", reload);
 })();

@@ -32,10 +32,14 @@
     }
 
     function parseDate(value) {
-        if (!value) return null;
-        const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
-        if (!year || !month || !day) return null;
-        return new Date(year, month - 1, day);
+        const match = String(value || "").slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return null;
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        const date = new Date(year, month - 1, day);
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+        return date;
     }
 
     function daysUntil(value) {
@@ -74,6 +78,11 @@
 
     function createId() {
         return Date.now() + Math.floor(Math.random() * 1000);
+    }
+
+    function storageKeyMatches(eventKey, dataKey) {
+        const key = String(eventKey || "");
+        return key === dataKey || key.endsWith(`:${dataKey}`);
     }
 
     function notify(message, type = "success") {
@@ -180,7 +189,7 @@
 
                     <div class="capture-fields" data-capture-panel="study" hidden>
                         <div class="form-grid">
-                            <label class="field span-5"><span>Materia</span><input id="captureStudySubject" type="text" maxlength="90" placeholder="Ej: Contabilidad"></label>
+                            <label class="field span-5"><span>Materia</span><input id="captureStudySubject" type="text" maxlength="90" placeholder="Ej: Matemática"></label>
                             <label class="field span-7"><span>Actividad</span><input id="captureStudyTitle" type="text" maxlength="120" placeholder="Ej: examen final"></label>
                             <label class="field span-6"><span>Fecha</span><input id="captureStudyDate" type="date"></label>
                             <label class="field span-6"><span>Tipo</span><select id="captureStudyType"><option value="assignment">Trabajo / Entrega</option><option value="exam">Examen</option><option value="presentation">Exposición</option><option value="class">Clase</option><option value="other">Otro</option></select></label>
@@ -543,7 +552,7 @@
             <div class="sidebar-system-card">
                 <span>Una idea simple</span>
                 <strong>Lo que no se mide, no se mejora.</strong>
-                <small>ATLAS SO · v0.7</small>
+                <small>ATLAS SO · v0.7.1</small>
             </div>
         `;
 
@@ -662,6 +671,7 @@
         escapeHTML,
         createId,
         notify,
+        storageKeyMatches,
         obligationRemaining,
         loadTasks,
         getUserName() {

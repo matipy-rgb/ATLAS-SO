@@ -10,6 +10,7 @@
         workout: Boolean(item.workout),
         energy: item.energy ? Number(item.energy) : null
     }));
+    let writing = false;
 
     const form = document.querySelector("#healthForm");
     const dateInput = document.querySelector("#healthDate");
@@ -17,7 +18,26 @@
 
     function save() {
         records.sort((a, b) => b.date.localeCompare(a.date));
-        A.writeJSON(KEY, records);
+        writing = true;
+        try {
+            A.writeJSON(KEY, records);
+        } finally {
+            writing = false;
+        }
+    }
+
+    function reload() {
+        records = A.readArray(KEY).map(item => ({
+            ...item,
+            date: String(item.date || A.localDate()).slice(0, 10),
+            weight: item.weight === "" || item.weight === null ? null : Number(item.weight),
+            sleep: item.sleep === "" || item.sleep === null ? null : Number(item.sleep),
+            water: item.water === "" || item.water === null ? null : Number(item.water),
+            workout: Boolean(item.workout),
+            energy: item.energy ? Number(item.energy) : null
+        }));
+        loadIntoForm(dateInput.value || A.localDate());
+        render();
     }
 
     function average(items, property) {
@@ -45,7 +65,9 @@
     function render() {
         const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
         const latest = sorted[0];
-        const previousWeight = sorted.find((item, index) => index > 0 && item.weight > 0);
+        const weighted = sorted.filter(item => Number(item.weight) > 0);
+        const latestWeight = weighted[0];
+        const previousWeight = weighted[1];
         const sevenDays = sorted.filter(item => A.daysUntil(item.date) >= -6 && A.daysUntil(item.date) <= 0);
         const sleepAvg = average(sevenDays, "sleep");
         const waterAvg = average(sevenDays, "water");
@@ -53,9 +75,9 @@
         const workouts = records.filter(item => item.date.slice(0, 7) === currentMonth && item.workout).length;
         const todayRecord = records.find(item => item.date === A.localDate());
 
-        document.querySelector("#latestWeight").textContent = latest?.weight ? `${latest.weight.toLocaleString("es-PY")} kg` : "—";
-        if (latest?.weight && previousWeight?.weight) {
-            const diff = latest.weight - previousWeight.weight;
+        document.querySelector("#latestWeight").textContent = latestWeight?.weight ? `${latestWeight.weight.toLocaleString("es-PY")} kg` : "—";
+        if (latestWeight?.weight && previousWeight?.weight) {
+            const diff = latestWeight.weight - previousWeight.weight;
             document.querySelector("#weightChange").textContent = `${diff > 0 ? "+" : ""}${diff.toFixed(1)} kg respecto al registro anterior`;
         } else {
             document.querySelector("#weightChange").textContent = "Sin referencia anterior";
@@ -82,13 +104,13 @@
         `;
 
         if (!sorted.length) {
-            list.innerHTML = '<div class="empty-state">Todavía no hay datos. Una medición honesta vale más que diez estimaciones.</div>';
+            list.innerHTML = '<div class="empty-state">Todavía no hay mediciones. Registrá un dato cuando quieras empezar.</div>';
         } else {
             list.innerHTML = sorted.slice(0, 18).map(item => `
                 <article class="record-item">
                     <div class="record-main"><h3>${A.formatDate(item.date)}</h3><p><span>${item.sleep || "—"} h sueño</span><span>${item.water || "—"} L agua</span><span>${item.workout ? "Entrenó" : "Sin entrenamiento"}</span>${item.note ? `<span>${A.escapeHTML(item.note)}</span>` : ""}</p></div>
                     <div class="record-value"><strong>${item.weight ? `${item.weight} kg` : "Sin peso"}</strong><span>${item.energy ? `Energía ${item.energy}/5` : "Energía no medida"}</span></div>
-                    <div class="record-actions"><button class="small-button" data-edit="${item.date}" type="button">Editar</button><button class="danger-button" data-delete="${item.date}" type="button">Eliminar</button></div>
+                    <div class="record-actions"><button class="small-button" data-edit="${A.escapeHTML(item.date)}" type="button">Editar</button><button class="danger-button" data-delete="${A.escapeHTML(item.date)}" type="button">Eliminar</button></div>
                 </article>
             `).join("");
         }
@@ -108,6 +130,10 @@
             note: document.querySelector("#healthNote").value.trim(),
             updatedAt: new Date().toISOString()
         };
+        if (!record.weight && !record.sleep && !record.water && !record.workout && !record.energy && !record.note) {
+            A.notify("Registrá al menos una medición, una nota o un entrenamiento.", "error");
+            return;
+        }
         const index = records.findIndex(item => item.date === date);
         if (index >= 0) records[index] = { ...records[index], ...record };
         else records.push(record);
@@ -141,4 +167,12 @@
     dateInput.value = A.localDate();
     loadIntoForm(dateInput.value);
     render();
+    window.addEventListener("atlas:data-changed", event => {
+        if (!writing && event.detail?.key === KEY) reload();
+    });
+    window.addEventListener("storage", event => {
+        if (A.storageKeyMatches(event.key, KEY)) reload();
+    });
+    window.addEventListener("pageshow", reload);
+    window.addEventListener("focus", reload);
 })();

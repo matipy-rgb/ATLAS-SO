@@ -2,7 +2,9 @@
     "use strict";
 
     const A = window.Atlas;
-    const PATRONAL = "0005-82-01080";
+    const C = window.AtlasHRContext;
+    const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+    const MAX_IMAGE_PIXELS = 40_000_000;
     const input = document.querySelector("#ipsScreenshot");
     const dropZone = document.querySelector(".ips-drop-zone");
     const progress = document.querySelector("#ipsProgress");
@@ -17,6 +19,8 @@
     let worker = null;
     if (!input || !dropZone) return;
 
+    const patronalNumber = () => String(C?.company?.patronalNumber || "").trim();
+    const validPatronal = () => /^[0-9-]{5,30}$/.test(patronalNumber());
     const normalizeText = value => String(value || "").replace(/\s+/g, " ").trim().toUpperCase();
     const digitsOnly = value => String(value || "").replace(/\D/g, "");
     const normalizeDate = value => {
@@ -32,9 +36,19 @@
         if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2000 || year > 2100) return raw;
         return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
     };
-    const validDate = value => /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/20\d{2}$/.test(value);
+    const dateValue = value => {
+        const match = String(value || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!match) return null;
+        const day = Number(match[1]);
+        const month = Number(match[2]);
+        const year = Number(match[3]);
+        const date = new Date(year, month - 1, day);
+        return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date.valueOf() : null;
+    };
+    const validDate = value => dateValue(value) !== null;
     const rowValid = item => /^\d{5,12}$/.test(item.ci) && item.names && item.surnames
-        && validDate(item.start) && validDate(item.end) && validDate(item.documentDate) && /^\d{5,12}$/.test(item.id);
+        && validDate(item.start) && validDate(item.end) && dateValue(item.start) <= dateValue(item.end)
+        && validDate(item.documentDate) && /^\d{5,12}$/.test(item.id);
 
     function parseTSV(tsv, width, height) {
         const columns = [
@@ -114,7 +128,11 @@
                 ${["ci", "names", "surnames", "start", "end", "documentDate", "id"].map(key => `<td><input data-field="${key}" value="${A.escapeHTML(item[key])}"></td>`).join("")}
                 <td><span class="ips-state ${valid ? "ok" : "review"}">${valid ? "Listo" : "Revisar"}</span></td></tr>`;
         }).join("");
-        download.disabled = included.some(item => !rowValid(item));
+        download.disabled = included.some(item => !rowValid(item)) || !validPatronal();
+        if (!validPatronal()) {
+            summary.className = "ips-result-summary warning";
+            summary.insertAdjacentText("beforeend", " Falta configurar un número patronal válido para esta empresa.");
+        }
     }
 
     function updateFromTable(event) {
@@ -133,18 +151,23 @@
         const state = row.querySelector(".ips-state");
         state.className = `ips-state ${valid ? "ok" : "review"}`;
         state.textContent = valid ? "Listo" : "Revisar";
-        download.disabled = !records.length || records.some(record => !rowValid(record));
+        download.disabled = !records.length || records.some(record => !rowValid(record)) || !validPatronal();
     }
 
     async function dimensions(file) {
         const bitmap = await createImageBitmap(file);
         const size = { width: bitmap.width, height: bitmap.height };
         bitmap.close();
+        if (!size.width || !size.height || size.width * size.height > MAX_IMAGE_PIXELS) {
+            throw new Error("La imagen es demasiado grande para procesarla con seguridad.");
+        }
         return size;
     }
 
     async function readScreenshot(file) {
         if (!file || !file.type.startsWith("image/")) return A.notify("Subí una captura en formato de imagen.", "error");
+        if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return A.notify("Usá una imagen PNG, JPG o WebP.", "error");
+        if (file.size > MAX_IMAGE_BYTES) return A.notify("La captura supera el límite de 15 MB.", "error");
         progress.hidden = false;
         result.hidden = true;
         progressBar.style.width = "2%";
@@ -182,12 +205,16 @@
 
     function downloadCSV() {
         if (!records.length || records.some(item => !rowValid(item))) return A.notify("Revisá todos los campos antes de descargar.", "error");
-        const lines = records.map(item => [PATRONAL, item.ci, item.names, item.surnames, "11", item.start, item.end, item.documentDate, item.id, "PERMISO"].join(";"));
+        const patronal = patronalNumber();
+        if (!validPatronal()) return A.notify("Configurá un número patronal IPS válido para la empresa antes de descargar.", "error");
+        const lines = records.map(item => [patronal, item.ci, item.names, item.surnames, "11", item.start, item.end, item.documentDate, item.id, "PERMISO"].join(";"));
         const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = `IPS_PERMISOS_${A.localDate().split("-").reverse().join("-")}.csv`;
+        const companyName = String(C?.company?.name || "EMPRESA").normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "");
+        anchor.download = `IPS_PERMISOS_${companyName || "EMPRESA"}_${A.localDate().split("-").reverse().join("-")}.csv`;
         anchor.click();
         URL.revokeObjectURL(url);
         A.notify(`CSV generado con ${records.length} registro(s).`);

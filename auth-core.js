@@ -28,6 +28,28 @@
         return new URL(fileName, window.location.href).href;
     }
 
+    function workspaceCacheKey(userId) {
+        return `atlas:workspace:${userId}`;
+    }
+
+    function hrAdminCacheKey(userId) {
+        return `atlas:hr-admin:${userId}`;
+    }
+
+    function readCachedWorkspace(userId) {
+        try {
+            const cached = JSON.parse(localStorage.getItem(workspaceCacheKey(userId)) || "null");
+            return cached?.id ? cached : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function cacheWorkspace(userId, workspace) {
+        localStorage.setItem(workspaceCacheKey(userId), JSON.stringify(workspace));
+        return workspace;
+    }
+
     async function getSession() {
         if (!client) return null;
         const { data, error } = await client.auth.getSession();
@@ -40,6 +62,7 @@
         if (currentWorkspace) return currentWorkspace;
         const session = currentSession || await getSession();
         if (!session) return null;
+        const cached = readCachedWorkspace(session.user.id);
 
         const { data, error } = await client
             .from("workspace_members")
@@ -49,34 +72,45 @@
             .limit(1)
             .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+            if (cached) {
+                currentWorkspace = cached;
+                return currentWorkspace;
+            }
+            throw error;
+        }
         if (!data) {
             const { data: createdId, error: createError } = await client.rpc(
                 "create_personal_workspace"
             );
             if (createError) throw createError;
-            currentWorkspace = {
+            currentWorkspace = cacheWorkspace(session.user.id, {
                 id: createdId,
                 name: "Mi espacio",
                 role: "owner"
-            };
+            });
             return currentWorkspace;
         }
 
-        currentWorkspace = {
+        currentWorkspace = cacheWorkspace(session.user.id, {
             id: data.workspace_id,
             name: data.workspaces?.name || "Mi espacio",
             slug: data.workspaces?.slug || "",
             role: data.role || "member"
-        };
+        });
         return currentWorkspace;
     }
 
     async function signOut() {
+        const userId = currentSession?.user?.id;
         if (client) await client.auth.signOut();
         currentSession = null;
         currentWorkspace = null;
         hrAdmin = null;
+        if (userId) {
+            localStorage.removeItem(workspaceCacheKey(userId));
+            localStorage.removeItem(hrAdminCacheKey(userId));
+        }
         localStorage.removeItem("atlasActiveUserId");
         localStorage.removeItem("atlasActiveWorkspaceId");
         window.location.replace("login.html");
@@ -89,10 +123,11 @@
         const { data, error } = await client.rpc("is_hr_admin");
         if (error) {
             console.warn("No se pudo verificar el permiso de RRHH:", error.message);
-            hrAdmin = false;
-            return false;
+            hrAdmin = localStorage.getItem(hrAdminCacheKey(session.user.id)) === "true";
+            return hrAdmin;
         }
         hrAdmin = data === true;
+        localStorage.setItem(hrAdminCacheKey(session.user.id), String(hrAdmin));
         return hrAdmin;
     }
 

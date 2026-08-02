@@ -1,33 +1,25 @@
-ATLAS SO v0.7.0 — ACTUALIZACIÓN INTEGRAL DE RR. HH.
+ATLAS SO v0.7.1 — ACTUALIZACIÓN AUDITADA
 
-1. Descargá una copia de seguridad desde la versión actual.
-2. Reemplazá los archivos del proyecto con el contenido de esta versión.
-3. No borres los datos del navegador ni la configuración de Supabase.
-4. En Supabase > SQL Editor ejecutá una sola vez:
+1. Descargá una copia completa desde ATLAS SO.
+2. Conservá el respaldo de la versión anterior.
+3. Reemplazá el código con el contenido del paquete v0.7.1.
+4. No borres los datos del navegador ni la configuración de Supabase.
+5. Ejecutá:
 
-   supabase/v0.7-rrhh-scale.sql
+   npm.cmd ci
+   npm.cmd run check
+   npm.cmd audit --omit=dev
 
-5. Publicá los archivos y recargá con Ctrl + F5.
+6. En una base existente con v0.7, ejecutá una sola vez:
 
-VERIFICACIÓN
+   supabase/v0.7.1-security-hardening.sql
 
-- Al entrar en RR. HH. debe poder elegirse primero empresa y luego cliente.
-- Deben existir botones separados Cambiar empresa y Cambiar cliente.
-- Nómina general no debe aparecer como cliente.
-- Empresa, cliente, logos y nombre de la nómina deben ser editables.
-- Deben aparecer Activos, Inactivos del mes e Inactivos.
-- Horarios debe incluir tipos, asignaciones y marcaciones.
-- Cálculo de horas debe exportar Resumen y Detalle.
-- Contratos debe detectar el modelo por cliente y guardar historial.
+   Si la base nunca recibió las migraciones anteriores, seguí el orden indicado
+   en CONFIGURAR-ACTUALIZACION.md.
 
-PRUEBAS TÉCNICAS
+7. Publicá la versión solo después de que todas las pruebas pasen.
+8. Recargá el sitio con Ctrl + F5 y verificá acceso, datos, marcaciones y copia
+   de seguridad.
 
-npm install
-npm run check
-
-PUBLICAR
-
-git status
-git add .
-git commit -m "ATLAS SO v0.7 - actualización integral de RRHH"
-git push origin main
+El aviso “LF will be replaced by CRLF” de Git en Windows es informativo: no
+indica que el proceso se haya colgado ni que los archivos estén dañados.
