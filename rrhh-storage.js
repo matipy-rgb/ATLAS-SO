@@ -4,6 +4,8 @@
     const DB_NAME = "atlas-so-rrhh";
     const DB_VERSION = 1;
     const STORE = "attendance";
+    const CLOUD_CHUNK_SIZE = 500;
+    const DELETE_CHUNK_SIZE = 200;
     const cloudAvailable = () => Boolean(window.AtlasAuth?.client && window.AtlasStore?.workspaceId);
 
     function bucketId(companyId, period) {
@@ -12,6 +14,29 @@
 
     function fallbackKey(companyId, period) {
         return `atlasHRAttendanceFallback__${companyId}__${period}`;
+    }
+
+    function deletionKey(companyId) {
+        return `atlasHRAttendanceDeletes__${companyId}`;
+    }
+
+    function pendingDeletions(companyId) {
+        const value = window.AtlasStore?.read(deletionKey(companyId), []);
+        if (!Array.isArray(value)) return [];
+        const normalized = new Map();
+        value.forEach(item => {
+            const id = String(typeof item === "object" ? item?.id || "" : item || "");
+            if (!id) return;
+            const parsed = Date.parse(typeof item === "object" ? item?.deletedAt || "" : "");
+            const deletedAt = Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
+            const previous = normalized.get(id);
+            if (!previous || Date.parse(deletedAt) > Date.parse(previous.deletedAt)) normalized.set(id, { id, deletedAt });
+        });
+        return Array.from(normalized.values());
+    }
+
+    function savePendingDeletions(companyId, records) {
+        window.AtlasStore?.write(deletionKey(companyId), Array.isArray(records) ? records : []);
     }
 
     function openDB() {
@@ -84,6 +109,26 @@
         };
     }
 
+    function comparable(value) {
+        return JSON.stringify({
+            employeeId: value.employeeId,
+            clientId: value.clientId,
+            clockId: value.clockId,
+            date: value.date,
+            in: value.in,
+            out: value.out,
+            rawStatus: value.rawStatus,
+            resolvedStatus: value.resolvedStatus,
+            note: value.note,
+            sourceImportId: value.sourceImportId
+        });
+    }
+
+    function timestamp(value) {
+        const parsed = Date.parse(value?.updatedAt || "");
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
     function mergeRecords(base, incoming) {
         const map = new Map((base || []).map(item => [`${item.employeeId || item.clockId}:${item.date}`, normalize(item)]));
         const counts = { new: 0, updated: 0, equal: 0 };
@@ -96,34 +141,43 @@
                 map.set(key, item);
                 return;
             }
-            const comparable = value => JSON.stringify({
-                employeeId: value.employeeId,
-                clientId: value.clientId,
-                clockId: value.clockId,
-                date: value.date,
-                in: value.in,
-                out: value.out,
-                rawStatus: value.rawStatus,
-                resolvedStatus: value.resolvedStatus
-            });
-            if (comparable(previous) === comparable(item)) counts.equal += 1;
+            if (comparable(previous) === comparable(item)) {
+                counts.equal += 1;
+                if (timestamp(item) >= timestamp(previous)) map.set(key, { ...previous, ...item, id: previous.id });
+            }
             else {
                 counts.updated += 1;
-                map.set(key, { ...previous, ...item, id: previous.id });
+                if (timestamp(item) >= timestamp(previous)) map.set(key, { ...previous, ...item, id: previous.id });
             }
         });
         return { records: Array.from(map.values()), counts };
     }
 
+    function periodEnd(period) {
+        const match = String(period || "").match(/^(\d{4})-(\d{2})$/);
+        if (!match) return "";
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        if (month < 1 || month > 12) return "";
+        const lastDay = new Date(year, month, 0).getDate();
+        return `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
+    }
+
+    function syncStatus(status, message) {
+        window.dispatchEvent?.(new CustomEvent("atlas:sync-status", { detail: { status, message } }));
+    }
+
     async function readCloud(companyId, period) {
         if (!cloudAvailable()) return null;
+        const end = periodEnd(period);
+        if (!end) return null;
         const { data, error } = await window.AtlasAuth.client
             .from("hr_attendance_records")
-            .select("id,employee_id,client_id,clock_id,source_name,work_date,time_in,time_out,raw_status,resolved_status,note,source_import_id,updated_at")
+            .select("id,employee_id,client_id,clock_id,source_name,work_date,time_in,time_out,raw_status,resolved_status,note,source_import_id,client_updated_at,updated_at")
             .eq("workspace_id", window.AtlasStore.workspaceId)
             .eq("company_id", companyId)
             .gte("work_date", `${period}-01`)
-            .lte("work_date", `${period}-31`);
+            .lte("work_date", end);
         if (error) {
             if (!["42P01", "PGRST205"].includes(error.code)) console.warn("Marcaciones en nube:", error.message);
             return null;
@@ -141,7 +195,7 @@
             resolvedStatus: row.resolved_status,
             note: row.note,
             sourceImportId: row.source_import_id,
-            updatedAt: row.updated_at
+            updatedAt: row.client_updated_at || row.updated_at
         }));
     }
 
@@ -162,25 +216,63 @@
             resolved_status: item.resolvedStatus || null,
             note: item.note || null,
             source_import_id: item.sourceImportId || null,
-            updated_by: window.AtlasStore.userId,
-            updated_at: new Date().toISOString()
+            client_updated_at: item.updatedAt
         }));
-        const { error } = await window.AtlasAuth.client
-            .from("hr_attendance_records")
-            .upsert(rows, { onConflict: "workspace_id,company_id,employee_id,work_date" });
-        if (error) {
-            if (!["42P01", "PGRST205"].includes(error.code)) console.warn("No se sincronizaron marcaciones:", error.message);
-            return false;
+        for (let index = 0; index < rows.length; index += CLOUD_CHUNK_SIZE) {
+            const chunk = rows.slice(index, index + CLOUD_CHUNK_SIZE);
+            const { error } = await window.AtlasAuth.client.rpc("upsert_hr_attendance_if_newer", {
+                target_workspace: window.AtlasStore.workspaceId,
+                target_company: companyId,
+                records: chunk
+            });
+            if (error) {
+                if (!["42P01", "PGRST205"].includes(error.code)) console.warn("No se sincronizaron marcaciones:", error.message);
+                syncStatus("offline", "Marcaciones guardadas en este dispositivo");
+                return false;
+            }
         }
+        syncStatus("synced", "Marcaciones sincronizadas");
+        return true;
+    }
+
+    async function flushPendingDeletions(companyId) {
+        const records = pendingDeletions(companyId);
+        if (!records.length) return true;
+        if (!cloudAvailable()) return false;
+        for (let index = 0; index < records.length; index += DELETE_CHUNK_SIZE) {
+            const chunk = records.slice(index, index + DELETE_CHUNK_SIZE).map(item => ({
+                id: item.id,
+                deleted_at: item.deletedAt
+            }));
+            const { error } = await window.AtlasAuth.client.rpc("delete_hr_attendance_records", {
+                target_workspace: window.AtlasStore.workspaceId,
+                target_company: companyId,
+                records: chunk
+            });
+            if (error) {
+                syncStatus("offline", "Hay eliminaciones de marcaciones pendientes");
+                return false;
+            }
+        }
+        savePendingDeletions(companyId, []);
         return true;
     }
 
     async function getMonth(companyId, period) {
-        const local = await readLocal(companyId, period);
-        const cloud = await readCloud(companyId, period);
-        if (cloud) {
-            const merged = mergeRecords(local, cloud).records;
+        if (cloudAvailable()) await flushPendingDeletions(companyId);
+        const deleted = new Set(pendingDeletions(companyId).map(item => item.id));
+        const local = (await readLocal(companyId, period)).filter(item => !deleted.has(String(item.id)));
+        const remote = await readCloud(companyId, period);
+        const cloud = remote?.filter(item => !deleted.has(String(item.id))) ?? remote;
+        if (cloud !== null) {
+            const merged = mergeRecords(cloud, local).records;
             await writeLocal(companyId, period, merged);
+            const cloudByKey = new Map(cloud.map(item => [`${item.employeeId || item.clockId}:${item.date}`, item]));
+            const pending = merged.filter(item => {
+                const remote = cloudByKey.get(`${item.employeeId || item.clockId}:${item.date}`);
+                return !remote || comparable(remote) !== comparable(item) || timestamp(item) > timestamp(remote);
+            });
+            if (pending.length) await writeCloud(companyId, pending);
             return merged;
         }
         return local;
@@ -188,19 +280,22 @@
 
     async function upsertMonth(companyId, period, incoming) {
         const current = await getMonth(companyId, period);
-        const merged = mergeRecords(current, incoming);
+        const normalizedIncoming = incoming.map(normalize);
+        const merged = mergeRecords(current, normalizedIncoming);
         await writeLocal(companyId, period, merged.records);
-        await writeCloud(companyId, incoming.map(normalize));
-        return merged;
+        const cloudSynced = await writeCloud(companyId, normalizedIncoming);
+        return { ...merged, cloudSynced: cloudAvailable() ? cloudSynced : null };
     }
 
     async function remove(companyId, period, id) {
         const records = (await getMonth(companyId, period)).filter(item => String(item.id) !== String(id));
         await writeLocal(companyId, period, records);
-        if (cloudAvailable()) {
-            await window.AtlasAuth.client.from("hr_attendance_records")
-                .delete().eq("workspace_id", window.AtlasStore.workspaceId).eq("id", id);
-        }
+        savePendingDeletions(companyId, [
+            ...pendingDeletions(companyId),
+            { id: String(id), deletedAt: new Date().toISOString() }
+        ]);
+        const deleted = await flushPendingDeletions(companyId);
+        if (!deleted) syncStatus("offline", "La eliminación quedó pendiente de sincronizar");
         return records;
     }
 
@@ -209,6 +304,8 @@
         upsertMonth,
         remove,
         mergeRecords,
-        normalize
+        normalize,
+        periodEnd,
+        flushPendingDeletions
     };
 })();

@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self'; media-src 'self' blob:; manifest-src 'self'">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0b1220">
     <meta name="description" content="Cómo ATLAS SO protege y utiliza la información de cada cuenta.">
@@ -21,7 +23,7 @@
 
         <section>
             <h2>Qué información se guarda</h2>
-            <p>Se guarda la información que cargás voluntariamente en tus módulos: tareas, movimientos financieros, estudios, salud, proyectos, hábitos, jornadas y notas. Para iniciar sesión se utiliza tu nombre, correo y una contraseña administrada de forma segura por Supabase.</p>
+            <p>Se guarda la información que cargás voluntariamente en tus módulos: tareas, movimientos financieros, estudios, salud, proyectos, hábitos, jornadas y notas. Si tu cuenta administra Recursos Humanos, también puede guardar legajos, identificadores del reloj, marcaciones, ausencias, horarios, contratos, datos de empresas y clientes. Para iniciar sesión se utiliza tu nombre, correo y una contraseña administrada por Supabase.</p>
         </section>
         <section>
             <h2>Para qué se utiliza</h2>
@@ -29,11 +31,23 @@
         </section>
         <section>
             <h2>Separación y acceso</h2>
-            <p>Cada cuenta trabaja en un espacio independiente. Las reglas de acceso de la base de datos impiden que una cuenta consulte o modifique los registros de otra.</p>
+            <p>Cada cuenta trabaja en un espacio independiente. Las reglas de acceso de la base de datos impiden que una cuenta consulte o modifique los registros de otra. Recursos Humanos requiere, además, que Supabase confirme en línea el permiso de la cuenta administradora; si esa verificación falla, el acceso se bloquea.</p>
         </section>
         <section>
             <h2>Copias y archivos</h2>
-            <p>Podés descargar una copia de tus datos desde la aplicación. Los comprobantes admitidos se guardan en un espacio privado asociado a tu cuenta y pueden mantener también una copia local en el dispositivo para facilitar el acceso.</p>
+            <p>Podés descargar una copia completa desde la aplicación. Incluye los grupos de datos de tu espacio, comprobantes locales o recuperables del depósito privado y, para la cuenta autorizada, marcaciones de Recursos Humanos. Las copias nuevas se cifran con una contraseña elegida al exportar; ATLAS SO no guarda ni puede recuperar esa contraseña. Al restaurar podés combinar sin duplicar o reemplazar. Si una carga o eliminación queda pendiente por falta de conexión, la aplicación vuelve a intentarla.</p>
+        </section>
+        <section>
+            <h2>Copia local del dispositivo</h2>
+            <p>Para funcionar sin conexión, el navegador conserva una copia local separada por espacio de trabajo. En un equipo compartido, usá un perfil protegido del sistema operativo y cerrá sesión al terminar. Si una cuenta pierde el permiso de Recursos Humanos, ATLAS SO elimina de su espacio local las copias de RR. HH. que ya no está autorizada a usar.</p>
+        </section>
+        <section>
+            <h2>Archivos procesados en el dispositivo</h2>
+            <p>La lectura OCR de capturas de IPS se ejecuta dentro del navegador. La aplicación no conserva la imagen después de preparar la revisión, salvo que vos la guardes por separado.</p>
+        </section>
+        <section>
+            <h2>Conservación y eliminación</h2>
+            <p>Los datos permanecen en tu espacio hasta que los elimines o restaures una copia. Las marcaciones borradas dejan una marca técnica mínima para impedir que una copia atrasada las haga reaparecer; esa marca no contiene el detalle de la jornada. Los datos locales antiguos sin cuenta solo se vinculan después de una confirmación expresa. Si necesitás eliminar la cuenta o todos sus datos, debe hacerlo la persona responsable de la administración del sistema.</p>
         </section>
         <section>
             <h2>Seguridad de la cuenta</h2>

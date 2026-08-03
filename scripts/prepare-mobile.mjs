@@ -15,8 +15,10 @@ for (const entry of await readdir(ROOT, { withFileTypes: true })) {
     }
 }
 
-for (const directory of ["icons", "vendor"]) {
-    await cp(path.join(ROOT, directory), path.join(OUTPUT, directory), { recursive: true });
-}
+await cp(path.join(ROOT, "icons"), path.join(OUTPUT, "icons"), { recursive: true });
+await cp(path.join(ROOT, "vendor"), path.join(OUTPUT, "vendor"), {
+    recursive: true,
+    filter: source => !source.endsWith(".tgz")
+});
 
 console.log("ATLAS SO preparado en www/ para Android.");

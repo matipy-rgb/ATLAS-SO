@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self'; media-src 'self' blob:; manifest-src 'self'">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0b1220">
     <title>Sin conexión | ATLAS SO</title>
@@ -9,5 +11,5 @@
         *{box-sizing:border-box}body{display:grid;min-height:100vh;margin:0;place-items:center;padding:24px;background:#0b1220;color:#fff;font-family:Inter,"Segoe UI",sans-serif}.card{width:min(460px,100%);padding:30px;border:1px solid #26364e;border-radius:20px;background:#111b2d;box-shadow:0 24px 70px #03071280}.mark{display:grid;width:48px;height:48px;place-items:center;border-radius:13px;background:linear-gradient(145deg,#2563eb,#0891b2);font-weight:900}h1{margin:24px 0 8px;font-size:30px;letter-spacing:-.04em}p{margin:0 0 24px;color:#a8b4c7;line-height:1.6}button{padding:11px 15px;border:0;border-radius:10px;background:#2563eb;color:#fff;font:inherit;font-weight:800;cursor:pointer}
     </style>
 </head>
-<body><main class="card"><span class="mark">A</span><h1>Estás sin conexión</h1><p>Los cambios que ya estaban en este dispositivo siguen protegidos. Volvé a intentar cuando recuperes internet para sincronizarlos.</p><button onclick="location.reload()">Reintentar</button></main></body>
+<body><main class="card"><span class="mark">A</span><h1>Estás sin conexión</h1><p>Los cambios que ya estaban en este dispositivo siguen protegidos. Volvé a intentar cuando recuperes internet para sincronizarlos.</p><button id="retryConnection" type="button">Reintentar</button></main><script src="offline.js"></script></body>
 </html>

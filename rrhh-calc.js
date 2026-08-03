@@ -31,10 +31,19 @@
         }
         const text = String(value).trim();
         let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-        if (match) return `${match[1]}-${pad(match[2])}-${pad(match[3])}`;
+        if (match && validDateParts(match[1], match[2], match[3])) return `${match[1]}-${pad(match[2])}-${pad(match[3])}`;
         match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
-        if (match) return `${match[3]}-${pad(match[2])}-${pad(match[1])}`;
+        if (match && validDateParts(match[3], match[2], match[1])) return `${match[3]}-${pad(match[2])}-${pad(match[1])}`;
         return "";
+    }
+
+    function validDateParts(yearValue, monthValue, dayValue) {
+        const year = Number(yearValue);
+        const month = Number(monthValue);
+        const day = Number(dayValue);
+        if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+        const date = new Date(year, month - 1, day);
+        return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
     }
 
     function timeMinutes(value) {
@@ -113,11 +122,14 @@
     function resolveStatus(record, schedule, options) {
         const explicit = String(record?.resolvedStatus || record?.status || "").toLowerCase();
         const raw = String(record?.rawStatus || record?.out || record?.salida || "").toUpperCase();
-        if (explicit && explicit !== "worked") return explicit === "missing" ? "raw_missing" : explicit;
-        if (raw === "FALTA") return "raw_missing";
-        if (!schedule) return "rest";
         const actual = normalizedActual(record);
+        const complete = actual.start !== null && actual.end !== null;
+        if (explicit && explicit !== "worked") return explicit === "missing" ? "raw_missing" : explicit;
+        if (options?.holiday && !complete) return "holiday";
+        if (raw === "FALTA") return "raw_missing";
+        if (!schedule && actual.start === null && actual.end === null) return "rest";
         if (actual.start === null || actual.end === null) return actual.start === null && actual.end === null ? "raw_missing" : "incomplete";
+        if (!schedule && complete) return options?.holiday ? "holiday" : "worked";
         return options?.holiday ? "holiday" : "worked";
     }
 
@@ -160,7 +172,7 @@
             if (status === "raw_missing") result.warnings.push("La FALTA todavía necesita una justificación o confirmación.");
             return result;
         }
-        if (excused.has(status) || status === "rest") return result;
+        if (excused.has(status) || status === "rest" || (status === "holiday" && !complete)) return result;
         if (!complete) {
             result.missingMinutes = scheduledMinutes;
             result.warnings.push("Falta una entrada o una salida; el cálculo no se cierra.");
@@ -178,22 +190,26 @@
             result.warnings.push("No hay un horario vigente para comparar esta marcación.");
             return result;
         }
-        const ordinaryMinutes = Math.min(actualMinutes, scheduledMinutes);
-        const extraMinutes = Math.max(0, actualMinutes - scheduledMinutes);
+        const tolerance = rule.tolerance;
+        const lateArrival = Math.max(0, actual.start - rule.start);
+        const earlyDeparture = Math.max(0, rule.end - actual.end);
+        const forgivenMinutes = Math.min(lateArrival, tolerance) + Math.min(earlyDeparture, tolerance);
         const extraStart = Math.max(actual.start, rule.end + rule.tolerance);
         const extraAfter = Math.max(0, actual.end - extraStart);
         const extraBefore = Math.max(0, Math.min(actual.end, rule.start - rule.tolerance) - actual.start);
-        const classifiedExtra = Math.min(extraMinutes, extraAfter + extraBefore);
+        const extraMinutes = Math.min(actualMinutes, extraAfter + extraBefore);
+        const creditedOrdinaryMinutes = Math.min(scheduledMinutes, Math.max(0, actualMinutes - extraMinutes + forgivenMinutes));
+        const ordinaryMinutes = Math.min(actualMinutes - extraMinutes, creditedOrdinaryMinutes);
         let extraNight = 0;
         if (extraAfter) extraNight += nightMinutes(extraStart, actual.end);
         if (extraBefore) extraNight += nightMinutes(actual.start, Math.min(actual.end, rule.start - rule.tolerance));
-        extraNight = Math.min(classifiedExtra || extraMinutes, extraNight);
+        extraNight = Math.min(extraMinutes, extraNight);
         result.extraNightMinutes = extraNight;
         result.extraDayMinutes = Math.max(0, extraMinutes - extraNight);
         const ordinaryNight = Math.max(0, Math.min(ordinaryMinutes, actualNight - extraNight));
         result.nightPremiumMinutes = ordinaryNight;
         result.ordinaryDayMinutes = Math.max(0, ordinaryMinutes - ordinaryNight);
-        result.missingMinutes = Math.max(0, scheduledMinutes - actualMinutes);
+        result.missingMinutes = Math.max(0, scheduledMinutes - creditedOrdinaryMinutes);
         return result;
     }
 
@@ -228,9 +244,9 @@
         const baseSalary = Number(salary || 0);
         const divisor = Number(rates.monthlyHours || 240);
         const hourly = workerType === "parttime"
-            ? Number(rates.partTimeDay || 14635)
+            ? Number(rates.partTimeHour || baseSalary / divisor)
             : workerType === "daily"
-                ? Number(rates.dailyHour || baseSalary / divisor)
+                ? Number(rates.dailyHour || baseSalary / Number(rates.dailyHours || 8))
                 : baseSalary / divisor;
         const ordinaryNightPremium = hours(totals.nightPremiumMinutes) * hourly * 0.30;
         const extraDay = hours(totals.extraDayMinutes) * hourly * 1.50;

@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self'; media-src 'self' blob:; manifest-src 'self'">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0b1220">
     <title>Estudios | ATLAS SO</title>
@@ -15,7 +17,7 @@
     <script src="auth-core.js"></script>
     <script src="app-bootstrap.js" defer></script>
 </head>
-<body data-page="study" data-script="study.js" data-context="UTCD, ITSSMAR y fechas académicas importantes" data-protected>
+<body data-page="study" data-script="study.js" data-context="Materias, actividades y fechas académicas importantes" data-protected>
     <div class="app-frame"><div class="app-workspace">
         <main class="page-content">
             <section class="page-hero">
@@ -33,11 +35,11 @@
             <section id="studyAttention" class="study-attention" hidden></section>
 
             <section class="panel study-card">
-                <header class="panel-header"><div><p class="section-kicker">PLANIFICACIÓN</p><h2 id="studyFormTitle">Agregar actividad</h2><p>Una fecha sin plan es una sorpresa esperando pasar.</p></div></header>
+                <header class="panel-header"><div><p class="section-kicker">PLANIFICACIÓN</p><h2 id="studyFormTitle">Agregar actividad</h2><p>Completá la fecha y el avance para mantener tu agenda al día.</p></div></header>
                 <form id="studyEventForm" class="study-form">
                     <input id="editingStudyId" type="hidden">
-                    <label class="study-field"><span>Institución</span><input id="studyInstitution" type="text" list="institutionOptions" maxlength="60" placeholder="Ej: UTCD" autocomplete="off" required></label>
-                    <label class="study-field study-field-wide"><span>Materia</span><input id="studySubject" type="text" list="subjectOptions" maxlength="90" placeholder="Ej: Fundamentos de Contabilidad" autocomplete="off" required></label>
+                    <label class="study-field"><span>Institución</span><input id="studyInstitution" type="text" list="institutionOptions" maxlength="60" placeholder="Ej: Universidad Central" autocomplete="off" required></label>
+                    <label class="study-field study-field-wide"><span>Materia</span><input id="studySubject" type="text" list="subjectOptions" maxlength="90" placeholder="Ej: Matemática aplicada" autocomplete="off" required></label>
                     <label class="study-field study-field-wide"><span>Actividad</span><input id="studyTitle" type="text" maxlength="120" placeholder="Ej: Examen final" autocomplete="off" required></label>
                     <label class="study-field"><span>Tipo</span><select id="studyType"><option value="exam">Examen</option><option value="assignment">Trabajo / Entrega</option><option value="presentation">Exposición</option><option value="forum">Foro</option><option value="project">Proyecto</option><option value="class">Clase</option><option value="other">Otro</option></select></label>
                     <label class="study-field"><span>Fecha límite</span><input id="studyDate" type="date" required></label>
@@ -48,8 +50,8 @@
                     <label class="study-field study-field-full"><span>Notas</span><textarea id="studyNotes" rows="3" maxlength="600" placeholder="Temas a repasar, indicaciones o datos importantes."></textarea></label>
                     <div class="study-form-actions study-field-full"><button id="cancelStudyEdit" class="study-secondary-button" type="button" hidden>Cancelar edición</button><button id="saveStudyButton" class="study-primary-button" type="submit">Agregar actividad</button></div>
                 </form>
-                <datalist id="institutionOptions"><option value="UTCD"></option><option value="ITSSMAR"></option></datalist>
-                <datalist id="subjectOptions"><option value="Fundamentos de Contabilidad"></option><option value="Laboratorio de Computación"></option><option value="Metodología de la Investigación"></option><option value="Inglés"></option><option value="Ofimática"></option><option value="Informática Aplicada"></option><option value="Ética Profesional"></option></datalist>
+                <datalist id="institutionOptions"></datalist>
+                <datalist id="subjectOptions"></datalist>
             </section>
 
             <section class="panel study-card study-list-card">

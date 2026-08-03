@@ -53,6 +53,7 @@ const typeLabels = {
 };
 
 let studyEvents = loadStudyEvents();
+let writingStudyEvents = false;
 
 function clampProgress(value) {
     return Math.min(100, Math.max(0, Number(value) || 0));
@@ -88,11 +89,12 @@ function loadStudyEvents() {
 }
 
 function saveStudyEvents() {
-    window.Atlas?.writeJSON(STUDY_EVENTS_KEY, studyEvents);
-
-    window.dispatchEvent(new CustomEvent("atlas:data-changed", {
-        detail: { key: STUDY_EVENTS_KEY }
-    }));
+    writingStudyEvents = true;
+    try {
+        window.Atlas?.writeJSON(STUDY_EVENTS_KEY, studyEvents);
+    } finally {
+        writingStudyEvents = false;
+    }
 }
 
 function reloadStudyEvents() {
@@ -383,7 +385,7 @@ function renderStudyEvents() {
             <div class="empty-study-state">
                 ${hasEvents
                     ? "No hay actividades que coincidan con estos filtros."
-                    : "Todavía no cargaste actividades. Tu calendario académico está en blanco; sospechosamente tranquilo."
+                    : "Todavía no cargaste actividades. Agregá la primera cuando tengas una fecha."
                 }
             </div>
         `;
@@ -482,7 +484,9 @@ function reopenStudyEvent(id) {
     if (!confirmed) return;
 
     event.completed = false;
-    event.progress = event.progressBeforeCompletion || 75;
+    event.progress = Number.isFinite(Number(event.progressBeforeCompletion))
+        ? clampProgress(event.progressBeforeCompletion)
+        : 75;
     event.completedAt = "";
     event.result = "";
     event.completionNote = "";
@@ -513,14 +517,23 @@ studyEventForm.addEventListener("submit", (event) => {
     const existing = id ? findStudyEvent(id) : null;
     const now = new Date().toISOString();
 
+    const institution = studyInstitution.value.trim();
+    const subject = studySubject.value.trim();
+    const title = studyTitle.value.trim();
+    const date = studyDate.value;
+    if (!institution || !subject || !title || !date) {
+        window.Atlas?.notify("Completá institución, materia, actividad y fecha.", "error");
+        return;
+    }
+
     const nextEvent = normalizeStudyEvent({
         ...existing,
         id: existing?.id ?? createStudyId(),
-        institution: studyInstitution.value.trim(),
-        subject: studySubject.value.trim(),
-        title: studyTitle.value.trim(),
+        institution,
+        subject,
+        title,
         type: studyType.value,
-        date: studyDate.value,
+        date,
         time: studyTime.value,
         priority: studyPriority.value,
         progress: studyProgress.value,
@@ -595,7 +608,10 @@ completeStudyDialog.addEventListener("click", (event) => {
 window.addEventListener("pageshow", reloadStudyEvents);
 window.addEventListener("focus", reloadStudyEvents);
 window.addEventListener("storage", (event) => {
-    if (event.key === STUDY_EVENTS_KEY) reloadStudyEvents();
+    if (window.Atlas.storageKeyMatches(event.key, STUDY_EVENTS_KEY)) reloadStudyEvents();
+});
+window.addEventListener("atlas:data-changed", event => {
+    if (!writingStudyEvents && event.detail?.key === STUDY_EVENTS_KEY) reloadStudyEvents();
 });
 
 document.addEventListener("visibilitychange", () => {

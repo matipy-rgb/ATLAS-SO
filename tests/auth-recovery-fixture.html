@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prueba de recuperación | ATLAS SO</title>
+    <link rel="stylesheet" href="../auth.css">
+    <script>
+        window.AtlasAuth = {
+            isConfigured: () => true,
+            getSession: async () => null,
+            redirectUrl: file => new URL(file, location.href).href,
+            client: {
+                auth: {
+                    signInWithPassword: async () => ({ error: null }),
+                    signUp: async () => ({ data: { session: null }, error: null }),
+                    resetPasswordForEmail: async email => {
+                        if (email.startsWith("empty")) {
+                            return { error: { message: "{}", code: "unexpected_failure", status: 500, name: "AuthApiError" } };
+                        }
+                        if (email.startsWith("rate")) {
+                            return { error: { message: "Too many emails", code: "over_email_send_rate_limit", status: 429, name: "AuthApiError" } };
+                        }
+                        return { data: {}, error: null };
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="../auth-page.js?v=0.8.0" defer></script>
+</head>
+<body data-auth-page="login">
+    <main class="auth-layout">
+        <section class="auth-story">
+            <a class="auth-brand" href="#"><span class="auth-brand-mark">A</span><span><strong>ATLAS SO</strong><small>Prueba controlada</small></span></a>
+            <div class="auth-story-copy">
+                <p class="auth-eyebrow">RECUPERACIÓN SEGURA</p>
+                <h1>Prueba del flujo.</h1>
+                <p>Esta pantalla no envía correos reales.</p>
+            </div>
+        </section>
+        <section class="auth-panel">
+            <div class="auth-card">
+                <div id="setupNotice" hidden></div>
+                <header class="auth-heading">
+                    <p class="auth-eyebrow">ACCESO SEGURO</p>
+                    <h2 id="authTitle">Bienvenido de vuelta</h2>
+                    <p id="authSubtitle">Ingresá con tu correo y contraseña.</p>
+                </header>
+                <nav class="auth-tabs">
+                    <button class="active" data-auth-view="login" type="button">Ingresar</button>
+                    <button data-auth-view="register" type="button">Crear cuenta</button>
+                </nav>
+                <form id="loginForm" class="auth-form" data-auth-form="login">
+                    <input id="loginEmail" type="email" required>
+                    <input id="loginPassword" type="password" required>
+                    <button class="auth-primary" type="submit">Ingresar</button>
+                    <button class="auth-link" data-auth-view="forgot" type="button">¿Olvidaste tu contraseña?</button>
+                </form>
+                <form id="registerForm" class="auth-form" data-auth-form="register" hidden>
+                    <input id="registerName" type="text" required>
+                    <input id="registerEmail" type="email" required>
+                    <input id="registerPassword" type="password" required>
+                    <button class="auth-primary" type="submit">Crear cuenta</button>
+                </form>
+                <form id="forgotForm" class="auth-form" data-auth-form="forgot" hidden>
+                    <label><span>Correo de la cuenta</span><input id="forgotEmail" type="email" placeholder="caso@atlas.test" required></label>
+                    <button class="auth-primary" type="submit">Enviar enlace de recuperación</button>
+                    <button class="auth-link" data-auth-view="login" type="button">Volver al ingreso</button>
+                </form>
+                <div id="authMessage" class="auth-message" role="status" aria-live="polite"></div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

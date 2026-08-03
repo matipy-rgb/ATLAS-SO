@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self'; media-src 'self' blob:; manifest-src 'self'">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0b1220">
     <title>Recursos Humanos | ATLAS SO</title>
@@ -43,7 +45,7 @@
                     <span id="hrContextMark" class="hr-context-mark">AS</span>
                     <div>
                         <small>EMPRESA Y VISTA ACTUAL</small>
-                        <strong id="hrContextTitle">A Support · Nómina general</strong>
+                        <strong id="hrContextTitle">Mi empresa · Nómina general</strong>
                         <span id="hrContextCaption">Vista consolidada de la empresa</span>
                     </div>
                 </div>
@@ -61,8 +63,7 @@
                 <button data-hr-tab="calculations" type="button">Cálculo de horas</button>
                 <button data-hr-tab="news" type="button">Novedades</button>
                 <button data-hr-tab="contracts" type="button">Contratos</button>
-                <button data-hr-tab="payroll" type="button">Liquidación</button>
-                <button data-hr-tab="compliance" type="button">IPS y MTESS</button>
+                <button data-hr-tab="compliance" type="button">Checklist laboral</button>
                 <button data-hr-tab="ips" type="button">CSV IPS</button>
             </nav>
 
@@ -81,15 +82,15 @@
                     <div id="hrComplianceAlerts" class="hr-alert-stack"></div>
                 </article>
                 <article class="panel hr-command-card">
-                    <p class="section-kicker">PARÁMETROS DESDE 01/07/2026</p>
-                    <h2>Base salarial configurable</h2>
+                    <p class="section-kicker">REGLAS VISIBLES</p>
+                    <h2>Criterios del cálculo</h2>
                     <div class="hr-rate-list">
-                        <span><small>Mínimo mensual diurno</small><strong>G. 3.044.000</strong></span>
-                        <span><small>Mínimo mensual nocturno</small><strong>G. 3.957.200</strong></span>
+                        <span><small>Nocturnidad ordinaria</small><strong>+30 %</strong></span>
                         <span><small>Extra diurna</small><strong>+50 %</strong></span>
                         <span><small>Extra nocturna</small><strong>+100 %</strong></span>
+                        <span><small>Domingo / feriado</small><strong>Recargo legal</strong></span>
                     </div>
-                    <p class="hr-legal-note">Los valores se guardan con vigencia; un cambio futuro no modifica periodos cerrados.</p>
+                    <p class="hr-legal-note">El cálculo usa el horario y el salario de cada legajo. Es un control de horas auditable, no una liquidación salarial definitiva.</p>
                 </article>
                 <article class="panel hr-command-card">
                     <p class="section-kicker">FLUJO MENSUAL</p>
@@ -105,7 +106,7 @@
 
             <section class="panel hr-super-panel" data-hr-panel="people" hidden>
                 <header class="panel-header">
-                    <div><p class="section-kicker">NÓMINA SIN CUPO ARTIFICIAL</p><h2>Funcionarios</h2><p id="hrPeopleListCaption">0 registros</p></div>
+                    <div><p class="section-kicker">GESTIÓN DE FUNCIONARIOS</p><h2>Funcionarios</h2><p id="hrPeopleListCaption">0 registros</p></div>
                     <div class="hr-filter-row">
                         <input id="hrPeopleSearch" type="search" placeholder="Buscar nombre, CI, reloj o cargo">
                         <select id="hrPeopleStatus"><option value="active">Activos</option><option value="inactive-month">Inactivos del mes</option><option value="inactive">Inactivos</option><option value="all">Todos</option></select>
@@ -158,6 +159,8 @@
                                 <label><input type="checkbox" value="0"><span>Dom</span></label>
                             </div>
                         </fieldset>
+                        <label class="hr-wide checkbox-card hr-schedule-advanced-toggle"><input id="hrScheduleAdvancedToggle" type="checkbox"> Usar horas diferentes según el día</label>
+                        <div id="hrScheduleAdvanced" class="hr-wide hr-schedule-advanced" hidden></div>
                         <button class="primary-button" type="submit">Guardar horario</button>
                         <button id="hrScheduleCancel" class="secondary-button" type="button" hidden>Cancelar edición</button>
                     </form>
@@ -209,7 +212,7 @@
 
             <section class="panel hr-super-panel" data-hr-panel="calculations" hidden>
                 <header class="panel-header">
-                    <div><p class="section-kicker">REEMPLAZA LAS FÓRMULAS ROTAS DEL EXCEL</p><h2>Cálculo de horas</h2><p>Desglose auditable por funcionario y periodo, sin copiar errores #VALUE! ni #N/A.</p></div>
+                    <div><p class="section-kicker">CONTROL MENSUAL</p><h2>Cálculo de horas</h2><p>Revisá el detalle por funcionario y periodo antes de exportar el resultado.</p></div>
                     <div class="hr-attendance-toolbar">
                         <label><span>Periodo</span><input id="hrCalculationPeriod" type="month"></label>
                         <button id="hrRunCalculation" class="primary-button" type="button">Calcular</button>
@@ -255,33 +258,18 @@
                 <div id="hrContractHistory" class="hr-table-shell"></div>
             </section>
 
-            <section class="panel hr-super-panel" data-hr-panel="payroll" hidden>
-                <header class="panel-header"><div><p class="section-kicker">SIMULACIÓN</p><h2>Liquidación</h2><p>Estimación separada del cierre definitivo de horas.</p></div></header>
-                <form id="hrPayrollForm" class="hr-payroll-form">
-                    <label><span>Tipo</span><select id="hrWorkerType"><option value="monthly">Mensualizado</option><option value="daily">Jornalero</option><option value="parttime">Tiempo parcial</option></select></label>
-                    <label><span>Salario mensual</span><input id="hrSalary" type="number" min="0" value="3044000"></label>
-                    <label><span>Nocturnas 30 %</span><input id="hrNightHours" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Extras 50 %</span><input id="hrExtraDay" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Extras 100 %</span><input id="hrExtraNight" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Domingo / feriado</span><input id="hrHolidayHours" type="number" min="0" step="0.01" value="0"></label>
-                    <label><span>Ausencias injustificadas</span><input id="hrAbsentDays" type="number" min="0" step="1" value="0"></label>
-                    <button class="primary-button" type="submit">Simular</button>
-                </form>
-                <div id="hrPayrollResult" class="hr-payroll-result"></div>
-            </section>
-
             <section class="panel hr-super-panel" data-hr-panel="compliance" hidden>
-                <header class="panel-header"><div><p class="section-kicker">CONTROL DE COMUNICACIONES</p><h2>IPS y MTESS</h2><p>Altas, bajas, permisos, vacaciones, reposos y vencimientos pendientes.</p></div></header>
+                <header class="panel-header"><div><p class="section-kicker">CONTROL INTERNO</p><h2>Checklist de altas y bajas</h2><p>Recordatorios generados al activar o inactivar funcionarios. La confirmación indica control interno; no reemplaza la presentación ante IPS o MTESS.</p></div></header>
                 <div id="hrComplianceList" class="hr-table-shell"></div>
             </section>
 
             <section class="panel ips-panel" data-hr-panel="ips" hidden>
                 <header class="panel-header ips-panel-header">
                     <div><p class="section-kicker">IPS · MOVIMIENTOS POR LOTE</p><h2>Captura REOP a CSV de permisos</h2><p>Leé la captura, revisá los datos detectados y descargá el archivo.</p></div>
-                    <span class="ips-patronal">Patronal · 0005-82-01080</span>
+                    <span id="ipsPatronal" class="ips-patronal">Patronal · Sin configurar</span>
                 </header>
                 <div class="ips-import-grid">
-                    <label class="ips-drop-zone" for="ipsScreenshot"><input id="ipsScreenshot" type="file" accept="image/png,image/jpeg,image/webp" hidden><span class="ips-drop-icon">⇧</span><strong>Subir captura del REOP</strong><small>PNG, JPG o WebP</small></label>
+                    <label class="ips-drop-zone" for="ipsScreenshot"><input id="ipsScreenshot" type="file" accept="image/png,image/jpeg,image/webp" hidden><span class="ips-drop-icon">⇧</span><strong>Subir captura del REOP</strong><small>PNG, JPG o WebP · hasta 15 MB</small></label>
                     <div class="ips-import-copy"><strong>Reglas activas</strong><ul><li>Solo registros PERMISO.</li><li>Código 11 y documento como ID.</li><li>Fecha Alta como fecha del documento.</li><li>CSV UTF-8 separado por punto y coma.</li></ul></div>
                 </div>
                 <div id="ipsProgress" class="ips-progress" hidden><span><i id="ipsProgressBar"></i></span><strong id="ipsProgressText">Preparando lectura…</strong></div>
@@ -298,7 +286,7 @@
     <dialog id="employeeDialog">
         <form id="employeeForm">
             <input id="employeeId" type="hidden">
-            <div class="dialog-heading"><div><p class="section-kicker">LEGAJO</p><h2 id="employeeDialogTitle">Nuevo funcionario</h2><p>Los campos alimentan nómina, cálculo y contratos.</p></div><button id="closeEmployeeDialog" class="icon-button" type="button">×</button></div>
+            <div class="dialog-heading"><div><p class="section-kicker">LEGAJO</p><h2 id="employeeDialogTitle">Nuevo funcionario</h2><p>Los campos alimentan nómina, cálculo y contratos.</p></div><button id="closeEmployeeDialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
             <div class="form-grid">
                 <label class="field span-3"><span>Cédula</span><input id="employeeCI" inputmode="numeric" maxlength="20" required></label>
                 <label class="field span-6"><span>Apellidos y nombres</span><input id="employeeName" maxlength="120" required></label>
@@ -308,9 +296,9 @@
                 <label class="field span-4"><span>Centro de costo</span><input id="employeeCostCenter" maxlength="80"></label>
                 <label class="field span-3"><span>Ingreso</span><input id="employeeStartDate" type="date"></label>
                 <label class="field span-3"><span>Salida</span><input id="employeeEndDate" type="date"></label>
-                <label class="field span-3"><span>Estado</span><select id="employeeStatus"><option value="active">Activo</option><option value="inactive-month">Inactivo del mes</option><option value="inactive">Inactivo</option></select></label>
+                <label class="field span-3"><span>Estado</span><select id="employeeStatus"><option value="active">Activo</option><option value="inactive">Inactivo</option></select></label>
                 <label class="field span-3"><span>Modalidad</span><select id="employeeWorkerType"><option value="monthly">Mensualizado</option><option value="daily">Jornalero</option><option value="parttime">Tiempo parcial</option></select></label>
-                <label class="field span-3"><span>Salario</span><input id="employeeSalary" type="number" min="0" value="3044000"></label>
+                <label class="field span-3"><span>Remuneración nominal (Gs.)</span><input id="employeeSalary" type="number" min="0" value="0" placeholder="Ingresá el monto real"><small id="employeeSalaryHelp">Monto mensual acordado.</small></label>
                 <label class="field span-3"><span>Nacimiento</span><input id="employeeBirthDate" type="date"></label>
                 <label class="field span-3"><span>Sexo</span><select id="employeeSex"><option value="">Sin indicar</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select></label>
                 <label class="field span-3"><span>Estado civil</span><input id="employeeCivilStatus" maxlength="50"></label>
@@ -329,7 +317,7 @@
     <dialog id="absenceDialog">
         <form id="absenceForm">
             <input id="absenceId" type="hidden">
-            <div class="dialog-heading"><div><p class="section-kicker">NOVEDAD</p><h2 id="absenceDialogTitle">Registrar ausencia</h2><p>La novedad luego puede justificar una FALTA.</p></div><button id="closeAbsenceDialog" class="icon-button" type="button">×</button></div>
+            <div class="dialog-heading"><div><p class="section-kicker">NOVEDAD</p><h2 id="absenceDialogTitle">Registrar ausencia</h2><p>La novedad luego puede justificar una FALTA.</p></div><button id="closeAbsenceDialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
             <div class="form-grid">
                 <label class="field span-7"><span>Funcionario</span><select id="absenceEmployee" required></select></label>
                 <label class="field span-5"><span>Tipo</span><select id="absenceType"><option value="vacation">Vacaciones</option><option value="medical">Reposo médico</option><option value="maternity">Maternidad</option><option value="permission">Permiso</option><option value="suspension">Suspensión</option><option value="other">Otro</option></select></label>
@@ -345,7 +333,7 @@
 
     <dialog id="hrContextDialog" class="hr-context-dialog">
         <form method="dialog">
-            <div class="dialog-heading"><div><p class="section-kicker">EMPRESA Y CLIENTE</p><h2 id="hrContextCompanyStep">Elegí la empresa administrada</h2><div id="hrContextClientStep" hidden><h2>Elegí la vista o el cliente</h2><p id="hrContextSelectedCompany"></p></div></div><button class="icon-button" value="cancel">×</button></div>
+            <div class="dialog-heading"><div><p class="section-kicker">EMPRESA Y CLIENTE</p><h2 id="hrContextCompanyStep">Elegí la empresa administrada</h2><div id="hrContextClientStep" hidden><h2>Elegí la vista o el cliente</h2><p id="hrContextSelectedCompany"></p></div></div><button class="icon-button" value="cancel" aria-label="Cerrar">×</button></div>
             <button id="hrContextBack" class="hr-back-link" type="button">← Volver a empresas</button>
             <div id="hrCompanyList" class="hr-company-list"></div>
             <div id="hrClientList" class="hr-company-list"></div>
@@ -355,19 +343,22 @@
 
     <dialog id="hrIdentityDialog">
         <form id="hrIdentityForm">
-            <div class="dialog-heading"><div><p class="section-kicker">IDENTIDAD EDITABLE</p><h2 id="hrIdentityTitle">Editar</h2></div><button class="icon-button" data-close type="button">×</button></div>
+            <div class="dialog-heading"><div><p class="section-kicker">IDENTIDAD EDITABLE</p><h2 id="hrIdentityTitle">Editar</h2></div><button class="icon-button" data-close type="button" aria-label="Cerrar">×</button></div>
             <div class="hr-identity-editor">
                 <label class="hr-logo-editor"><span id="hrIdentityLogoPreview"><span>?</span></span><strong>Cambiar logo</strong><input id="hrIdentityLogo" type="file" accept="image/png,image/jpeg,image/webp"></label>
                 <div class="form-grid">
                     <label class="field span-12"><span>Nombre</span><input id="hrIdentityName" required maxlength="100"></label>
                     <label class="field span-12" data-identity-for="client"><span>Descripción</span><input id="hrIdentityDetail" maxlength="120"></label>
                     <label class="field span-12" data-identity-for="company"><span>Razón social para documentos</span><input id="hrIdentityLegalName" maxlength="140"></label>
-                    <label class="field span-4" data-identity-for="company"><span>RUC</span><input id="hrIdentityRuc" maxlength="40"></label>
-                    <label class="field span-5" data-identity-for="company"><span>Representante</span><input id="hrIdentityRepresentative" maxlength="120"></label>
-                    <label class="field span-3" data-identity-for="company"><span>CI representante</span><input id="hrIdentityRepresentativeCI" maxlength="40"></label>
+                    <label class="field span-3" data-identity-for="company"><span>RUC</span><input id="hrIdentityRuc" maxlength="40"></label>
+                    <label class="field span-3" data-identity-for="company"><span>Número patronal IPS</span><input id="hrIdentityPatronal" inputmode="numeric" pattern="[0-9-]{5,30}" maxlength="30" placeholder="0000-00-00000"></label>
+                    <label class="field span-4" data-identity-for="company"><span>Representante</span><input id="hrIdentityRepresentative" maxlength="120"></label>
+                    <label class="field span-2" data-identity-for="company"><span>CI representante</span><input id="hrIdentityRepresentativeCI" maxlength="40"></label>
+                    <label class="field span-4" data-identity-for="company"><span>Ciudad para documentos</span><input id="hrIdentityDocumentCity" maxlength="80" placeholder="Ej: Asunción"></label>
+                    <label class="field span-8" data-identity-for="company"><span>Domicilio legal</span><input id="hrIdentityAddress" maxlength="180"></label>
                     <label class="field span-6" data-identity-for="client"><span>Lugar de trabajo</span><input id="hrIdentityWorkplace" maxlength="160"></label>
                     <label class="field span-6" data-identity-for="client"><span>Centro de costo</span><input id="hrIdentityCostCenter" maxlength="80"></label>
-                    <label class="field span-12" data-identity-for="client"><span>Modelo contractual</span><select id="hrIdentityContract"><option value="">Sin modelo asignado</option><option value="amancer">Contrato AMANCER</option><option value="bdp">Contrato BDP</option><option value="arcor">Contrato ARCOR</option><option value="polo">Contrato POLO</option><option value="geomax">Contrato GEOMAX</option></select></label>
+                    <label class="field span-12" data-identity-for="client"><span>Modelo contractual</span><select id="hrIdentityContract"><option value="">Sin modelo asignado</option><option value="general">Contrato general</option></select></label>
                 </div>
             </div>
             <div class="dialog-actions"><button id="hrIdentityCancel" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar cambios</button></div>

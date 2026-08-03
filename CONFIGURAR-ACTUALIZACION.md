@@ -1,89 +1,102 @@
-# Configurar ATLAS SO v0.7.0
+# Configurar ATLAS SO v0.8.0
 
-La pantalla de acceso y la conexión pública ya están configuradas. No coloques contraseñas, App Passwords ni la `service_role key` dentro de ningún archivo del proyecto.
+Esta guía separa una instalación nueva de una actualización existente. Antes de
+tocar la base de datos, descargá una copia completa desde ATLAS SO y conservá el
+respaldo anterior del proyecto.
 
-## 1. Crear la base de ATLAS SO
+## Requisitos
 
-1. Creá un proyecto en Supabase.
-2. Abrí **SQL Editor**.
-3. Copiá y ejecutá todo `supabase/atlas-schema.sql`.
-4. Entrá en **Settings > API**.
-5. Confirmá que el proyecto muestre las tablas creadas.
+- Node.js 22 o 24 LTS.
+- Un proyecto de Supabase.
+- Sitio servido por HTTP/HTTPS; no abras los HTML con `file://`.
+- Nunca guardes contraseñas, App Passwords ni la `service_role key` en el
+  proyecto.
+- Completá `atlas-config.js` localmente con la URL y la publishable key; la
+  entrega no trae valores asociados a una instancia real.
 
-Esta compilación ya contiene la **Project URL** y la **Publishable key** proporcionadas. Ambas son datos públicos de la aplicación; la seguridad real la aplican las políticas RLS del archivo SQL.
+En PowerShell podés usar `npm.cmd` si la política del equipo bloquea `npm.ps1`.
 
-La Publishable key se puede usar en el navegador. La seguridad real la aplican las políticas RLS del archivo SQL.
+## Base de datos
 
-## 2. Configurar las direcciones permitidas
+### Instalación nueva
+
+En **Supabase > SQL Editor**, ejecutá una sola vez:
+
+```text
+supabase/atlas-schema.sql
+supabase/v0.8-security-privacy-sync.sql
+```
+
+No ejecutes las migraciones históricas en una base nueva. Después de crear y
+confirmar la cuenta principal, copiá su UID desde Authentication > Users, editá
+`supabase/configure-hr-admin.example.sql` y ejecutalo en el SQL Editor.
+
+### Actualización de una instalación existente
+
+- Si ya instalaste v0.7 o v0.7.1, ejecutá al final:
+
+  ```text
+  supabase/v0.8-security-privacy-sync.sql
+  ```
+
+- Si venís de v0.6 o anterior y nunca aplicaste las migraciones de RR. HH.,
+  ejecutá, en este orden:
+
+  ```text
+  supabase/v0.4-rrhh-admin.sql
+  supabase/v0.7-rrhh-scale.sql
+  supabase/v0.7.1-security-hardening.sql
+  supabase/v0.8-security-privacy-sync.sql
+  ```
+
+Los scripts no borran la información de la aplicación. Aun así, confirmá que
+Supabase muestre `Success` antes de seguir.
+
+## Direcciones permitidas
 
 En **Authentication > URL Configuration** configurá:
 
 - Site URL local: `http://127.0.0.1:5500`
 - Redirect URL local: `http://127.0.0.1:5500/**`
-- Cuando publiques: agregá también la dirección HTTPS real de ATLAS SO con `/**`.
+- Si usás `localhost`, agregá también `http://localhost:5500/**`.
+- Al publicar, agregá la dirección HTTPS real con `/**`.
 
-Si Live Server usa `http://localhost:5500`, agregá esa dirección también.
+## Recuperación de contraseña
 
-## 3. Correo provisional para recuperar contraseñas
+El remitente se configura en **Authentication > SMTP Settings**. No se escribe
+en el código. El correo incluido por Supabase sirve para pruebas limitadas; para
+usuarios externos configurá SMTP propio.
 
-El remitente no se escribe en el código. Se configura en **Authentication > SMTP Settings** para que su contraseña nunca quede expuesta.
+## Verificación antes de publicar
 
-Para las primeras pruebas podés usar el servicio de correo incluido por Supabase, pero tiene límites fuertes y solo envía a direcciones autorizadas del equipo. Para probar con otras personas necesitás SMTP propio.
+Desde la carpeta del proyecto:
 
-Prepará estos datos del correo provisional:
+```powershell
+npm.cmd ci
+npm.cmd run check
+npm.cmd audit
+npm.cmd run mobile:prepare
+```
 
-- Dirección remitente.
-- Nombre visible: `ATLAS SO`.
-- Host SMTP.
-- Puerto.
-- Usuario SMTP.
-- Contraseña SMTP o App Password.
+El resultado esperado es:
 
-Luego activá **Custom SMTP** y cargalos allí. Cuando ATLAS SO tenga dominio y correo propio, solo se reemplaza esta configuración; el código no cambia.
+- Toda la suite de ATLAS SO aprobada.
+- `found 0 vulnerabilities`.
+- Carpeta `www` generada para Android.
 
-## 4. Primera entrada y datos anteriores
+Después de aplicar el SQL en la base real, probá con dos cuentas diferentes:
 
-1. Abrí `login.html` con Live Server.
-2. Creá primero tu cuenta de propietario.
-3. Confirmá el correo.
-4. Iniciá sesión.
+1. La cuenta configurada por UID puede abrir RR. HH. y administrar miembros.
+2. Una cuenta común no puede abrir RR. HH.
+3. Ninguna cuenta ve los datos personales de otra.
+4. Un editor puede modificar datos, pero no asignarse un rol administrativo.
+5. Una escritura atrasada no pisa una versión más nueva y una marcación borrada
+   no reaparece al sincronizar otro dispositivo.
+6. Los modos de restauración `COMBINAR` y `REEMPLAZAR` conservan comprobantes.
 
-En el primer ingreso, ATLAS SO asigna a esa cuenta tus datos antiguos de Finanzas, Estudios, Trabajo, Salud, Proyectos y Personal. Por eso la cuenta del propietario debe ser la primera que ingrese en el navegador donde ya existen datos.
+## Instalación móvil
 
-Cada persona de prueba debe crear su propia cuenta. No compartas tu contraseña: así se comprueba de verdad que los datos estén separados.
-
-## 5. Instalar en el teléfono
-
-Cuando el sitio esté publicado con HTTPS, abrilo en Chrome para Android y elegí **Instalar aplicación**. La versión instalada se actualiza al publicar cambios.
-
-## 6. Descargar un APK de prueba
-
-Después de subir esta versión a GitHub:
-
-1. Abrí la pestaña **Actions** del repositorio.
-2. Elegí **Generar APK de prueba**.
-3. Presioná **Run workflow**.
-4. Al terminar, descargá el archivo `atlas-so-debug-apk` en **Artifacts**.
-5. Extraé el ZIP e instalá `app-debug.apk` en Android.
-
-El APK de prueba no es todavía una versión firmada para Play Store. Esa firma se prepara cuando la aplicación esté estable.
-# ATLAS SO v0.4 · activación de RR. HH. privado
-
-Antes de reemplazar los archivos en tu proyecto, abrí:
-
-**Supabase → SQL Editor → New query**
-
-Copiá todo el contenido de `supabase/v0.4-rrhh-admin.sql`, ejecutalo con
-**Run** y confirmá que aparezca `Success`. Este paso fija a la primera cuenta
-registrada como única administradora de Recursos Humanos y bloquea las claves
-`atlasHR...` para cualquier otra cuenta.
-
-Después reemplazá los archivos, cerrá ATLAS SO, volvé a abrirlo y presioná
-`Ctrl + F5`.
-
-# ATLAS SO v0.7 · marcaciones a escala
-
-Después de tener activa la protección de RR. HH. de la v0.4, ejecutá una sola
-vez `supabase/v0.7-rrhh-scale.sql`. Esta migración crea la tabla mensual de
-marcaciones con acceso exclusivo para la cuenta administradora. No borra ni
-reemplaza datos anteriores.
+La PWA puede instalarse desde Chrome cuando el sitio esté publicado con HTTPS.
+Para Android, `npm run mobile:prepare` prepara `www`; el flujo de GitHub Actions
+genera el APK de prueba. El APK debe probarse en un dispositivo antes de
+distribuirlo.

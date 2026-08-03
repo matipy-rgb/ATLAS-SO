@@ -1,5 +1,6 @@
--- ATLAS SO v0.4 · ejecutar una sola vez en Supabase > SQL Editor.
--- Fija como administrador de RRHH a la primera cuenta registrada.
+-- ATLAS SO v0.4 · compatibilidad segura para instalaciones que aún recorren
+-- las migraciones históricas. El administrador de RR. HH. se configura solo
+-- mediante configure-hr-admin.example.sql con un UID verificado.
 
 create table if not exists public.atlas_system_settings (
     singleton boolean primary key default true check (singleton),
@@ -7,9 +8,8 @@ create table if not exists public.atlas_system_settings (
     updated_at timestamptz not null default now()
 );
 
-insert into public.atlas_system_settings (singleton, hr_admin_user_id)
-select true, id from auth.users order by created_at asc limit 1
-on conflict (singleton) do nothing;
+drop trigger if exists on_auth_user_created_atlas_hr_admin on auth.users;
+drop function if exists public.assign_first_hr_admin();
 
 alter table public.atlas_system_settings enable row level security;
 
@@ -29,7 +29,7 @@ create or replace function public.can_access_app_data(target_workspace uuid, tar
 returns boolean language sql stable security definer set search_path = public
 as $$
     select public.is_workspace_member(target_workspace)
-       and (target_key not like 'atlasHR%' or public.is_hr_admin());
+       and (lower(coalesce(target_key, '')) not like 'atlashr%' or public.is_hr_admin());
 $$;
 
 drop policy if exists "app_data_select_member" on public.app_data;

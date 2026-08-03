@@ -24,27 +24,30 @@
     const originalReadArray = A.readArray.bind(A);
     const originalWriteJSON = A.writeJSON.bind(A);
     const esc = A.escapeHTML;
+    const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+
+    function safeLogo(value) {
+        const logo = String(value || "");
+        return logo.length <= 1_500_000 && /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/]+=*$/i.test(logo)
+            ? logo
+            : "";
+    }
 
     const initialCompany = {
-        id: "a-support",
-        name: "A Support",
-        legalName: "Gestión y Cambio E.A.S.",
-        rosterName: "Nómina general",
-        logo: "",
-        ruc: "80120408-9",
-        representative: "Marcelo Gul Pavoni",
-        representativeCI: "4.322.427",
-        address: "Aviadores del Chaco Nº 3207, Edificio Trading Park, Asunción",
-        active: true,
-        clients: [
-            { id: "arcor", name: "Arcor", logo: "", contractTemplateId: "arcor", active: true },
-            { id: "bdp", name: "BDP", detail: "Bebidas del Paraguay", logo: "", contractTemplateId: "bdp", active: true },
-            { id: "servieri", name: "Servieri", logo: "", contractTemplateId: "", active: true },
-            { id: "geomax", name: "Geomax", logo: "", contractTemplateId: "geomax", active: true },
-            { id: "polo-este", name: "Polo Este", logo: "", contractTemplateId: "polo", active: true },
-            { id: "amancer", name: "AMANCER", logo: "", contractTemplateId: "amancer", active: true }
-        ]
-    };
+    id: "empresa-inicial",
+    name: "Mi empresa",
+    legalName: "",
+    rosterName: "Nómina general",
+    logo: "",
+    ruc: "",
+    patronalNumber: "",
+    representative: "",
+    representativeCI: "",
+    documentCity: "",
+    address: "",
+    active: true,
+    clients: []
+};
 
     function slug(value, fallback = "registro") {
         const clean = String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -57,7 +60,7 @@
             id: String(item?.id || slug(item?.name, "cliente")),
             name: String(item?.name || "Cliente sin nombre").trim(),
             detail: String(item?.detail || "").trim(),
-            logo: String(item?.logo || ""),
+            logo: safeLogo(item?.logo),
             contractTemplateId: String(item?.contractTemplateId || ""),
             workplace: String(item?.workplace || ""),
             costCenter: String(item?.costCenter || item?.code || ""),
@@ -69,15 +72,19 @@
 
     function normalizeCompany(item) {
         const legacyGeneral = (item?.clients || []).find(client => String(client.id) === "general");
+        const hasPatronal = item && Object.prototype.hasOwnProperty.call(item, "patronalNumber");
+        const hasDocumentCity = item && Object.prototype.hasOwnProperty.call(item, "documentCity");
         return {
             id: String(item?.id || slug(item?.name, "empresa")),
             name: String(item?.name || "Empresa sin nombre").trim(),
             legalName: String(item?.legalName || item?.name || "Empresa sin nombre").trim(),
             rosterName: String(item?.rosterName || legacyGeneral?.name || "Nómina general").trim(),
-            logo: String(item?.logo || ""),
+            logo: safeLogo(item?.logo),
             ruc: String(item?.ruc || ""),
+            patronalNumber: String(hasPatronal ? item.patronalNumber || "" : ""),
             representative: String(item?.representative || ""),
             representativeCI: String(item?.representativeCI || ""),
+            documentCity: String(hasDocumentCity ? item.documentCity || "" : ""),
             address: String(item?.address || ""),
             active: item?.active !== false,
             clients: (Array.isArray(item?.clients) ? item.clients : [])
@@ -257,6 +264,8 @@
         if (caption) caption.textContent = client
             ? "Cliente seleccionado dentro de la empresa administrada"
             : `Vista consolidada · ${company.clients.length} cliente(s), sin duplicar funcionarios`;
+        const patronal = document.querySelector("#ipsPatronal");
+        if (patronal) patronal.textContent = `Patronal · ${company.patronalNumber || "Sin configurar"}`;
     }
 
     function openContext(mode = "company") {
@@ -309,6 +318,10 @@
     function fileAsDataURL(file) {
         return new Promise((resolve, reject) => {
             if (!file) return resolve("");
+            if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > MAX_LOGO_BYTES) {
+                reject(new Error("Formato o tamaño de logo no permitido."));
+                return;
+            }
             const image = new Image();
             const reader = new FileReader();
             reader.onerror = reject;
@@ -343,9 +356,12 @@
         document.querySelector("#hrIdentityName").value = type === "roster" ? company.rosterName : item?.name || "";
         document.querySelector("#hrIdentityDetail").value = type === "client" ? item?.detail || "" : "";
         document.querySelector("#hrIdentityRuc").value = type === "company" ? item?.ruc || "" : "";
+        document.querySelector("#hrIdentityPatronal").value = type === "company" ? item?.patronalNumber || "" : "";
         document.querySelector("#hrIdentityLegalName").value = type === "company" ? item?.legalName || item?.name || "" : "";
         document.querySelector("#hrIdentityRepresentative").value = type === "company" ? item?.representative || "" : "";
         document.querySelector("#hrIdentityRepresentativeCI").value = type === "company" ? item?.representativeCI || "" : "";
+        document.querySelector("#hrIdentityDocumentCity").value = type === "company" ? item?.documentCity || "Asunción" : "";
+        document.querySelector("#hrIdentityAddress").value = type === "company" ? item?.address || "" : "";
         document.querySelector("#hrIdentityWorkplace").value = type === "client" ? item?.workplace || "" : "";
         document.querySelector("#hrIdentityCostCenter").value = type === "client" ? item?.costCenter || "" : "";
         document.querySelector("#hrIdentityContract").value = type === "client" ? item?.contractTemplateId || "" : "";
@@ -355,6 +371,7 @@
         const preview = document.querySelector("#hrIdentityLogoPreview");
         const logo = type === "roster" ? company.logo : item?.logo;
         preview.innerHTML = logo ? `<img src="${esc(logo)}" alt="">` : `<span>${esc(String(type === "roster" ? company.name : item?.name || "?").slice(0, 2).toUpperCase())}</span>`;
+        delete preview.dataset.logo;
         document.querySelector("#hrIdentityLogo").value = "";
         dialog.showModal();
     }
@@ -406,7 +423,8 @@
             if (data) document.querySelector("#hrIdentityLogoPreview").innerHTML = `<img src="${esc(data)}" alt="">`;
             document.querySelector("#hrIdentityLogoPreview").dataset.logo = data;
         } catch {
-            A.notify("No se pudo leer ese logo.", "error");
+            event.target.value = "";
+            A.notify("El logo debe ser PNG, JPG o WebP y pesar hasta 5 MB.", "error");
         }
     });
 
@@ -425,8 +443,11 @@
                     name,
                     legalName: document.querySelector("#hrIdentityLegalName").value.trim() || name,
                     ruc: document.querySelector("#hrIdentityRuc").value.trim(),
+                    patronalNumber: document.querySelector("#hrIdentityPatronal").value.trim(),
                     representative: document.querySelector("#hrIdentityRepresentative").value.trim(),
                     representativeCI: document.querySelector("#hrIdentityRepresentativeCI").value.trim(),
+                    documentCity: document.querySelector("#hrIdentityDocumentCity").value.trim(),
+                    address: document.querySelector("#hrIdentityAddress").value.trim(),
                     logo: logo || existing.logo,
                     updatedAt: new Date().toISOString()
                 });
@@ -438,8 +459,11 @@
                     logo,
                     rosterName: "Nómina general",
                     ruc: document.querySelector("#hrIdentityRuc").value.trim(),
+                    patronalNumber: document.querySelector("#hrIdentityPatronal").value.trim(),
                     representative: document.querySelector("#hrIdentityRepresentative").value.trim(),
                     representativeCI: document.querySelector("#hrIdentityRepresentativeCI").value.trim(),
+                    documentCity: document.querySelector("#hrIdentityDocumentCity").value.trim(),
+                    address: document.querySelector("#hrIdentityAddress").value.trim(),
                     clients: []
                 });
                 companies.push(next);

@@ -18,14 +18,21 @@
     const esc = A.escapeHTML;
     let page = 1;
 
+    function derivedStatus(item) {
+        const raw = item?.status || (item?.active === false ? "inactive" : "active");
+        if (raw === "active") return "active";
+        return String(item?.endDate || "").slice(0, 7) === A.localDate().slice(0, 7)
+            ? "inactive-month"
+            : "inactive";
+    }
+
     function normalizePerson(item) {
         const legacyClient = String(item?.client || item?.department || "").trim().toLowerCase();
         const linkedClient = item?.clientId || C.company.clients.find(client =>
             client.name.toLowerCase() === legacyClient || client.id === legacyClient
         )?.id || (C.isGeneral ? "" : C.active.clientId);
-        let status = item?.status;
-        if (!status) status = item?.active === false ? "inactive" : "active";
-        if (status === "inactive" && String(item?.endDate || "").slice(0, 7) === A.localDate().slice(0, 7)) status = "inactive-month";
+        const status = derivedStatus(item);
+        const salary = Number(item?.salary);
         return {
             id: String(item?.id || A.createId()),
             ci: String(item?.ci || "").replace(/\D/g, ""),
@@ -40,7 +47,7 @@
             statusNote: String(item?.statusNote || ""),
             active: status === "active",
             workerType: item?.workerType || "monthly",
-            salary: Number(item?.salary || 3044000),
+            salary: Number.isFinite(salary) && salary >= 0 ? salary : 0,
             birthDate: item?.birthDate || "",
             sex: String(item?.sex || ""),
             civilStatus: String(item?.civilStatus || ""),
@@ -72,9 +79,10 @@
         };
     }
 
-    let people = A.readArray(PEOPLE_KEY).map(normalizePerson);
+    const storedPeople = A.readArray(PEOPLE_KEY);
+    let people = storedPeople.map(normalizePerson);
     let absences = A.readArray(ABSENCES_KEY).map(normalizeAbsence);
-    A.writeJSON(PEOPLE_KEY, people);
+    if (JSON.stringify(storedPeople) !== JSON.stringify(people)) A.writeJSON(PEOPLE_KEY, people);
     if (absences.length) A.writeJSON(ABSENCES_KEY, absences);
 
     function savePeople() {
@@ -104,11 +112,12 @@
         return A.localDate(date);
     }
 
-    function firstWorkdayAfter(endDate) {
+    function firstWorkdayAfter(endDate, employeeId = "") {
         let date = addDays(endDate, 1);
         for (let count = 0; count < 14; count += 1) {
             const day = A.parseDate(date)?.getDay();
-            if (day !== 0) return date;
+            const assigned = employeeId ? window.AtlasHRSchedules?.scheduleFor(employeeId, date) : null;
+            if (assigned ? window.AtlasHRCalc?.scheduleRule(assigned, date) : day !== 0) return date;
             date = addDays(date, 1);
         }
         return date;
@@ -208,6 +217,15 @@
         if (element) element.value = value ?? "";
     }
 
+    function updateSalaryHelp() {
+        const type = q("#employeeWorkerType").value;
+        q("#employeeSalaryHelp").textContent = type === "daily"
+            ? "Ingresá el jornal nominal por día."
+            : type === "parttime"
+                ? "Ingresá el monto mensual acordado para tiempo parcial."
+                : "Ingresá el salario nominal mensual.";
+    }
+
     function openEmployee(item = null) {
         q("#employeeForm").reset();
         setField("#employeeId", item?.id);
@@ -219,9 +237,10 @@
         setField("#employeeCostCenter", item?.costCenter);
         setField("#employeeStartDate", item?.startDate);
         setField("#employeeEndDate", item?.endDate);
-        setField("#employeeStatus", item?.status || "active");
+        setField("#employeeStatus", item?.status === "active" || !item ? "active" : "inactive");
         setField("#employeeWorkerType", item?.workerType || "monthly");
-        setField("#employeeSalary", item?.salary || 3044000);
+        setField("#employeeSalary", item ? item.salary : 0);
+        updateSalaryHelp();
         setField("#employeeBirthDate", item?.birthDate);
         setField("#employeeSex", item?.sex);
         setField("#employeeCivilStatus", item?.civilStatus);
@@ -268,6 +287,10 @@
         if (people.some(item => item.clockId && q("#employeeClockId").value.trim() && item.clockId === q("#employeeClockId").value.trim() && item.id !== id)) return A.notify("Ese ID del reloj ya está vinculado.", "error");
         const current = people.find(item => item.id === id);
         const status = q("#employeeStatus").value;
+        const startDate = q("#employeeStartDate").value;
+        const endDate = q("#employeeEndDate").value;
+        if (status !== "active" && !endDate) return A.notify("Indicá la fecha de salida para inactivar al funcionario.", "error");
+        if (startDate && endDate && A.parseDate(endDate) < A.parseDate(startDate)) return A.notify("La fecha de salida no puede ser anterior al ingreso.", "error");
         const next = normalizePerson({
             ...current,
             id: current?.id || String(A.createId()),
@@ -277,8 +300,8 @@
             clientId: q("#employeeClient").value,
             position: q("#employeePosition").value,
             costCenter: q("#employeeCostCenter").value,
-            startDate: q("#employeeStartDate").value,
-            endDate: q("#employeeEndDate").value,
+            startDate,
+            endDate,
             status,
             statusNote: q("#employeeStatusNote").value,
             workerType: q("#employeeWorkerType").value,
@@ -340,7 +363,7 @@
                 <div class="hr-card-actions">
                     ${!item.actualReturnDate && !item.cancelled && state.key !== "upcoming" ? `<button data-absence-return="${esc(item.id)}" type="button">Confirmar reintegro</button>` : ""}
                     ${!item.actualReturnDate && !item.cancelled ? `<button data-absence-edit="${esc(item.id)}" type="button">Editar</button>` : ""}
-                    <button data-absence-delete="${esc(item.id)}" type="button">Eliminar</button>
+                    <button data-absence-cancel="${esc(item.id)}" type="button">${item.cancelled ? "Reactivar" : "Anular"}</button>
                 </div></article>`;
         }).join("");
     }
@@ -358,7 +381,7 @@
         setField("#absenceType", item?.type || "vacation");
         setField("#absenceStart", item?.startDate || A.localDate());
         setField("#absenceEnd", item?.endDate || A.localDate());
-        setField("#absenceReturn", item?.returnDate || firstWorkdayAfter(A.localDate()));
+        setField("#absenceReturn", item?.returnDate || firstWorkdayAfter(A.localDate(), item?.employeeId));
         setField("#absenceNote", item?.note);
         q("#absenceDialogTitle").textContent = item ? "Editar novedad" : "Registrar ausencia";
         updateAbsencePreview();
@@ -368,7 +391,7 @@
     function updateAbsencePreview(autoReturn = false) {
         const start = q("#absenceStart").value;
         const end = q("#absenceEnd").value;
-        if (autoReturn && end) q("#absenceReturn").value = firstWorkdayAfter(end);
+        if (autoReturn && end) q("#absenceReturn").value = firstWorkdayAfter(end, q("#absenceEmployee").value);
         const total = calendarDays(start, end);
         q("#absencePreview").textContent = total ? `${total} día(s) calendario · reintegro ${A.formatDate(q("#absenceReturn").value)}` : "Revisá el rango de fechas.";
     }
@@ -379,6 +402,12 @@
         if (!calendarDays(q("#absenceStart").value, q("#absenceEnd").value)) return A.notify("El rango de fechas no es válido.", "error");
         if (A.parseDate(q("#absenceReturn").value) <= A.parseDate(q("#absenceEnd").value)) return A.notify("El reintegro debe ser posterior al último día.", "error");
         const current = absences.find(item => item.id === id);
+        const overlaps = absences.some(item => item.id !== id
+            && item.employeeId === q("#absenceEmployee").value
+            && !item.cancelled
+            && item.startDate <= q("#absenceEnd").value
+            && item.endDate >= q("#absenceStart").value);
+        if (overlaps) return A.notify("Ese funcionario ya tiene una novedad que se superpone con estas fechas.", "error");
         const next = normalizeAbsence({
             ...current,
             id: current?.id || String(A.createId()),
@@ -416,22 +445,26 @@
     q("#hrAbsenceList").addEventListener("click", event => {
         const edit = event.target.closest("[data-absence-edit]");
         const returned = event.target.closest("[data-absence-return]");
-        const deleted = event.target.closest("[data-absence-delete]");
+        const cancelled = event.target.closest("[data-absence-cancel]");
         if (edit) openAbsence(absences.find(item => item.id === edit.dataset.absenceEdit));
         if (returned) {
             absences = absences.map(item => item.id === returned.dataset.absenceReturn ? { ...item, actualReturnDate: A.localDate(), updatedAt: new Date().toISOString() } : item);
             saveAbsences(); renderAll();
         }
-        if (deleted && window.confirm("¿Eliminar esta novedad?")) {
-            absences = absences.filter(item => item.id !== deleted.dataset.absenceDelete);
+        if (cancelled && window.confirm(cancelled.textContent.trim() === "Reactivar" ? "¿Reactivar esta novedad?" : "¿Anular esta novedad sin borrar su historial?")) {
+            absences = absences.map(item => item.id === cancelled.dataset.absenceCancel
+                ? { ...item, cancelled: !item.cancelled, updatedAt: new Date().toISOString() }
+                : item);
             saveAbsences(); renderAll();
         }
     });
     ["#hrPeopleSearch", "#hrPeopleStatus", "#hrPeopleClient"].forEach(selector => q(selector).addEventListener("input", () => { page = 1; renderPeople(); }));
+    q("#employeeWorkerType").addEventListener("change", updateSalaryHelp);
     ["#hrSearch", "#hrStatusFilter", "#hrTypeFilter"].forEach(selector => q(selector).addEventListener("input", renderAbsences));
     q("#hrPeoplePrev").addEventListener("click", () => { page = Math.max(1, page - 1); renderPeople(); });
     q("#hrPeopleNext").addEventListener("click", () => { page += 1; renderPeople(); });
     q("#absenceEnd").addEventListener("change", () => updateAbsencePreview(true));
+    q("#absenceEmployee").addEventListener("change", () => updateAbsencePreview(true));
     ["#absenceStart", "#absenceReturn"].forEach(selector => q(selector).addEventListener("change", () => updateAbsencePreview(false)));
     window.addEventListener("atlas:hr-data-changed", event => {
         if (event.detail?.type === "people-import") {

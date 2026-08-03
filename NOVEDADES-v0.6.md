@@ -4,16 +4,14 @@
 
 RR. HH. ahora separa dos niveles:
 
-1. **Empresa administrada:** la organización para la que Matías gestiona el servicio.
+1. **Empresa administrada:** la organización para la que la persona usuaria gestiona el servicio.
 2. **Cliente operativo:** la empresa o cuenta donde se asignan funcionarios y operaciones.
 
-A Support incluye inicialmente:
+La versión original incluía una empresa de demostración con clientes ficticios:
 
-- Arcor · referencia de hasta 60 funcionarios.
-- BDP / Bebidas del Paraguay · hasta 5.
-- Servieri · hasta 1.
-- Geomax · hasta 2.
-- Polo Este · hasta 1.
+- Cliente Norte.
+- Cliente Centro.
+- Cliente Sur.
 
 Se pueden agregar nuevas empresas administradas y nuevos clientes. Cada espacio conserva por separado funcionarios, ausencias, sucursales, horarios, marcaciones, cumplimiento IPS/MTESS y demás registros.
 
@@ -33,7 +31,7 @@ La sección Funcionarios permite:
 
 ## Compatibilidad
 
-- La información anterior de RR. HH. se migra al espacio A Support → Arcor la primera vez.
+- La información anterior de RR. HH. se migra a la primera empresa configurada.
 - No requiere ejecutar un SQL nuevo.
 - Mantiene autenticación, sincronización, recuperación, PWA y preparación Android.
 - El lector Excel se incluye dentro del paquete para poder trabajar sin depender de una página externa.

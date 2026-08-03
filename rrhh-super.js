@@ -8,6 +8,9 @@
     const XLSX = window.XLSX;
     const q = selector => document.querySelector(selector);
     const esc = A.escapeHTML;
+    const MAX_SPREADSHEET_BYTES = 50 * 1024 * 1024;
+    const MAX_SPREADSHEET_ROWS = 250000;
+    const MAX_SPREADSHEET_COLUMNS = 200;
     const KEYS = {
         schedules: "atlasHRSchedules",
         assignments: "atlasHRScheduleAssignments",
@@ -20,8 +23,28 @@
     let assignments = A.readArray(KEYS.assignments).map(normalizeAssignment);
     let attendance = [];
     let stagedAttendance = [];
+    let stagedBaseAttendance = [];
     let stagedMappings = new Map();
     let calculations = [];
+    let editingScheduleRules = [];
+
+    function assertSpreadsheet(file, allowCSV = false) {
+        if (!XLSX) throw new Error("El lector de planillas no está disponible. Recargá la página.");
+        const extensions = allowCSV ? /\.(?:xlsx|xls|csv)$/i : /\.(?:xlsx|xls)$/i;
+        if (!extensions.test(file?.name || "")) throw new Error("Seleccioná una planilla compatible.");
+        if (file.size > MAX_SPREADSHEET_BYTES) throw new Error("La planilla supera el límite técnico de 50 MB.");
+    }
+
+    function assertSheetSize(sheet) {
+        if (!sheet) throw new Error("La planilla no contiene una hoja legible.");
+        if (!sheet["!ref"]) return;
+        const range = XLSX.utils.decode_range(sheet["!ref"]);
+        const rows = range.e.r - range.s.r + 1;
+        const columns = range.e.c - range.s.c + 1;
+        if (rows > MAX_SPREADSHEET_ROWS || columns > MAX_SPREADSHEET_COLUMNS) {
+            throw new Error(`La hoja tiene ${rows.toLocaleString("es-PY")} filas y ${columns} columnas; dividila en archivos más pequeños.`);
+        }
+    }
 
     function people() { return window.AtlasHRPeople?.all() || A.readArray("atlasHRPeople"); }
     function visiblePeople() { return C.visible(people()); }
@@ -136,11 +159,62 @@
         return Array.from(q("#hrScheduleDays").querySelectorAll("input:checked"), input => Number(input.value));
     }
 
+    function advancedRuleValues() {
+        return new Map(Array.from(q("#hrScheduleAdvanced").querySelectorAll("[data-rule-day]"), row => [
+            Number(row.dataset.ruleDay),
+            {
+                day: Number(row.dataset.ruleDay),
+                active: true,
+                start: row.querySelector("[data-rule-start]").value,
+                end: row.querySelector("[data-rule-end]").value,
+                breakMinutes: Number(row.querySelector("[data-rule-break]").value || 0),
+                tolerance: Number(row.querySelector("[data-rule-tolerance]").value || 0)
+            }
+        ]));
+    }
+
+    function renderAdvancedRules() {
+        const target = q("#hrScheduleAdvanced");
+        const current = advancedRuleValues();
+        const original = new Map(editingScheduleRules.map(rule => [Number(rule.day), rule]));
+        const common = {
+            start: q("#hrScheduleStart").value,
+            end: q("#hrScheduleEnd").value,
+            breakMinutes: Number(q("#hrScheduleBreak").value || 0),
+            tolerance: Number(q("#hrScheduleTolerance").value || 0)
+        };
+        const labels = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+        target.innerHTML = selectedDays().map(day => {
+            const rule = current.get(day) || original.get(day) || common;
+            return `<div data-rule-day="${day}" class="hr-schedule-rule-row">
+                <strong>${labels[day]}</strong>
+                <label><span>Entrada</span><input data-rule-start type="time" value="${esc(rule.start || "")}" required></label>
+                <label><span>Salida</span><input data-rule-end type="time" value="${esc(rule.end || "")}" required></label>
+                <label><span>Descanso</span><input data-rule-break type="number" min="0" max="300" value="${Number(rule.breakMinutes || 0)}"></label>
+                <label><span>Tolerancia</span><input data-rule-tolerance type="number" min="0" max="120" value="${Number(rule.tolerance || 0)}"></label>
+            </div>`;
+        }).join("");
+    }
+
+    function updateAdvancedSchedule() {
+        const enabled = q("#hrScheduleAdvancedToggle").checked;
+        q("#hrScheduleAdvanced").hidden = !enabled;
+        q("#hrScheduleStart").required = !enabled;
+        q("#hrScheduleEnd").required = !enabled;
+        if (enabled) renderAdvancedRules();
+    }
+
     function resetScheduleForm() {
         q("#hrScheduleForm").reset();
         q("#hrScheduleId").value = "";
         q("#hrScheduleFrom").value = A.localDate();
         q("#hrScheduleDays").querySelectorAll("input").forEach(input => { input.checked = Number(input.value) !== 0; });
+        editingScheduleRules = [];
+        q("#hrScheduleAdvancedToggle").checked = false;
+        q("#hrScheduleAdvanced").hidden = true;
+        q("#hrScheduleAdvanced").replaceChildren();
+        q("#hrScheduleStart").required = true;
+        q("#hrScheduleEnd").required = true;
         q("#hrScheduleCancel").hidden = true;
     }
 
@@ -170,10 +244,18 @@
         }
         target.innerHTML = schedules.sort((a, b) => a.name.localeCompare(b.name, "es")).map(item => {
             const revision = activeRevision(item);
-            const days = (revision?.rules || []).map(rule => ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"][Number(rule.day)]).join(", ");
-            const rule = revision?.rules?.[0] || {};
+            const dayLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+            const groups = new Map();
+            (revision?.rules || []).forEach(rule => {
+                const key = `${rule.start}|${rule.end}|${rule.breakMinutes}|${rule.tolerance}`;
+                if (!groups.has(key)) groups.set(key, { ...rule, days: [] });
+                groups.get(key).days.push(dayLabels[Number(rule.day)]);
+            });
+            const scheduleSummary = Array.from(groups.values()).map(rule =>
+                `${rule.days.join(", ")} ${rule.start || "—"}–${rule.end || "—"}`
+            ).join(" · ");
             return `<article class="hr-data-card hr-schedule-card">
-                <div><small>${esc(days || "Sin días")}</small><strong>${esc(item.name)}</strong><span>${esc(rule.start || "—")}–${esc(rule.end || "—")} · desde ${esc(revision?.effectiveFrom || "—")}</span></div>
+                <div><small>${esc((revision?.rules || []).map(rule => dayLabels[Number(rule.day)]).join(", ") || "Sin días")}</small><strong>${esc(item.name)}</strong><span>${esc(scheduleSummary || "Sin horas")} · desde ${esc(revision?.effectiveFrom || "—")}</span></div>
                 <p>${esc(revision?.note || "Sin observación")} · ${item.revisions.length} versión(es)</p>
                 <button data-edit-schedule="${esc(item.id)}" type="button">Editar / nueva vigencia</button>
                 <button data-toggle-schedule="${esc(item.id)}" class="hr-delete-link" type="button">${item.active ? "Desactivar" : "Reactivar"}</button>
@@ -186,18 +268,23 @@
         const days = selectedDays();
         if (!days.length) return A.notify("Elegí al menos un día de trabajo.", "error");
         const scheduleId = q("#hrScheduleId").value;
-        const revision = {
-            id: id("rev-"),
-            effectiveFrom: q("#hrScheduleFrom").value,
-            note: q("#hrScheduleNote").value.trim(),
-            rules: days.map(day => ({
+        const advanced = q("#hrScheduleAdvancedToggle").checked;
+        const rules = advanced
+            ? Array.from(advancedRuleValues().values())
+            : days.map(day => ({
                 day,
                 active: true,
                 start: q("#hrScheduleStart").value,
                 end: q("#hrScheduleEnd").value,
                 breakMinutes: Number(q("#hrScheduleBreak").value || 0),
                 tolerance: Number(q("#hrScheduleTolerance").value || 0)
-            })),
+            }));
+        if (rules.some(rule => !rule.start || !rule.end)) return A.notify("Completá la entrada y salida de cada día seleccionado.", "error");
+        const revision = {
+            id: id("rev-"),
+            effectiveFrom: q("#hrScheduleFrom").value,
+            note: q("#hrScheduleNote").value.trim(),
+            rules,
             createdAt: new Date().toISOString()
         };
         const current = schedules.find(item => item.id === scheduleId);
@@ -238,6 +325,12 @@
             q("#hrScheduleNote").value = revision?.note || "";
             const days = new Set((revision?.rules || []).map(entry => Number(entry.day)));
             q("#hrScheduleDays").querySelectorAll("input").forEach(input => { input.checked = days.has(Number(input.value)); });
+            editingScheduleRules = (revision?.rules || []).map(ruleEntry => ({ ...ruleEntry }));
+            const signatures = new Set(editingScheduleRules.map(ruleEntry =>
+                `${ruleEntry.start}|${ruleEntry.end}|${ruleEntry.breakMinutes}|${ruleEntry.tolerance}`
+            ));
+            q("#hrScheduleAdvancedToggle").checked = signatures.size > 1;
+            updateAdvancedSchedule();
             q("#hrScheduleCancel").hidden = false;
             q("#hrScheduleName").focus();
         }
@@ -247,6 +340,10 @@
         }
     });
     q("#hrScheduleCancel").addEventListener("click", resetScheduleForm);
+    q("#hrScheduleAdvancedToggle").addEventListener("change", updateAdvancedSchedule);
+    q("#hrScheduleDays").addEventListener("change", () => {
+        if (q("#hrScheduleAdvancedToggle").checked) renderAdvancedRules();
+    });
 
     function renderAssignments() {
         renderEmployeeOptions();
@@ -279,7 +376,10 @@
 
     q("#hrAssignmentForm").addEventListener("submit", event => {
         event.preventDefault();
-        assignSchedule(q("#hrAssignmentEmployee").value, q("#hrAssignmentSchedule").value, q("#hrAssignmentFrom").value, q("#hrAssignmentTo").value, q("#hrAssignmentNote").value);
+        const from = q("#hrAssignmentFrom").value;
+        const to = q("#hrAssignmentTo").value;
+        if (to && to < from) return A.notify("La fecha hasta no puede ser anterior a la fecha desde.", "error");
+        assignSchedule(q("#hrAssignmentEmployee").value, q("#hrAssignmentSchedule").value, from, to, q("#hrAssignmentNote").value);
         save("assignments", assignments);
         event.target.reset();
         q("#hrAssignmentFrom").value = A.localDate();
@@ -289,7 +389,10 @@
     q("#hrAssignmentList").addEventListener("click", event => {
         const button = event.target.closest("[data-delete-assignment]");
         if (!button) return;
-        assignments = assignments.map(item => item.id === button.dataset.deleteAssignment ? { ...item, to: previousDate(A.localDate()) } : item);
+        const current = assignments.find(item => item.id === button.dataset.deleteAssignment);
+        if (!current) return;
+        if (current.from > A.localDate()) return A.notify("La asignación todavía no comenzó. Editala o reemplazala con otra vigencia.", "error");
+        assignments = assignments.map(item => item.id === current.id ? { ...item, to: A.localDate() } : item);
         save("assignments", assignments); renderAssignments();
     });
 
@@ -321,8 +424,11 @@
         const file = event.target.files?.[0];
         if (!file) return;
         try {
+            assertSpreadsheet(file);
             const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
-            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            assertSheetSize(sheet);
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
             let imported = 0;
             const errors = [];
             rows.forEach((row, index) => {
@@ -381,6 +487,7 @@
 
     function parseAttendanceWorkbook(workbook) {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        assertSheetSize(sheet);
         const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", cellDates: true, raw: true });
         const headerIndex = matrix.findIndex(row => {
             const cells = row.map(clean);
@@ -437,8 +544,15 @@
         const unknownRows = stagedAttendance.filter(item => !item.employeeId);
         const periods = new Set(stagedAttendance.map(item => item.date.slice(0, 7)));
         const selectedPeriod = periods.size === 1 ? Array.from(periods)[0] : "";
-        const current = selectedPeriod === q("#hrAttendancePeriod").value ? attendance : [];
+        const current = selectedPeriod === q("#hrAttendancePeriod").value ? attendance : stagedBaseAttendance;
         const previewMerge = Store.mergeRecords(current, stagedAttendance.filter(item => item.employeeId));
+        const missingClock = stagedAttendance.filter(item => !item.clockId).length;
+        const mappedClockIds = new Map();
+        stagedAttendance.filter(item => item.clockId && item.employeeId).forEach(item => {
+            if (!mappedClockIds.has(item.employeeId)) mappedClockIds.set(item.employeeId, new Set());
+            mappedClockIds.get(item.employeeId).add(item.clockId);
+        });
+        const mappingConflicts = Array.from(mappedClockIds.values()).filter(ids => ids.size > 1).length;
         q("#hrAttendanceImportSummary").innerHTML = `<span><strong>${stagedAttendance.length.toLocaleString("es-PY")}</strong> filas</span><span><strong>${previewMerge.counts.new}</strong> nuevas</span><span><strong>${previewMerge.counts.updated}</strong> actualizadas</span><span><strong>${previewMerge.counts.equal}</strong> iguales</span><span><strong>${unknownRows.length}</strong> sin vincular</span>`;
         q("#hrAttendanceUnknown").innerHTML = stagedMappings.size ? `<strong>Vinculá estos ID del reloj una sola vez:</strong>${Array.from(stagedMappings).map(([clockId]) => {
             const example = stagedAttendance.find(item => item.clockId === clockId);
@@ -446,17 +560,25 @@
         }).join("")}` : '<div class="hr-import-ok">✓ Todos los ID del reloj están vinculados.</div>';
         q("#hrAttendancePreview").innerHTML = `<table class="hr-simple-table"><thead><tr><th>Fila</th><th>Nombre del reloj</th><th>ID</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Vínculo</th></tr></thead><tbody>${stagedAttendance.slice(0, 100).map(item => `<tr class="${item.employeeId ? "" : "hr-row-error"}"><td>${item.sourceRow}</td><td>${esc(item.sourceName)}</td><td>${esc(item.clockId)}</td><td>${esc(item.date)}</td><td>${esc(item.in || "—")}</td><td>${esc(item.rawStatus || item.out || "—")}</td><td>${esc(personById(item.employeeId)?.fullName || "Pendiente")}</td></tr>`).join("")}</tbody></table>`;
         q("#hrAttendanceImportResult").hidden = false;
-        q("#hrAttendanceProcess").disabled = periods.size !== 1 || unknownRows.length > 0;
+        q("#hrAttendanceProcess").disabled = periods.size !== 1 || unknownRows.length > 0 || mappingConflicts > 0;
         if (periods.size !== 1) q("#hrAttendanceUnknown").insertAdjacentHTML("afterbegin", '<p>El archivo debe contener un solo mes.</p>');
+        if (missingClock) q("#hrAttendanceUnknown").insertAdjacentHTML("afterbegin", `<p>${missingClock} fila(s) no tienen ID del reloj y no pueden vincularse.</p>`);
+        if (mappingConflicts) q("#hrAttendanceUnknown").insertAdjacentHTML("afterbegin", `<p>${mappingConflicts} funcionario(s) quedaron vinculados a más de un ID del reloj. Elegí un solo ID por persona.</p>`);
     }
 
     q("#hrAttendanceFile").addEventListener("change", async event => {
         const file = event.target.files?.[0];
         if (!file) return;
         try {
+            assertSpreadsheet(file, true);
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data, { type: "array", cellDates: true });
             stagedAttendance = linkAttendance(parseAttendanceWorkbook(workbook));
+            const periods = new Set(stagedAttendance.map(item => item.date.slice(0, 7)));
+            const period = periods.size === 1 ? Array.from(periods)[0] : "";
+            stagedBaseAttendance = period && period !== q("#hrAttendancePeriod").value
+                ? await Store.getMonth(C.active.companyId, period)
+                : attendance;
             renderAttendanceStage();
         } catch (error) {
             A.notify(error.message || "No se pudo leer el archivo del reloj.", "error");
@@ -483,9 +605,10 @@
         stagedAttendance.forEach(item => {
             if (item.clockId && item.employeeId) linkedIds.set(item.clockId, item.employeeId);
         });
+        const clockByEmployee = new Map(Array.from(linkedIds, ([clockId, employeeId]) => [employeeId, clockId]));
         const roster = people().map(person => {
-            const mapped = Array.from(linkedIds).find(([, employeeId]) => employeeId === person.id);
-            return mapped && !person.clockId ? { ...person, clockId: mapped[0], updatedAt: new Date().toISOString() } : person;
+            const clockId = clockByEmployee.get(person.id);
+            return clockId && person.clockId !== clockId ? { ...person, clockId, updatedAt: new Date().toISOString() } : person;
         });
         if (roster.some((person, index) => person.clockId !== people()[index]?.clockId)) {
             A.writeJSON("atlasHRPeople", roster);
@@ -497,16 +620,21 @@
         A.writeJSON(KEYS.imports, imports);
         q("#hrAttendancePeriod").value = period;
         stagedAttendance = [];
+        stagedBaseAttendance = [];
         q("#hrAttendanceImportResult").hidden = true;
         await loadAttendance();
-        A.notify(`Importación guardada: ${result.counts.new} nuevas, ${result.counts.updated} actualizadas y ${result.counts.equal} iguales.`);
+        A.notify(
+            `Importación guardada: ${result.counts.new} nuevas, ${result.counts.updated} actualizadas y ${result.counts.equal} iguales.${result.cloudSynced === false ? " La copia en nube quedó pendiente." : ""}`,
+            result.cloudSynced === false ? "warning" : "success"
+        );
     });
-    q("#hrAttendanceCancel").addEventListener("click", () => { stagedAttendance = []; q("#hrAttendanceImportResult").hidden = true; });
+    q("#hrAttendanceCancel").addEventListener("click", () => { stagedAttendance = []; stagedBaseAttendance = []; q("#hrAttendanceImportResult").hidden = true; });
 
     q("#hrAttendanceForm").addEventListener("submit", async event => {
         event.preventDefault();
         const form = event.currentTarget;
         const person = personById(q("#hrAttendanceEmployee").value);
+        if (!person) return A.notify("Seleccioná un funcionario.", "error");
         const date = q("#hrAttendanceDate").value;
         const status = q("#hrAttendanceStatus").value;
         const item = {
@@ -522,11 +650,11 @@
             resolvedStatus: status === "raw_missing" ? "" : status,
             updatedAt: new Date().toISOString()
         };
-        await Store.upsertMonth(C.active.companyId, date.slice(0, 7), [item]);
+        const result = await Store.upsertMonth(C.active.companyId, date.slice(0, 7), [item]);
         q("#hrAttendancePeriod").value = date.slice(0, 7);
         form.reset();
         await loadAttendance();
-        A.notify("Marcación guardada.");
+        A.notify(result.cloudSynced === false ? "Marcación guardada en este dispositivo; la nube quedó pendiente." : "Marcación guardada.", result.cloudSynced === false ? "warning" : "success");
     });
     q("#hrAttendanceList").addEventListener("click", async event => {
         const button = event.target.closest("[data-delete-attendance]");
@@ -578,7 +706,8 @@
         const byEmployeeDate = new Map(visibleRecords.map(item => [`${item.employeeId}:${item.date}`, item]));
         const holidays = holidaySet();
         const dates = datesInPeriod(period);
-        const roster = visiblePeople().filter(person => (!person.startDate || person.startDate <= `${period}-31`) && (!person.endDate || person.endDate >= `${period}-01`));
+        const periodEnd = Store.periodEnd(period);
+        const roster = visiblePeople().filter(person => (!person.startDate || person.startDate <= periodEnd) && (!person.endDate || person.endDate >= `${period}-01`));
         calculations = roster.map(person => {
             const details = dates.map(date => {
                 if (person.startDate && date < person.startDate) return null;
@@ -599,8 +728,7 @@
                 totals,
                 details,
                 pending,
-                incomplete,
-                pay: Calc.payable({ salary: person.salary, workerType: person.workerType, totals })
+                incomplete
             };
         });
         renderCalculations();
@@ -676,21 +804,6 @@
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), "RESUMEN");
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(detail), "DETALLE");
         XLSX.writeFile(workbook, `ATLAS_CALCULO_HORAS_${q("#hrCalculationPeriod").value}.xlsx`);
-    });
-
-    q("#hrPayrollForm").addEventListener("submit", event => {
-        event.preventDefault();
-        const totals = {
-            nightPremiumMinutes: Number(q("#hrNightHours").value || 0) * 60,
-            extraDayMinutes: Number(q("#hrExtraDay").value || 0) * 60,
-            extraNightMinutes: Number(q("#hrExtraNight").value || 0) * 60,
-            sundayHolidayMinutes: Number(q("#hrHolidayHours").value || 0) * 60,
-            sundayHolidayNightMinutes: 0,
-            absentDays: Number(q("#hrAbsentDays").value || 0)
-        };
-        const result = Calc.payable({ salary: q("#hrSalary").value, workerType: q("#hrWorkerType").value, totals });
-        const money = value => `G. ${Math.round(value).toLocaleString("es-PY")}`;
-        q("#hrPayrollResult").innerHTML = `<div><span>Hora base</span><strong>${money(result.hourly)}</strong></div><div><span>Adicional nocturno</span><strong>${money(result.ordinaryNightPremium)}</strong></div><div><span>Extras 50 %</span><strong>${money(result.extraDay)}</strong></div><div><span>Extras 100 %</span><strong>${money(result.extraNight)}</strong></div><div><span>Domingo / feriado</span><strong>${money(result.sundayHoliday)}</strong></div><div><span>Descuento por ausencias</span><strong>− ${money(result.absenceDiscount)}</strong></div><div class="total"><span>Bruto estimado</span><strong>${money(result.estimatedGross)}</strong></div>`;
     });
 
     function renderCompliance() {

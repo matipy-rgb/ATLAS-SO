@@ -1,8 +1,10 @@
 (function () {
     const config = window.ATLAS_CONFIG || {};
+    const configuredUrl = String(config.supabaseUrl || "").trim();
+    const configuredKey = String(config.supabasePublishableKey || "").trim();
     const hasCredentials = Boolean(
-        /^https:\/\/.+\.supabase\.co$/i.test(String(config.supabaseUrl || "").trim()) &&
-        String(config.supabasePublishableKey || "").trim()
+        /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(configuredUrl) &&
+        /^sb_publishable_[a-z0-9_-]+$/i.test(configuredKey)
     );
 
     let client = null;
@@ -18,7 +20,9 @@
                 auth: {
                     persistSession: true,
                     autoRefreshToken: true,
-                    detectSessionInUrl: true
+                    detectSessionInUrl: true,
+                    flowType: "pkce",
+                    storageKey: "atlas-so-auth"
                 }
             }
         );
@@ -26,6 +30,24 @@
 
     function redirectUrl(fileName) {
         return new URL(fileName, window.location.href).href;
+    }
+
+    function workspaceCacheKey(userId) {
+        return `atlas:workspace:${userId}`;
+    }
+
+    function readCachedWorkspace(userId) {
+        try {
+            const cached = JSON.parse(localStorage.getItem(workspaceCacheKey(userId)) || "null");
+            return cached?.id ? cached : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function cacheWorkspace(userId, workspace) {
+        localStorage.setItem(workspaceCacheKey(userId), JSON.stringify(workspace));
+        return workspace;
     }
 
     async function getSession() {
@@ -40,6 +62,7 @@
         if (currentWorkspace) return currentWorkspace;
         const session = currentSession || await getSession();
         if (!session) return null;
+        const cached = readCachedWorkspace(session.user.id);
 
         const { data, error } = await client
             .from("workspace_members")
@@ -49,37 +72,53 @@
             .limit(1)
             .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+            if (cached) {
+                currentWorkspace = cached;
+                return currentWorkspace;
+            }
+            throw error;
+        }
         if (!data) {
             const { data: createdId, error: createError } = await client.rpc(
                 "create_personal_workspace"
             );
             if (createError) throw createError;
-            currentWorkspace = {
+            currentWorkspace = cacheWorkspace(session.user.id, {
                 id: createdId,
                 name: "Mi espacio",
                 role: "owner"
-            };
+            });
             return currentWorkspace;
         }
 
-        currentWorkspace = {
+        currentWorkspace = cacheWorkspace(session.user.id, {
             id: data.workspace_id,
             name: data.workspaces?.name || "Mi espacio",
             slug: data.workspaces?.slug || "",
             role: data.role || "member"
-        };
+        });
         return currentWorkspace;
     }
 
     async function signOut() {
+        const userId = currentSession?.user?.id;
+        const synced = await window.AtlasStore?.flush?.();
+        if (synced === false && !window.confirm(
+            "Hay cambios guardados solo en este dispositivo. Si cerrás sesión ahora, seguirán pendientes hasta que vuelvas a ingresar. ¿Cerrar sesión igualmente?"
+        )) return false;
         if (client) await client.auth.signOut();
         currentSession = null;
         currentWorkspace = null;
         hrAdmin = null;
+        if (userId) {
+            localStorage.removeItem(workspaceCacheKey(userId));
+            localStorage.removeItem(`atlas:hr-admin:${userId}`);
+        }
         localStorage.removeItem("atlasActiveUserId");
         localStorage.removeItem("atlasActiveWorkspaceId");
         window.location.replace("login.html");
+        return true;
     }
 
     async function isHRAdmin() {
@@ -90,6 +129,7 @@
         if (error) {
             console.warn("No se pudo verificar el permiso de RRHH:", error.message);
             hrAdmin = false;
+            localStorage.removeItem(`atlas:hr-admin:${session.user.id}`);
             return false;
         }
         hrAdmin = data === true;

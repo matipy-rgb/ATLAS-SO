@@ -9,6 +9,7 @@ const [
     index,
     app,
     atlas,
+    dashboard,
     bootstrap,
     authPage,
     styles,
@@ -19,6 +20,7 @@ const [
     read("index.html"),
     read("app.html"),
     read("atlas.js"),
+    read("dashboard.js"),
     read("app-bootstrap.js"),
     read("auth-page.js"),
     read("styles.css"),
@@ -36,11 +38,14 @@ const checks = [
     [atlas.includes("atlasCaptureDialog") && atlas.includes("atlasSearchDialog"), "Faltan las herramientas globales."],
     [atlas.includes('writeJSON("atlasTransactions"') && atlas.includes('writeJSON("atlasStudyEvents"'), "El registro rápido no cubre dinero y estudios."],
     [bootstrap.includes('"atlasPreferences"') && bootstrap.includes('"atlasDailyFocus"'), "Las preferencias nuevas no se sincronizan."],
+    [bootstrap.includes("retryDelay") && bootstrap.includes('addEventListener("online"'), "La sincronización no reintenta después de recuperar conexión."],
+    [bootstrap.includes("replaceChildren") && !bootstrap.includes("<p>${String(error.message"), "El error de arranque no se muestra de forma segura."],
+    [dashboard.includes('schema: "atlas-so-backup"') && dashboard.includes("exportAttendanceRecords") && dashboard.includes("atlasHRScheduleAssignments") && dashboard.includes("atlasHRContractHistory"), "La copia completa no incluye todos los datos de v0.7."],
     [authPage.includes('|| "app.html"'), "El acceso no redirige al nuevo inicio."],
     [styles.includes("[hidden]"), "Los formularios ocultos necesitan una regla explícita."],
     [manifest.start_url === "./app.html", "La PWA no inicia en app.html."],
-    [serviceWorker.includes('CACHE_NAME = "atlas-so-v0.7.0"'), "La caché no corresponde a v0.7.0."],
-    [packageJson.version === "0.7.0", "package.json no corresponde a v0.7.0."]
+    [serviceWorker.includes('CACHE_NAME = "atlas-so-v0.8.0"'), "La caché no corresponde a v0.8.0."],
+    [packageJson.version === "0.8.0", "package.json no corresponde a v0.8.0."]
 ];
 
 const failures = checks.filter(([passed]) => !passed).map(([, message]) => message);
@@ -49,4 +54,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log("ATLAS SO v0.7: portada, inicio diario y herramientas globales verificadas.");
+console.log("ATLAS SO v0.8.0: portada, inicio diario y herramientas globales verificadas.");

@@ -6,6 +6,9 @@
     const XLSX = window.XLSX;
     const q = selector => document.querySelector(selector);
     const esc = A.escapeHTML;
+    const MAX_SPREADSHEET_BYTES = 50 * 1024 * 1024;
+    const MAX_SPREADSHEET_ROWS = 250000;
+    const MAX_SPREADSHEET_COLUMNS = 200;
     const MASTER_HEADERS = [
         "N°", "C.I.N°", "Apellidos y Nombres", "Modalidad Contractual", "Telefono",
         "Direccion", "Ciudad", "Edad", "N° Hijos", "Tipo de Relacion", "Cuenta Bancaria",
@@ -15,6 +18,23 @@
         "Nacionalidad", "salario", "ID del reloj", "Fecha de salida", "Observación de estado"
     ];
     let staged = [];
+
+    function assertSpreadsheet(file) {
+        if (!XLSX) throw new Error("El lector de Excel no está disponible. Recargá la página.");
+        if (!/\.(?:xlsx|xlsm|xls)$/i.test(file?.name || "")) throw new Error("Seleccioná un archivo Excel válido.");
+        if (file.size > MAX_SPREADSHEET_BYTES) throw new Error("El Excel supera el límite técnico de 50 MB.");
+    }
+
+    function assertSheetSize(sheet) {
+        if (!sheet) throw new Error("El Excel no contiene una hoja legible.");
+        if (!sheet["!ref"]) return;
+        const range = XLSX.utils.decode_range(sheet["!ref"]);
+        const rows = range.e.r - range.s.r + 1;
+        const columns = range.e.c - range.s.c + 1;
+        if (rows > MAX_SPREADSHEET_ROWS || columns > MAX_SPREADSHEET_COLUMNS) {
+            throw new Error(`La hoja tiene ${rows.toLocaleString("es-PY")} filas y ${columns} columnas; dividila en archivos más pequeños.`);
+        }
+    }
 
     function clean(value) {
         return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -41,10 +61,10 @@
     }
     function statusFor(value, endDate) {
         const text = clean(value);
+        if (text.includes("inactivodelmes")) return "inactive-month";
         if (text.includes("inactiv") || text.includes("baja") || text.includes("retir")) {
             return endDate.slice(0, 7) === A.localDate().slice(0, 7) ? "inactive-month" : "inactive";
         }
-        if (text.includes("inactivodelmes")) return "inactive-month";
         return "active";
     }
     function normalizeRow(row, sourceRow) {
@@ -71,7 +91,7 @@
             statusNote: String(valueBy(row, ["Observación de estado", "Observacion"])).trim(),
             active: statusFor(valueBy(row, ["Estado"]), endDate) === "active",
             workerType: /jornal/i.test(mode) ? "daily" : /parcial/i.test(mode) ? "parttime" : "monthly",
-            salary: Number(String(valueBy(row, ["salario", "Sueldo"])).replace(/\D/g, "")) || 3044000,
+            salary: Number(String(valueBy(row, ["salario", "Sueldo"])).replace(/\D/g, "")) || 0,
             birthDate: excelDate(valueBy(row, ["Fecha de Nacimiento", "Nacimiento"])),
             sex: String(valueBy(row, ["SEXO", "Sexo"])).trim(),
             civilStatus: String(valueBy(row, ["Estado Civil"])).trim(),
@@ -102,6 +122,8 @@
             if (!item.ci) issues.push("Falta número de cédula");
             if (!item.fullName) issues.push("Falta apellido y nombre");
             if (!item.clientId) issues.push(`Cliente o centro de costo no reconocido: ${item.clientSource || "vacío"}`);
+            if (item.status !== "active" && !item.endDate) issues.push("El estado inactivo requiere fecha de salida");
+            if (item.startDate && item.endDate && item.endDate < item.startDate) issues.push("La fecha de salida es anterior al ingreso");
             if (item.ci && counts.get(item.ci) > 1) issues.push("Cédula repetida dentro del Excel");
             if (item.clockId && clockCounts.get(item.clockId) > 1) issues.push("ID del reloj repetido dentro del Excel");
             const existingPerson = existingByCI.get(item.ci);
@@ -130,9 +152,12 @@
     }
 
     async function readWorkbook(file) {
+        assertSpreadsheet(file);
         const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
         const preferred = workbook.SheetNames.find(name => /datos.*personal/i.test(name)) || workbook.SheetNames[0];
-        const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[preferred], { header: 1, defval: "", raw: true });
+        const sheet = workbook.Sheets[preferred];
+        assertSheetSize(sheet);
+        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
         const headerIndex = matrix.findIndex(row => row.some(cell => ["cin", "cin°", "cedula", "apellidosynombres"].includes(clean(cell))));
         if (headerIndex < 0) throw new Error("No encontré la fila de encabezados de Datos Personales.");
         const headers = matrix[headerIndex].map(String);
