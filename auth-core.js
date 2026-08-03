@@ -1,8 +1,10 @@
 (function () {
     const config = window.ATLAS_CONFIG || {};
+    const configuredUrl = String(config.supabaseUrl || "").trim();
+    const configuredKey = String(config.supabasePublishableKey || "").trim();
     const hasCredentials = Boolean(
-        /^https:\/\/.+\.supabase\.co$/i.test(String(config.supabaseUrl || "").trim()) &&
-        String(config.supabasePublishableKey || "").trim()
+        /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(configuredUrl) &&
+        /^sb_publishable_[a-z0-9_-]+$/i.test(configuredKey)
     );
 
     let client = null;
@@ -18,7 +20,9 @@
                 auth: {
                     persistSession: true,
                     autoRefreshToken: true,
-                    detectSessionInUrl: true
+                    detectSessionInUrl: true,
+                    flowType: "pkce",
+                    storageKey: "atlas-so-auth"
                 }
             }
         );
@@ -30,10 +34,6 @@
 
     function workspaceCacheKey(userId) {
         return `atlas:workspace:${userId}`;
-    }
-
-    function hrAdminCacheKey(userId) {
-        return `atlas:hr-admin:${userId}`;
     }
 
     function readCachedWorkspace(userId) {
@@ -103,17 +103,22 @@
 
     async function signOut() {
         const userId = currentSession?.user?.id;
+        const synced = await window.AtlasStore?.flush?.();
+        if (synced === false && !window.confirm(
+            "Hay cambios guardados solo en este dispositivo. Si cerrás sesión ahora, seguirán pendientes hasta que vuelvas a ingresar. ¿Cerrar sesión igualmente?"
+        )) return false;
         if (client) await client.auth.signOut();
         currentSession = null;
         currentWorkspace = null;
         hrAdmin = null;
         if (userId) {
             localStorage.removeItem(workspaceCacheKey(userId));
-            localStorage.removeItem(hrAdminCacheKey(userId));
+            localStorage.removeItem(`atlas:hr-admin:${userId}`);
         }
         localStorage.removeItem("atlasActiveUserId");
         localStorage.removeItem("atlasActiveWorkspaceId");
         window.location.replace("login.html");
+        return true;
     }
 
     async function isHRAdmin() {
@@ -123,11 +128,11 @@
         const { data, error } = await client.rpc("is_hr_admin");
         if (error) {
             console.warn("No se pudo verificar el permiso de RRHH:", error.message);
-            hrAdmin = localStorage.getItem(hrAdminCacheKey(session.user.id)) === "true";
-            return hrAdmin;
+            hrAdmin = false;
+            localStorage.removeItem(`atlas:hr-admin:${session.user.id}`);
+            return false;
         }
         hrAdmin = data === true;
-        localStorage.setItem(hrAdminCacheKey(session.user.id), String(hrAdmin));
         return hrAdmin;
     }
 

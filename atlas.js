@@ -552,7 +552,7 @@
             <div class="sidebar-system-card">
                 <span>Una idea simple</span>
                 <strong>Lo que no se mide, no se mejora.</strong>
-                <small>ATLAS SO · v0.7.1</small>
+                <small>ATLAS SO · v0.8.0</small>
             </div>
         `;
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "atlas-so-v0.7.1";
+const CACHE_NAME = "atlas-so-v0.8.0";
 const APP_SHELL = [
     "./",
     "./app.html",
@@ -64,18 +64,47 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", event => {
-    event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
-    self.skipWaiting();
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(APP_SHELL))
+            .then(() => self.skipWaiting())
+    );
 });
 
 self.addEventListener("activate", event => {
     event.waitUntil(
-        caches.keys().then(keys => Promise.all(
-            keys.filter(key => key.startsWith("atlas-so-") && key !== CACHE_NAME).map(key => caches.delete(key))
-        ))
+        caches.keys()
+            .then(keys => Promise.all(
+                keys.filter(key => key.startsWith("atlas-so-") && key !== CACHE_NAME).map(key => caches.delete(key))
+            ))
+            .then(() => self.clients.claim())
     );
-    self.clients.claim();
 });
+
+const SENSITIVE_QUERY_KEYS = new Set([
+    "access_token", "refresh_token", "token", "token_hash", "code", "error", "error_description"
+]);
+
+function containsSensitiveQuery(url) {
+    return Array.from(url.searchParams.keys()).some(key => SENSITIVE_QUERY_KEYS.has(key.toLowerCase()));
+}
+
+function cleanCacheKey(request) {
+    const url = new URL(request.url);
+    url.search = "";
+    url.hash = "";
+    return url.href;
+}
+
+async function updateCache(request, response, requestUrl) {
+    if (!response.ok || containsSensitiveQuery(requestUrl)) return;
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(cleanCacheKey(request), response.clone());
+}
+
+function cachedResponse(request) {
+    return caches.match(cleanCacheKey(request));
+}
 
 self.addEventListener("fetch", event => {
     const requestUrl = new URL(event.request.url);
@@ -133,19 +162,10 @@ self.addEventListener("fetch", event => {
         event.respondWith(
             fetch(event.request)
                 .then(response => {
-                    if (response.ok) {
-    const responseCopy = response.clone();
-
-    caches.open(CACHE_NAME)
-        .then(cache => cache.put(event.request, responseCopy))
-        .catch(error => {
-            console.warn("No se pudo actualizar la caché:", error.message);
-        });
-}
-
-return response;
+                    updateCache(event.request, response, requestUrl).catch(() => {});
+                    return response;
                 })
-                .catch(() => caches.match(event.request))
+                .catch(() => cachedResponse(event.request))
         );
         return;
     }
@@ -154,29 +174,19 @@ return response;
         event.respondWith(
             fetch(event.request)
                 .then(response => {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+                    updateCache(event.request, response, requestUrl).catch(() => {});
                     return response;
                 })
-                .catch(async () => (await caches.match(event.request)) || caches.match("./offline.html"))
+                .catch(async () => (await cachedResponse(event.request)) || caches.match("./offline.html"))
         );
         return;
     }
 
     event.respondWith(
-        caches.match(event.request).then(cached => {
+        cachedResponse(event.request).then(cached => {
             const network = fetch(event.request).then(response => {
-                if (response.ok) {
-    const responseCopy = response.clone();
-
-    caches.open(CACHE_NAME)
-        .then(cache => cache.put(event.request, responseCopy))
-        .catch(error => {
-            console.warn("No se pudo actualizar la caché:", error.message);
-        });
-}
-
-return response;
+                updateCache(event.request, response, requestUrl).catch(() => {});
+                return response;
             }).catch(() => cached);
             return cached || network;
         })

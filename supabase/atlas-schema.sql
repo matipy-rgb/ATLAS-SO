@@ -1,4 +1,4 @@
--- ATLAS SO v0.7.1 · esquema base completo. Ejecutar una sola vez en Supabase > SQL Editor.
+-- ATLAS SO v0.8 · esquema base. Después ejecutar v0.8-security-privacy-sync.sql.
 -- La publishable key puede usarse en el navegador porque estas políticas RLS
 -- son las que deciden qué filas puede leer o modificar cada cuenta.
 
@@ -34,6 +34,7 @@ create table if not exists public.app_data (
     data_key text not null,
     value jsonb not null default 'null'::jsonb,
     updated_by uuid references auth.users(id) on delete set null,
+    client_updated_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     primary key (workspace_id, data_key)
 );
@@ -204,35 +205,72 @@ alter table public.workspaces enable row level security;
 alter table public.workspace_members enable row level security;
 alter table public.app_data enable row level security;
 
+create or replace function public.storage_workspace_id(object_name text)
+returns uuid
+language plpgsql
+immutable
+security invoker
+set search_path = pg_catalog
+as $$
+declare
+    candidate text := split_part(coalesce(object_name, ''), '/', 1);
+begin
+    if candidate !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+        return null;
+    end if;
+    return candidate::uuid;
+exception when invalid_text_representation then
+    return null;
+end;
+$$;
+
+create or replace function public.storage_receipt_path_is_valid(object_name text)
+returns boolean
+language sql
+immutable
+security invoker
+set search_path = pg_catalog, public
+as $$
+    select public.storage_workspace_id(object_name) is not null
+       and array_length(string_to_array(coalesce(object_name, ''), '/'), 1) = 3
+       and split_part(object_name, '/', 2) ~ '^[A-Za-z0-9_-]{1,128}$'
+       and split_part(object_name, '/', 3) ~ '^[A-Za-z0-9._-]{1,100}$';
+$$;
+
 drop policy if exists "atlas_files_select" on storage.objects;
 create policy "atlas_files_select" on storage.objects
     for select to authenticated using (
         bucket_id = 'atlas-files'
-        and public.is_workspace_member(((storage.foldername(name))[1])::uuid)
+        and public.storage_receipt_path_is_valid(name)
+        and public.is_workspace_member(public.storage_workspace_id(name))
     );
 
 drop policy if exists "atlas_files_insert" on storage.objects;
 create policy "atlas_files_insert" on storage.objects
     for insert to authenticated with check (
         bucket_id = 'atlas-files'
-        and public.can_edit_workspace(((storage.foldername(name))[1])::uuid)
+        and public.storage_receipt_path_is_valid(name)
+        and public.can_edit_workspace(public.storage_workspace_id(name))
     );
 
 drop policy if exists "atlas_files_update" on storage.objects;
 create policy "atlas_files_update" on storage.objects
     for update to authenticated using (
         bucket_id = 'atlas-files'
-        and public.can_edit_workspace(((storage.foldername(name))[1])::uuid)
+        and public.storage_receipt_path_is_valid(name)
+        and public.can_edit_workspace(public.storage_workspace_id(name))
     ) with check (
         bucket_id = 'atlas-files'
-        and public.can_edit_workspace(((storage.foldername(name))[1])::uuid)
+        and public.storage_receipt_path_is_valid(name)
+        and public.can_edit_workspace(public.storage_workspace_id(name))
     );
 
 drop policy if exists "atlas_files_delete" on storage.objects;
 create policy "atlas_files_delete" on storage.objects
     for delete to authenticated using (
         bucket_id = 'atlas-files'
-        and public.can_edit_workspace(((storage.foldername(name))[1])::uuid)
+        and public.storage_receipt_path_is_valid(name)
+        and public.can_edit_workspace(public.storage_workspace_id(name))
     );
 
 drop policy if exists "profiles_select_own" on public.profiles;
@@ -309,14 +347,18 @@ grant update (name, slug, updated_at) on public.workspaces to authenticated;
 grant select, insert, delete on public.workspace_members to authenticated;
 revoke update on public.workspace_members from authenticated;
 grant update (role) on public.workspace_members to authenticated;
-grant select, insert, update, delete on public.app_data to authenticated;
+grant select on public.app_data to authenticated;
 grant execute on function public.create_personal_workspace() to authenticated;
 grant execute on function public.is_workspace_member(uuid) to authenticated;
 grant execute on function public.can_edit_workspace(uuid) to authenticated;
 grant execute on function public.can_manage_workspace(uuid) to authenticated;
+grant execute on function public.storage_workspace_id(text) to authenticated;
+grant execute on function public.storage_receipt_path_is_valid(text) to authenticated;
 
 revoke all on function public.create_personal_workspace_for(uuid) from public, anon, authenticated;
 revoke all on function public.handle_new_atlas_user() from public, anon, authenticated;
+revoke all on function public.storage_workspace_id(text) from public, anon;
+revoke all on function public.storage_receipt_path_is_valid(text) from public, anon;
 
 revoke all on public.profiles from anon;
 revoke all on public.workspaces from anon;
@@ -340,6 +382,7 @@ create table if not exists public.hr_attendance_records (
     note text,
     source_import_id text,
     updated_by uuid references auth.users(id) on delete set null,
+    client_updated_at timestamptz not null default now(),
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     unique (workspace_id, company_id, employee_id, work_date)
@@ -352,41 +395,16 @@ create index if not exists hr_attendance_client_period_idx
 create index if not exists hr_attendance_clock_idx
     on public.hr_attendance_records (workspace_id, company_id, clock_id);
 
--- ATLAS SO v0.4 · administrador privado de Recursos Humanos.
--- La primera cuenta creada queda fijada una sola vez como administradora.
+-- Administrador privado de Recursos Humanos.
+-- v0.8 no concede este permiso automáticamente: se configura por UID verificado.
 create table if not exists public.atlas_system_settings (
     singleton boolean primary key default true check (singleton),
     hr_admin_user_id uuid not null references auth.users(id) on delete restrict,
     updated_at timestamptz not null default now()
 );
 
-insert into public.atlas_system_settings (singleton, hr_admin_user_id)
-select true, id
-from auth.users
-order by created_at asc
-limit 1
-on conflict (singleton) do nothing;
-
-create or replace function public.assign_first_hr_admin()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-    insert into public.atlas_system_settings (singleton, hr_admin_user_id)
-    values (true, new.id)
-    on conflict (singleton) do nothing;
-    return new;
-end;
-$$;
-
 drop trigger if exists on_auth_user_created_atlas_hr_admin on auth.users;
-create trigger on_auth_user_created_atlas_hr_admin
-    after insert on auth.users
-    for each row execute procedure public.assign_first_hr_admin();
-
-revoke all on function public.assign_first_hr_admin() from public, anon, authenticated;
+drop function if exists public.assign_first_hr_admin();
 
 alter table public.atlas_system_settings enable row level security;
 
@@ -493,5 +511,5 @@ using (
     and public.can_edit_workspace(workspace_id)
 );
 
-grant select, insert, update, delete on public.hr_attendance_records to authenticated;
+grant select on public.hr_attendance_records to authenticated;
 revoke all on public.hr_attendance_records from anon;

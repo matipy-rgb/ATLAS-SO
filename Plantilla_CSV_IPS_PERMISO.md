@@ -45,7 +45,7 @@
 ## Exclusiones
 
 - No incluir reposos, sanciones, licencias de maternidad ni otros movimientos.
-- Solo incluirlos si Matías indica expresamente que deben tratarse como permiso.
+- Solo incluirlos si la persona responsable indica expresamente que deben tratarse como permiso.
 
 ## Lectura automática desde captura REOP
 
@@ -71,5 +71,5 @@
 ## Ejemplo
 
 ```text
-0000-00-00000;5469180;EDGAR;LUGO ARMOA;11;20/07/2026;20/07/2026;20/07/2026;1989608;PERMISO
+0000-00-00000;0000000;PERSONA;DE EJEMPLO;11;20/07/2026;20/07/2026;20/07/2026;DOC-EJEMPLO;PERMISO
 ```

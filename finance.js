@@ -50,6 +50,7 @@ const doneReceiptDialog = document.querySelector("#doneReceiptDialog");
 
 let activeReceiptUrl = "";
 let writingFinanceData = false;
+let syncingReceipts = false;
 
 let transactions = loadArray(TRANSACTIONS_KEY).map(normalizeTransaction);
 let obligations = loadArray(OBLIGATIONS_KEY).map(normalizeObligation);
@@ -120,12 +121,16 @@ async function saveReceipt(paymentId, file) {
         };
     });
 
+    return uploadReceipt(paymentId, file, file.name);
+}
+
+async function uploadReceipt(paymentId, file, originalName = "comprobante") {
     const storage = window.AtlasAuth?.client?.storage;
     const workspaceId = window.AtlasStore?.workspaceId;
-    if (!storage || !workspaceId) return "";
-
-    const safeName = file.name.replace(/[^a-z0-9._-]+/gi, "-").slice(-100) || "comprobante";
-    const path = `${workspaceId}/${paymentId}/${safeName}`;
+    if (!storage || !workspaceId) return null;
+    const safePaymentId = String(paymentId).replace(/[^a-z0-9_-]+/gi, "-").slice(0, 128) || "pago";
+    const safeName = String(originalName).replace(/[^a-z0-9._-]+/gi, "-").slice(-100) || "comprobante";
+    const path = `${workspaceId}/${safePaymentId}/${safeName}`;
     const { error } = await storage.from("atlas-files").upload(path, file, {
         upsert: true,
         contentType: file.type || "application/octet-stream"
@@ -138,7 +143,8 @@ async function saveReceipt(paymentId, file) {
 }
 
 async function getReceipt(paymentId, cloudPath = "") {
-    if (cloudPath && window.AtlasAuth?.client?.storage) {
+    const workspacePrefix = `${window.AtlasStore?.workspaceId || ""}/`;
+    if (cloudPath && workspacePrefix !== "/" && cloudPath.startsWith(workspacePrefix) && window.AtlasAuth?.client?.storage) {
         const { data, error } = await window.AtlasAuth.client.storage
             .from("atlas-files")
             .download(cloudPath);
@@ -168,9 +174,12 @@ async function getReceipt(paymentId, cloudPath = "") {
 }
 
 async function deleteReceipt(paymentId, cloudPath = "") {
-    if (cloudPath && window.AtlasAuth?.client?.storage) {
+    let cloudDeleted = !cloudPath;
+    const workspacePrefix = `${window.AtlasStore?.workspaceId || ""}/`;
+    if (cloudPath && workspacePrefix !== "/" && cloudPath.startsWith(workspacePrefix) && window.AtlasAuth?.client?.storage) {
         const { error } = await window.AtlasAuth.client.storage.from("atlas-files").remove([cloudPath]);
         if (error) console.warn("No se borró la copia en la nube:", error.message);
+        else cloudDeleted = true;
     }
     const database = await openReceiptDatabase();
 
@@ -182,7 +191,7 @@ async function deleteReceipt(paymentId, cloudPath = "") {
 
         transaction.oncomplete = () => {
             database.close();
-            resolve();
+            resolve(cloudDeleted);
         };
 
         transaction.onerror = () => {
@@ -190,6 +199,52 @@ async function deleteReceipt(paymentId, cloudPath = "") {
             reject(transaction.error);
         };
     });
+}
+
+function pendingReceiptDeletes() {
+    const value = window.Atlas?.readArray("atlasReceiptDeletes") || [];
+    const prefix = `${window.AtlasStore?.workspaceId || ""}/`;
+    return [...new Set(value.map(String).filter(path => prefix !== "/" && path.startsWith(prefix)))];
+}
+
+function queueReceiptDelete(path) {
+    if (!path) return;
+    window.Atlas?.writeJSON("atlasReceiptDeletes", [...pendingReceiptDeletes(), path]);
+}
+
+async function flushReceiptDeletes() {
+    const storage = window.AtlasAuth?.client?.storage;
+    const pending = pendingReceiptDeletes();
+    if (!storage || !pending.length) return;
+    const { error } = await storage.from("atlas-files").remove(pending);
+    if (!error) window.Atlas?.writeJSON("atlasReceiptDeletes", []);
+}
+
+async function syncPendingReceipts() {
+    if (syncingReceipts || !window.AtlasAuth?.client?.storage || !window.AtlasStore?.workspaceId) return;
+    syncingReceipts = true;
+    let changed = false;
+    try {
+        await flushReceiptDeletes();
+        for (const obligation of obligations) {
+            for (const payment of obligation.payments || []) {
+                if (!payment.receipt?.cloudPending) continue;
+                const local = await getReceipt(payment.id);
+                if (!local?.file) continue;
+                const path = await uploadReceipt(payment.id, local.file, payment.receipt.name || local.name);
+                if (!path) continue;
+                payment.receipt.path = path;
+                delete payment.receipt.cloudPending;
+                changed = true;
+            }
+        }
+        if (changed) {
+            saveData();
+            renderAll();
+        }
+    } finally {
+        syncingReceipts = false;
+    }
 }
 
 function formatFileSize(size) {
@@ -715,9 +770,11 @@ async function undoLastPayment(obligationId) {
 
     if (lastPayment.receipt) {
         try {
-            await deleteReceipt(lastPayment.id, lastPayment.receipt?.path || "");
+            const deleted = await deleteReceipt(lastPayment.id, lastPayment.receipt?.path || "");
+            if (!deleted) queueReceiptDelete(lastPayment.receipt?.path || "");
         } catch (error) {
             console.error("No se pudo borrar el comprobante:", error);
+            queueReceiptDelete(lastPayment.receipt?.path || "");
         }
     }
 
@@ -1058,9 +1115,11 @@ receiptDialog?.addEventListener("click", (event) => {
 function synchronizeFinancePage() {
     reloadStoredData();
     renderAll();
+    syncPendingReceipts().catch(error => console.warn("Comprobantes pendientes:", error.message));
 }
 
 window.addEventListener("pageshow", synchronizeFinancePage);
+window.addEventListener("online", () => syncPendingReceipts().catch(error => console.warn("Comprobantes pendientes:", error.message)));
 
 window.addEventListener("storage", (event) => {
     if (window.Atlas.storageKeyMatches(event.key, TRANSACTIONS_KEY) || window.Atlas.storageKeyMatches(event.key, OBLIGATIONS_KEY)) {

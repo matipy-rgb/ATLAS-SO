@@ -53,6 +53,7 @@ async function page(htmlFile, scriptFile, seed = {}) {
     };
     window.Element.prototype.scrollIntoView = function () {};
     window.confirm = () => true;
+    window.prompt = () => "REEMPLAZAR";
     window.alert = message => alerts.push(String(message));
     window.URL.createObjectURL = () => "blob:atlas-test";
     window.URL.revokeObjectURL = () => {};
@@ -134,6 +135,7 @@ async function testDashboardAndGlobalTools() {
     window.Element.prototype.scrollIntoView = function () {};
     window.confirm = () => true;
     window.alert = () => {};
+    window.prompt = () => "REEMPLAZAR";
     window.ATLAS_IS_HR_ADMIN = false;
     window.AtlasAuth = {
         user: { email: "prueba@example.com", user_metadata: { full_name: "Persona Prueba" } },
@@ -210,7 +212,7 @@ async function testDashboardAndGlobalTools() {
 
     data.set("atlasProjects", [{ id: "old-project", name: "Dato que debe reemplazarse" }]);
     const backup = {
-        version: "7.1",
+        version: "8.0",
         schema: "atlas-so-backup",
         exportedAt: new Date().toISOString(),
         workspace: {
@@ -232,7 +234,39 @@ async function testDashboardAndGlobalTools() {
     await settle();
     assert.equal(data.get("atlasTasks")[0].id, "restored-task");
     assert.equal(data.get("atlasProjects"), null, "Restaurar debe reemplazar datos ausentes de la copia");
-    assert.match(document.querySelector("#backupStatus").textContent, /restaurada/i);
+    assert.match(document.querySelector("#backupStatus").textContent, /reemplazada/i);
+
+    data.set("atlasTasks", [{ id: "current-task", text: "Tarea actual", updatedAt: "2026-08-02T10:00:00.000Z" }]);
+    data.set("atlasProjects", [{ id: "current-project", name: "Proyecto actual" }]);
+    const mergeBackup = {
+        version: "8.0",
+        schema: "atlas-so-backup",
+        exportedAt: new Date().toISOString(),
+        workspace: {
+            entries: {
+                atlasTasks: [
+                    { id: "current-task", text: "Tarea importada más nueva", updatedAt: "2026-08-02T11:00:00.000Z" },
+                    { id: "imported-task", text: "Tarea adicional" }
+                ]
+            },
+            attendance: [],
+            receipts: []
+        }
+    };
+    window.prompt = () => "COMBINAR";
+    Object.defineProperty(document.querySelector("#backupFile"), "files", {
+        configurable: true,
+        value: [{
+            size: JSON.stringify(mergeBackup).length,
+            text: async () => JSON.stringify(mergeBackup)
+        }]
+    });
+    document.querySelector("#backupFile").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await settle();
+    assert.equal(data.get("atlasTasks").length, 2, "Combinar no debe duplicar registros con el mismo ID");
+    assert.equal(data.get("atlasTasks").find(item => item.id === "current-task").text, "Tarea importada más nueva");
+    assert.equal(data.get("atlasProjects")[0].id, "current-project", "Combinar debe conservar grupos ausentes en la copia");
+    assert.match(document.querySelector("#backupStatus").textContent, /combinada/i);
     assert.equal(errors.length, 0, errors.map(error => error.message).join("\n"));
     dom.window.close();
 }
@@ -567,14 +601,21 @@ async function testStaticSafety() {
         read("package.json")
     ]);
     const publicCopy = `${index}\n${study}\n${work}`;
-    ["Matías", "UTCD", "ITSSMAR", "14635", "Pago de moto", "ASUPOR"].forEach(token => {
+    [
+        "Mat" + "ías",
+        "UT" + "CD",
+        "ITS" + "SMAR",
+        "146" + "35",
+        "Pago de " + "moto",
+        "ASU" + "POR"
+    ].forEach(token => {
         assert.ok(!publicCopy.includes(token), `Quedó un valor personal predefinido: ${token}`);
     });
     assert.ok(!rrhh.includes('data-hr-tab="payroll"'), "La simulación aislada de liquidación todavía aparece");
     assert.ok(!bootstrap.includes("<p>${String(error.message"), "El error de arranque no debe inyectar HTML");
     assert.match(schema, /can_manage_workspace/);
     assert.match(privacy, /marcaciones de Recursos Humanos/i);
-    assert.equal(JSON.parse(packageSource).version, "0.7.1");
+    assert.equal(JSON.parse(packageSource).version, "0.8.0");
 }
 
 await testHealth();
@@ -587,4 +628,4 @@ await testRRHHCore();
 await testDashboardAndGlobalTools();
 await testStaticSafety();
 
-console.log("ATLAS SO v0.7.1: CRUD, tablero y recorrido RRHH completo verificados.");
+console.log("ATLAS SO v0.8.0: CRUD, tablero y recorrido RRHH completo verificados.");

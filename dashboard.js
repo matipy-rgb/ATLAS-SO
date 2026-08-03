@@ -605,7 +605,6 @@
         "atlasHRScheduleAssignments",
         "atlasHRAttendance",
         "atlasHRAttendanceImports",
-        "atlasHRAttendanceDeletes",
         "atlasHRCompliance",
         "atlasHRPayrollSettings",
         "atlasHRHolidays",
@@ -615,8 +614,10 @@
 
     function allowedBackupKey(key) {
         const text = String(key || "");
+        if (/^atlasHRAttendanceDeletes(?:__|$)/i.test(text) || text === "atlasReceiptDeletes") return false;
+        if (/^atlasHR/i.test(text) && !window.ATLAS_IS_HR_ADMIN) return false;
         if (BACKUP_KEYS.includes(text)) return true;
-        if (!window.ATLAS_IS_HR_ADMIN || !text.startsWith("atlasHR")) return false;
+        if (!text.startsWith("atlasHR")) return false;
         return /^atlasHR[A-Za-z0-9]+(?:__[A-Za-z0-9_-]+){0,2}$/.test(text);
     }
 
@@ -624,6 +625,94 @@
         return JSON.parse(JSON.stringify(value, (key, item) =>
             ["__proto__", "prototype", "constructor"].includes(key) ? undefined : item
         ));
+    }
+
+    function backupRecordTime(item) {
+        const parsed = Date.parse(item?.updatedAt || item?.updated_at || item?.savedAt || item?.createdAt || "");
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function backupRecordIdentity(key, item) {
+        if (item?.id !== undefined && item?.id !== null && String(item.id)) return `id:${String(item.id)}`;
+        if (/atlasHRPeople/.test(key) && item?.ci) return `ci:${String(item.ci).replace(/\D/g, "")}`;
+        if (/Attendance/.test(key) && item?.date && (item?.employeeId || item?.clockId)) {
+            return `attendance:${item.employeeId || item.clockId}:${item.date}`;
+        }
+        return `value:${JSON.stringify(item)}`;
+    }
+
+    function mergeBackupArrays(key, current, incoming) {
+        const merged = new Map();
+        current.forEach(item => merged.set(backupRecordIdentity(key, item), safeBackupValue(item)));
+        incoming.forEach(item => {
+            const identity = backupRecordIdentity(key, item);
+            const previous = merged.get(identity);
+            if (!previous) {
+                merged.set(identity, safeBackupValue(item));
+                return;
+            }
+            const nextWins = backupRecordTime(item) >= backupRecordTime(previous);
+            let combined = nextWins ? { ...previous, ...item } : { ...item, ...previous };
+            if (key === "atlasObligations" && Array.isArray(previous.payments) && Array.isArray(item.payments)) {
+                combined.payments = mergeBackupArrays("atlasObligationPayments", previous.payments, item.payments);
+            }
+            merged.set(identity, safeBackupValue(combined));
+        });
+        return Array.from(merged.values());
+    }
+
+    function combineBackupValue(key, incoming) {
+        const current = A.readJSON(key, null);
+        if (Array.isArray(current) && Array.isArray(incoming)) return mergeBackupArrays(key, current, incoming);
+        if (
+            current && incoming
+            && typeof current === "object" && typeof incoming === "object"
+            && !Array.isArray(current) && !Array.isArray(incoming)
+        ) return safeBackupValue({ ...current, ...incoming });
+        if (key === "atlasQuickNotes" && typeof current === "string" && typeof incoming === "string") {
+            if (!current || current === incoming) return incoming;
+            if (!incoming) return current;
+            return `${current}\n\n--- Nota combinada desde respaldo ---\n${incoming}`;
+        }
+        return current === null || current === undefined || current === "" ? safeBackupValue(incoming) : current;
+    }
+
+    function markRestoredReceiptsPending(entries, receipts) {
+        const entryMap = new Map(entries);
+        const receiptMap = new Map((receipts || []).map(record => [String(record.paymentId), record]));
+        const obligations = entryMap.get("atlasObligations");
+        if (!Array.isArray(obligations) || !receiptMap.size) return entries;
+        const updated = obligations.map(obligation => ({
+            ...obligation,
+            payments: Array.isArray(obligation.payments) ? obligation.payments.map(payment => {
+                const restored = receiptMap.get(String(payment.id));
+                if (!restored) return payment;
+                const receipt = {
+                    ...(payment.receipt || {}),
+                    name: String(restored.name || payment.receipt?.name || "comprobante").slice(0, 200),
+                    type: String(restored.type || payment.receipt?.type || "application/octet-stream"),
+                    size: Number(restored.size || 0),
+                    savedAt: restored.savedAt || new Date().toISOString(),
+                    cloudPending: true
+                };
+                delete receipt.path;
+                return { ...payment, receipt };
+            }) : []
+        }));
+        entryMap.set("atlasObligations", updated);
+        return Array.from(entryMap.entries());
+    }
+
+    function requestRestoreMode() {
+        const answer = window.prompt(
+            "Elegí cómo restaurar: escribí COMBINAR para conservar y unir los datos actuales, o REEMPLAZAR para sustituirlos.",
+            "COMBINAR"
+        );
+        if (answer === null) return null;
+        const normalized = answer.trim().toUpperCase();
+        if (normalized === "COMBINAR") return "merge";
+        if (normalized === "REEMPLAZAR") return "replace";
+        throw new Error("Modo no válido. Escribí COMBINAR o REEMPLAZAR.");
     }
 
     function exportAppEntries() {
@@ -657,6 +746,10 @@
     function clearCurrentEntries() {
         const keys = new Set([...BACKUP_KEYS, ...storedDataKeys()]);
         keys.forEach(key => {
+            if (key === "atlasReceiptDeletes" || /^atlasHRAttendanceDeletes(?:__|$)/i.test(key)) {
+                A.writeJSON(key, []);
+                return;
+            }
             if (key.startsWith("atlasHRAttendanceFallback__")) return;
             if (allowedBackupKey(key)) A.writeJSON(key, null);
         });
@@ -795,21 +888,8 @@
     }
 
     async function replaceCloudAttendance(records) {
-        if (!window.AtlasAuth?.client || !window.AtlasStore?.workspaceId) return;
-        const currentIds = [];
-        const pageSize = 1000;
-        for (let offset = 0; ; offset += pageSize) {
-            const { data, error } = await window.AtlasAuth.client
-                .from("hr_attendance_records")
-                .select("id")
-                .eq("workspace_id", window.AtlasStore.workspaceId)
-                .range(offset, offset + pageSize - 1);
-            if (error) {
-                if (["42P01", "PGRST205"].includes(error.code)) return;
-                throw error;
-            }
-            (data || []).forEach(item => currentIds.push(String(item.id)));
-            if ((data || []).length < pageSize) break;
+        if (!window.AtlasAuth?.client || !window.AtlasStore?.workspaceId) {
+            throw new Error("Se necesita conexión para restaurar las marcaciones de forma segura.");
         }
         const rows = records.map(item => ({
             id: item.id,
@@ -826,32 +906,42 @@
             resolved_status: item.resolvedStatus || null,
             note: item.note || null,
             source_import_id: item.sourceImportId || null,
-            updated_by: window.AtlasStore.userId,
-            updated_at: item.updatedAt
+            client_updated_at: item.updatedAt
         }));
-        for (let index = 0; index < rows.length; index += 500) {
-            const { error } = await window.AtlasAuth.client.from("hr_attendance_records")
-                .upsert(rows.slice(index, index + 500), { onConflict: "workspace_id,company_id,employee_id,work_date" });
-            if (error) throw error;
-        }
-        const restoredIds = new Set(rows.map(item => String(item.id)));
-        const obsoleteIds = currentIds.filter(id => !restoredIds.has(id));
-        for (let index = 0; index < obsoleteIds.length; index += 200) {
-            const { error } = await window.AtlasAuth.client
-                .from("hr_attendance_records")
-                .delete()
-                .eq("workspace_id", window.AtlasStore.workspaceId)
-                .in("id", obsoleteIds.slice(index, index + 200));
-            if (error) throw error;
+        const { error } = await window.AtlasAuth.client.rpc("restore_hr_attendance_backup", {
+            target_workspace: window.AtlasStore.workspaceId,
+            records: rows
+        });
+        if (error) {
+            if (["42883", "PGRST202"].includes(error.code)) {
+                throw new Error("Falta aplicar supabase/v0.8-security-privacy-sync.sql antes de restaurar marcaciones.");
+            }
+            throw error;
         }
     }
 
-    async function restoreAttendanceRecords(records) {
+    function mergeAttendanceBackups(current, incoming) {
+        const merged = new Map();
+        [...(current || []), ...(incoming || [])].forEach(raw => {
+            const item = normalizeAttendanceBackup(raw);
+            const key = `${item.companyId}:${item.employeeId || item.clockId}:${item.date}`;
+            const previous = merged.get(key);
+            const currentTime = Date.parse(item.updatedAt || "") || 0;
+            const previousTime = Date.parse(previous?.updatedAt || "") || 0;
+            if (!previous || currentTime >= previousTime) merged.set(key, item);
+        });
+        return Array.from(merged.values());
+    }
+
+    async function restoreAttendanceRecords(records, mode = "replace") {
         if (!window.ATLAS_IS_HR_ADMIN || !Array.isArray(records)) return;
         const grouped = new Map();
-        const normalized = records.map(item => normalizeAttendanceBackup(item)).filter(item =>
+        let normalized = records.map(item => normalizeAttendanceBackup(item)).filter(item =>
             item.companyId && A.parseDate(item.date) && (item.employeeId || item.clockId)
         );
+        if (mode === "merge") {
+            normalized = mergeAttendanceBackups(await exportAttendanceRecords(), normalized);
+        }
         await replaceCloudAttendance(normalized.filter(item => item.employeeId));
         normalized.forEach(item => {
             const period = item.date.slice(0, 7);
@@ -913,33 +1003,148 @@
         });
     }
 
+    function receiptMimeType(name, type) {
+        const normalized = String(type || "").toLowerCase();
+        if (["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(normalized)) return normalized;
+        const extension = String(name || "").toLowerCase().match(/\.(jpe?g|png|webp|pdf)$/)?.[1] || "";
+        return ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", pdf: "application/pdf" })[extension] || "";
+    }
+
     async function exportReceipts() {
         const db = await openReceiptDatabase();
-        if (!db) return [];
-        const records = await new Promise((resolve, reject) => {
+        const records = db ? await new Promise((resolve, reject) => {
             const transaction = db.transaction("paymentReceipts", "readonly");
             const request = transaction.objectStore("paymentReceipts").getAll();
             request.onsuccess = () => resolve(request.result || []);
             request.onerror = () => reject(request.error);
-        });
-        db.close();
+        }) : [];
+        db?.close();
         const workspaceId = window.AtlasStore?.workspaceId || "local";
-        const paymentIds = new Set(A.readArray("atlasObligations")
-            .flatMap(item => Array.isArray(item.payments) ? item.payments : [])
-            .map(item => String(item.id)));
+        const payments = A.readArray("atlasObligations")
+            .flatMap(item => Array.isArray(item.payments) ? item.payments : []);
+        const paymentIds = new Set(payments.map(item => String(item.id)));
         const scoped = records.filter(record =>
-            record.workspaceId === workspaceId
+            (record.workspaceId === workspaceId && paymentIds.has(String(record.originalPaymentId ?? record.paymentId).replace(`${workspaceId}:`, "")))
             || (!record.workspaceId && paymentIds.has(String(record.originalPaymentId ?? record.paymentId)))
         );
-        return Promise.all(scoped.map(async record => ({
-            paymentId: record.originalPaymentId
-                ?? (String(record.paymentId).startsWith(`${workspaceId}:`) ? String(record.paymentId).slice(workspaceId.length + 1) : record.paymentId),
+        const exported = new Map();
+        const localRecords = await Promise.all(scoped.map(async record => ({
+            paymentId: String(record.originalPaymentId
+                ?? (String(record.paymentId).startsWith(`${workspaceId}:`) ? String(record.paymentId).slice(workspaceId.length + 1) : record.paymentId)),
             name: record.name,
-            type: record.type,
+            type: receiptMimeType(record.name, record.type || record.file?.type),
             size: record.size,
             savedAt: record.savedAt,
             dataUrl: record.file ? await blobToDataURL(record.file) : null
         })));
+        localRecords.forEach(record => exported.set(record.paymentId, record));
+
+        for (const payment of payments) {
+            if (!payment?.receipt) continue;
+            const paymentId = String(payment.id || "");
+            if (!paymentId) throw new Error("Hay un comprobante sin identificador de pago.");
+            const local = exported.get(paymentId);
+            if (local?.dataUrl) continue;
+            const path = String(payment.receipt.path || "");
+            const prefix = `${workspaceId}/`;
+            if (!path || workspaceId === "local" || !path.startsWith(prefix) || !window.AtlasAuth?.client?.storage) {
+                throw new Error(`El comprobante del pago ${paymentId} no está disponible para incluirlo en la copia.`);
+            }
+            const { data, error } = await window.AtlasAuth.client.storage.from("atlas-files").download(path);
+            if (error || !data) throw new Error(`No se pudo descargar el comprobante del pago ${paymentId}.`);
+            if (data.size > 10 * 1024 * 1024) throw new Error(`El comprobante del pago ${paymentId} supera 10 MB.`);
+            exported.set(paymentId, {
+                paymentId,
+                name: String(payment.receipt.name || path.split("/").pop() || "comprobante").slice(0, 200),
+                type: receiptMimeType(payment.receipt.name || path, payment.receipt.type || data.type),
+                size: data.size,
+                savedAt: payment.receipt.savedAt || new Date().toISOString(),
+                dataUrl: await blobToDataURL(data)
+            });
+        }
+        return Array.from(exported.values());
+    }
+
+    function bytesToBase64(bytes) {
+        let binary = "";
+        for (let offset = 0; offset < bytes.length; offset += 32768) {
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+        }
+        return btoa(binary);
+    }
+
+    function base64ToBytes(value) {
+        const binary = atob(String(value || ""));
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        return bytes;
+    }
+
+    async function backupKey(password, salt, usage) {
+        const material = await crypto.subtle.importKey(
+            "raw",
+            new TextEncoder().encode(password),
+            "PBKDF2",
+            false,
+            ["deriveKey"]
+        );
+        return crypto.subtle.deriveKey(
+            { name: "PBKDF2", hash: "SHA-256", salt, iterations: 310000 },
+            material,
+            { name: "AES-GCM", length: 256 },
+            false,
+            [usage]
+        );
+    }
+
+    async function encryptBackup(payload, password) {
+        if (!window.crypto?.subtle) throw new Error("Este navegador no permite cifrar la copia.");
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const key = await backupKey(password, salt, "encrypt");
+        const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+        const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext));
+        return {
+            schema: "atlas-so-encrypted-backup",
+            version: "8.0",
+            kdf: { name: "PBKDF2", hash: "SHA-256", iterations: 310000, salt: bytesToBase64(salt) },
+            cipher: { name: "AES-GCM", iv: bytesToBase64(iv) },
+            ciphertext: bytesToBase64(ciphertext)
+        };
+    }
+
+    async function decryptBackup(envelope, password) {
+        if (
+            envelope?.schema !== "atlas-so-encrypted-backup"
+            || envelope?.version !== "8.0"
+            || envelope?.kdf?.name !== "PBKDF2"
+            || envelope?.kdf?.hash !== "SHA-256"
+            || envelope?.kdf?.iterations !== 310000
+            || envelope?.cipher?.name !== "AES-GCM"
+        ) throw new Error("Formato de copia cifrada no válido.");
+        try {
+            const salt = base64ToBytes(envelope.kdf.salt);
+            const iv = base64ToBytes(envelope.cipher.iv);
+            if (salt.length !== 16 || iv.length !== 12) throw new Error("Parámetros inválidos");
+            const key = await backupKey(password, salt, "decrypt");
+            const plaintext = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv },
+                key,
+                base64ToBytes(envelope.ciphertext)
+            );
+            return JSON.parse(new TextDecoder().decode(plaintext));
+        } catch {
+            throw new Error("La contraseña es incorrecta o la copia fue alterada.");
+        }
+    }
+
+    function requestBackupPassword(confirmValue = false) {
+        const password = window.prompt(confirmValue
+            ? "Repetí la contraseña de la copia:"
+            : "Creá una contraseña para proteger esta copia (mínimo 10 caracteres):");
+        if (password === null) return null;
+        if (password.length < 10) throw new Error("La contraseña de la copia debe tener al menos 10 caracteres.");
+        return password;
     }
 
     async function exportBackup() {
@@ -947,33 +1152,41 @@
         button.disabled = true;
         backupStatus.textContent = "Preparando tu copia…";
         try {
+            const password = requestBackupPassword();
+            if (password === null) {
+                backupStatus.textContent = "Copia cancelada.";
+                return;
+            }
+            if (requestBackupPassword(true) !== password) throw new Error("Las contraseñas de la copia no coinciden.");
             const [receipts, attendance] = await Promise.all([
                 exportReceipts(),
                 exportAttendanceRecords()
             ]);
             const backup = {
-                version: "7.1",
+                version: "8.0",
                 schema: "atlas-so-backup",
                 exportedAt: new Date().toISOString(),
                 workspace: {
+                    id: window.AtlasStore?.workspaceId || "",
                     entries: exportAppEntries(),
                     attendance,
                     receipts
                 }
             };
-            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+            const envelope = await encryptBackup(backup, password);
+            const blob = new Blob([JSON.stringify(envelope)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = `atlas-so-backup-${A.localDate()}.json`;
+            link.download = `atlas-so-backup-${A.localDate()}.atlas`;
             document.body.appendChild(link);
             link.click();
             link.remove();
             URL.revokeObjectURL(url);
-            backupStatus.textContent = `Copia completa: ${Object.keys(backup.workspace.entries).length} grupos de datos, ${attendance.length} marcaciones y ${receipts.length} comprobante(s).`;
+            backupStatus.textContent = `Copia cifrada completa: ${Object.keys(backup.workspace.entries).length} grupos de datos, ${attendance.length} marcaciones y ${receipts.length} comprobante(s).`;
         } catch (error) {
             console.error(error);
-            backupStatus.textContent = "No se pudo completar la copia.";
+            backupStatus.textContent = `No se pudo completar la copia: ${String(error.message || "error desconocido")}.`;
         } finally {
             button.disabled = false;
         }
@@ -986,22 +1199,108 @@
         const [header, data] = dataUrl.split(",");
         const type = header.match(/data:(.*?);/)?.[1] || "application/octet-stream";
         const binary = atob(data);
+        if (binary.length > 10 * 1024 * 1024) throw new Error("El comprobante supera 10 MB.");
         const bytes = new Uint8Array(binary.length);
         for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
         return new Blob([bytes], { type });
     }
 
-    async function restoreReceipts(receipts, obligations = A.readArray("atlasObligations")) {
+    function validateBackupPayload(parsed) {
+        if (parsed?.schema !== "atlas-so-backup" || !parsed.workspace || typeof parsed.workspace !== "object") {
+            throw new Error("Formato de copia no válido.");
+        }
+        if (parsed.version !== "8.0" || !Number.isFinite(Date.parse(parsed.exportedAt || ""))) {
+            throw new Error("Versión de copia incompatible o fecha de exportación no válida.");
+        }
+        const entriesSource = parsed.workspace.entries;
+        if (!entriesSource || typeof entriesSource !== "object" || Array.isArray(entriesSource)) {
+            throw new Error("La copia no contiene grupos de datos válidos.");
+        }
+        const entries = Object.entries(entriesSource);
+        if (entries.length > 500 || entries.some(([key]) => !allowedBackupKey(key))) {
+            throw new Error("La copia contiene grupos de datos no permitidos.");
+        }
+        if (!Array.isArray(parsed.workspace.attendance) || !Array.isArray(parsed.workspace.receipts)) {
+            throw new Error("La copia no contiene marcaciones o comprobantes válidos.");
+        }
+        if (parsed.workspace.attendance.length > 250000 || parsed.workspace.receipts.length > 10000) {
+            throw new Error("La copia supera el volumen de restauración permitido.");
+        }
+        if (!window.ATLAS_IS_HR_ADMIN && parsed.workspace.attendance.length) {
+            throw new Error("Esta cuenta no tiene permiso para restaurar marcaciones de RRHH.");
+        }
+        parsed.workspace.attendance.forEach(record => {
+            const recordTimestamp = record?.updatedAt ? Date.parse(record.updatedAt) : Date.now();
+            if (
+                !record || typeof record !== "object"
+                || !String(record.companyId || "").trim()
+                || !String(record.employeeId || record.clockId || "").trim()
+                || !A.parseDate(String(record.date || "").slice(0, 10))
+                || String(record.id || "").length > 256
+                || String(record.companyId || "").length > 256
+                || String(record.employeeId || "").length > 256
+                || !Number.isFinite(recordTimestamp)
+                || recordTimestamp < Date.parse("2000-01-01T00:00:00.000Z")
+                || recordTimestamp > Date.now() + 5 * 60 * 1000
+            ) throw new Error("Hay una marcación no válida en la copia.");
+        });
+        const allowedReceiptTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+        parsed.workspace.receipts.forEach(record => {
+            if (!record || typeof record !== "object") throw new Error("Hay un comprobante no válido.");
+            const dataUrl = String(record.dataUrl || "");
+            const encoded = dataUrl.split(",", 2)[1] || "";
+            const decodedSize = encoded ? Math.floor(encoded.length * 3 / 4) - (encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0) : -1;
+            if (
+                !String(record.paymentId || "").trim()
+                || String(record.paymentId).length > 256
+                || String(record.name || "").length > 200
+                || !allowedReceiptTypes.has(String(record.type || ""))
+                || !Number.isFinite(Number(record.size))
+                || Number(record.size) < 0
+                || Number(record.size) > 10 * 1024 * 1024
+                || Number(record.size) !== decodedSize
+                || (record.savedAt && !Number.isFinite(Date.parse(record.savedAt)))
+                || !record.dataUrl
+                || dataUrl.length > 15 * 1024 * 1024
+                || !/^data:(?:image\/(?:jpeg|png|webp)|application\/pdf);base64,[a-z0-9+/]+=*$/i.test(dataUrl)
+                || !dataUrl.toLowerCase().startsWith(`data:${String(record.type).toLowerCase()};base64,`)
+            ) throw new Error("Hay un comprobante no permitido en la copia.");
+        });
+        const entriesMap = Object.fromEntries(entries);
+        const receiptIds = new Set(parsed.workspace.receipts.map(record => String(record.paymentId)));
+        if (receiptIds.size !== parsed.workspace.receipts.length) throw new Error("La copia contiene comprobantes duplicados.");
+        const referencedReceiptIds = new Set((Array.isArray(entriesMap.atlasObligations) ? entriesMap.atlasObligations : [])
+            .flatMap(item => Array.isArray(item?.payments) ? item.payments : [])
+            .filter(payment => payment?.receipt)
+            .map(payment => String(payment.id)));
+        if (
+            [...receiptIds].some(id => !referencedReceiptIds.has(id))
+            || [...referencedReceiptIds].some(id => !receiptIds.has(id))
+        ) throw new Error("La copia tiene comprobantes incompletos o sin pago asociado.");
+        const sourceWorkspace = String(parsed.workspace.id || "");
+        const currentWorkspace = String(window.AtlasStore?.workspaceId || "");
+        if (sourceWorkspace && currentWorkspace && sourceWorkspace !== currentWorkspace && !window.confirm(
+            "Esta copia pertenece a otro espacio. Restaurarla trasladará sus datos al espacio actual. ¿Continuar?"
+        )) throw new Error("Restauración cancelada.");
+        return {
+            entries: entries.map(([key, value]) => [key, safeBackupValue(value)]),
+            attendance: parsed.workspace.attendance.map(item => safeBackupValue(item)),
+            receipts: parsed.workspace.receipts.map(item => safeBackupValue(item))
+        };
+    }
+
+    async function restoreReceipts(receipts, obligations = A.readArray("atlasObligations"), mode = "replace") {
         if (!Array.isArray(receipts)) return;
         const prepared = receipts.flatMap(record => {
             if (!record?.dataUrl || String(record.dataUrl).length > 15 * 1024 * 1024) return [];
+            const file = dataURLToBlob(record.dataUrl);
             return [{
                 paymentId: record.paymentId,
                 name: String(record.name || "comprobante"),
-                type: String(record.type || "application/octet-stream"),
-                size: Number(record.size || 0),
+                type: file.type,
+                size: file.size,
                 savedAt: record.savedAt || new Date().toISOString(),
-                file: dataURLToBlob(record.dataUrl)
+                file
             }];
         });
         const db = await openReceiptDatabase();
@@ -1018,10 +1317,12 @@
             const store = transaction.objectStore("paymentReceipts");
             const request = store.getAll();
             request.onsuccess = () => {
-                (request.result || []).filter(record =>
-                    record.workspaceId === workspaceId
-                    || (!record.workspaceId && paymentIds.has(String(record.originalPaymentId ?? record.paymentId)))
-                ).forEach(record => store.delete(record.paymentId));
+                if (mode === "replace") {
+                    (request.result || []).filter(record =>
+                        record.workspaceId === workspaceId
+                        || (!record.workspaceId && paymentIds.has(String(record.originalPaymentId ?? record.paymentId)))
+                    ).forEach(record => store.delete(record.paymentId));
+                }
                 prepared.forEach(record => store.put({
                     paymentId: `${workspaceId}:${String(record.paymentId)}`,
                     originalPaymentId: record.paymentId,
@@ -1040,8 +1341,59 @@
         db.close();
     }
 
+    function validateLegacyBackupData(data) {
+        if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Formato anterior no válido.");
+        const arrayProperties = [
+            "tasks", "transactions", "obligations", "studyEvents", "healthRecords", "projects", "workRecords",
+            "habits", "hrPeople", "hrAbsences", "hrClients", "hrBranches", "hrSchedules", "hrAttendance",
+            "hrCompliance", "hrHolidays", "receipts"
+        ];
+        const objectProperties = ["preferences", "dailyFocus", "workSettings", "hrPayrollSettings"];
+        const recognized = [
+            ...arrayProperties.filter(property => Object.prototype.hasOwnProperty.call(data, property)),
+            ...objectProperties.filter(property => Object.prototype.hasOwnProperty.call(data, property)),
+            ...(Object.prototype.hasOwnProperty.call(data, "notes") ? ["notes"] : [])
+        ];
+        if (!recognized.length) throw new Error("La copia anterior no contiene datos reconocidos.");
+        arrayProperties.forEach(property => {
+            if (Object.prototype.hasOwnProperty.call(data, property) && !Array.isArray(data[property])) {
+                throw new Error(`El grupo ${property} de la copia anterior no es válido.`);
+            }
+        });
+        objectProperties.forEach(property => {
+            if (
+                Object.prototype.hasOwnProperty.call(data, property)
+                && (!data[property] || typeof data[property] !== "object" || Array.isArray(data[property]))
+            ) throw new Error(`El grupo ${property} de la copia anterior no es válido.`);
+        });
+        if (Object.prototype.hasOwnProperty.call(data, "notes") && typeof data.notes !== "string") {
+            throw new Error("Las notas de la copia anterior no son válidas.");
+        }
+        if (!window.ATLAS_IS_HR_ADMIN && recognized.some(property => property.startsWith("hr") && data[property]?.length)) {
+            throw new Error("Esta cuenta no tiene permiso para restaurar datos de RRHH.");
+        }
+        return safeBackupValue(data);
+    }
+
     async function importBackup(file) {
-        if (!file || !confirm("La restauración reemplazará los datos actuales. ¿Continuar?")) return;
+        if (!file) return;
+        let mode;
+        try {
+            mode = requestRestoreMode();
+        } catch (error) {
+            backupStatus.textContent = error.message;
+            backupFile.value = "";
+            return;
+        }
+        if (!mode) {
+            backupFile.value = "";
+            return;
+        }
+        const action = mode === "merge" ? "combinará la copia con" : "reemplazará";
+        if (!confirm(`La restauración ${action} los datos actuales. ¿Continuar?`)) {
+            backupFile.value = "";
+            return;
+        }
         if (file.size > 250 * 1024 * 1024) {
             backupStatus.textContent = "La copia supera el límite de 250 MB.";
             backupFile.value = "";
@@ -1049,25 +1401,27 @@
         }
         backupStatus.textContent = "Restaurando información…";
         try {
-            const parsed = JSON.parse(await file.text());
+            let parsed = JSON.parse(await file.text());
+            if (parsed?.schema === "atlas-so-encrypted-backup") {
+                const password = window.prompt("Ingresá la contraseña de esta copia:");
+                if (password === null) throw new Error("Restauración cancelada.");
+                parsed = await decryptBackup(parsed, password);
+            } else if (!window.confirm(
+                "Esta es una copia anterior sin cifrado. Verificá que provenga de un lugar confiable. ¿Continuar?"
+            )) throw new Error("Restauración cancelada.");
             if (parsed.schema === "atlas-so-backup" && parsed.workspace?.entries && typeof parsed.workspace.entries === "object") {
-                const entries = Object.entries(parsed.workspace.entries);
-                if (entries.some(([key]) => !allowedBackupKey(key))) {
-                    throw new Error("La copia contiene grupos de datos no permitidos.");
-                }
-                if (!Array.isArray(parsed.workspace.attendance) || !Array.isArray(parsed.workspace.receipts)) {
-                    throw new Error("La copia no contiene marcaciones o comprobantes válidos.");
-                }
+                const validated = validateBackupPayload(parsed);
+                let entries = mode === "merge"
+                    ? validated.entries.map(([key, value]) => [key, combineBackupValue(key, value)])
+                    : validated.entries;
+                entries = markRestoredReceiptsPending(entries, validated.receipts);
                 const entryMap = Object.fromEntries(entries);
-                await restoreAttendanceRecords(parsed.workspace.attendance);
-                await restoreReceipts(parsed.workspace.receipts, entryMap.atlasObligations);
-                clearCurrentEntries();
-                entries.forEach(([key, value]) => A.writeJSON(key, safeBackupValue(value)));
+                await restoreAttendanceRecords(validated.attendance, mode);
+                await restoreReceipts(validated.receipts, entryMap.atlasObligations, mode);
+                if (mode === "replace") clearCurrentEntries();
+                entries.forEach(([key, value]) => A.writeJSON(key, value));
             } else {
-                const data = parsed.data || parsed;
-                if (!data || typeof data !== "object") throw new Error("Formato anterior no válido.");
-                await restoreReceipts(Array.isArray(data.receipts) ? data.receipts : [], data.obligations);
-                clearCurrentEntries();
+                const data = validateLegacyBackupData(parsed.data || parsed);
                 const arrayMapping = {
                     tasks: "atlasTasks",
                     transactions: "atlasTransactions",
@@ -1086,9 +1440,11 @@
                     hrCompliance: "atlasHRCompliance",
                     hrHolidays: "atlasHRHolidays"
                 };
+                let entries = [];
                 Object.entries(arrayMapping).forEach(([property, key]) => {
                     if (Array.isArray(data[property]) && (!key.startsWith("atlasHR") || window.ATLAS_IS_HR_ADMIN)) {
-                        A.writeJSON(key, safeBackupValue(data[property]));
+                        const value = safeBackupValue(data[property]);
+                        entries.push([key, mode === "merge" ? combineBackupValue(key, value) : value]);
                     }
                 });
                 const objectMapping = {
@@ -1099,13 +1455,24 @@
                 };
                 Object.entries(objectMapping).forEach(([property, key]) => {
                     if (data[property] && typeof data[property] === "object" && (!key.startsWith("atlasHR") || window.ATLAS_IS_HR_ADMIN)) {
-                        A.writeJSON(key, safeBackupValue(data[property]));
+                        const value = safeBackupValue(data[property]);
+                        entries.push([key, mode === "merge" ? combineBackupValue(key, value) : value]);
                     }
                 });
-                if (typeof data.notes === "string") A.writeJSON("atlasQuickNotes", data.notes);
+                if (typeof data.notes === "string") {
+                    entries.push(["atlasQuickNotes", mode === "merge" ? combineBackupValue("atlasQuickNotes", data.notes) : data.notes]);
+                }
+                entries = markRestoredReceiptsPending(entries, Array.isArray(data.receipts) ? data.receipts : []);
+                const entryMap = Object.fromEntries(entries);
+                await restoreReceipts(Array.isArray(data.receipts) ? data.receipts : [], entryMap.atlasObligations, mode);
+                if (mode === "replace") clearCurrentEntries();
+                entries.forEach(([key, value]) => A.writeJSON(key, value));
             }
             quickNotes.value = A.readJSON("atlasQuickNotes", "") || "";
-            backupStatus.textContent = "Copia restaurada. La sincronización continuará en segundo plano.";
+            const synced = await window.AtlasStore?.flush?.();
+            backupStatus.textContent = synced === false
+                ? "Copia restaurada en este dispositivo. La nube se actualizará al recuperar conexión."
+                : `Copia ${mode === "merge" ? "combinada" : "reemplazada"} y sincronizada.`;
             renderAll();
             A.notify("Tu espacio fue restaurado.");
         } catch (error) {

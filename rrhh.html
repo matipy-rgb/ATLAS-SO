@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self'; media-src 'self' blob:; manifest-src 'self'">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0b1220">
     <title>Recursos Humanos | ATLAS SO</title>
@@ -43,7 +45,7 @@
                     <span id="hrContextMark" class="hr-context-mark">AS</span>
                     <div>
                         <small>EMPRESA Y VISTA ACTUAL</small>
-                        <strong id="hrContextTitle">A Support · Nómina general</strong>
+                        <strong id="hrContextTitle">Mi empresa · Nómina general</strong>
                         <span id="hrContextCaption">Vista consolidada de la empresa</span>
                     </div>
                 </div>
@@ -356,7 +358,7 @@
                     <label class="field span-8" data-identity-for="company"><span>Domicilio legal</span><input id="hrIdentityAddress" maxlength="180"></label>
                     <label class="field span-6" data-identity-for="client"><span>Lugar de trabajo</span><input id="hrIdentityWorkplace" maxlength="160"></label>
                     <label class="field span-6" data-identity-for="client"><span>Centro de costo</span><input id="hrIdentityCostCenter" maxlength="80"></label>
-                    <label class="field span-12" data-identity-for="client"><span>Modelo contractual</span><select id="hrIdentityContract"><option value="">Sin modelo asignado</option><option value="amancer">Contrato AMANCER</option><option value="bdp">Contrato BDP</option><option value="arcor">Contrato ARCOR</option><option value="polo">Contrato POLO</option><option value="geomax">Contrato GEOMAX</option></select></label>
+                    <label class="field span-12" data-identity-for="client"><span>Modelo contractual</span><select id="hrIdentityContract"><option value="">Sin modelo asignado</option><option value="general">Contrato general</option></select></label>
                 </div>
             </div>
             <div class="dialog-actions"><button id="hrIdentityCancel" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar cambios</button></div>

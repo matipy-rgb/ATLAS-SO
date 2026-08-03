@@ -1,13 +1,31 @@
-# ATLAS SO · v0.7.1
+# ATLAS SO · v0.8.0
 
 ATLAS SO reúne la operación personal y de RR. HH. en una aplicación instalable, privada y sincronizada.
 
-## Auditoría v0.7.1
+## Estabilidad, privacidad y seguridad v0.8
+
+- Las copias nuevas se cifran con AES-GCM y contraseña; la restauración valida
+  el contenido completo y permite combinar o reemplazar sin duplicar registros.
+- Las marcaciones se restauran en una transacción atómica de Supabase.
+- RR. HH. falla de forma cerrada: sin verificación vigente del permiso no se
+  abre el módulo ni se conserva su copia local para esa cuenta.
+- La sincronización aísla los fallos por grupo de datos, conserva una marca ISO
+  por cambio, rechaza escrituras atrasadas y reintenta cargas o eliminaciones.
+- Las marcaciones eliminadas generan tombstones en Supabase para que un
+  dispositivo atrasado no pueda hacerlas reaparecer.
+- El service worker no guarda parámetros de recuperación, tokens ni códigos de
+  autenticación en la caché.
+- Las políticas RLS reconocen las claves de RR. HH. sin depender de mayúsculas,
+  validan las rutas del depósito privado y revocan permisos públicos sobrantes.
+- La administración de RR. HH. deja de asignarse al primer registro: se fija por
+  UID verificado desde el SQL Editor.
+
+## Base funcional v0.7.1
 
 - Corrige feriados, tolerancias y marcaciones válidas sin horario asignado.
 - Sincroniza marcaciones por lotes, usa el último día real de cada mes y conserva
   tanto cambios como eliminaciones hechos sin conexión.
-- La copia completa reemplaza datos anteriores e incluye empresa, contratos,
+- La copia completa combina o reemplaza datos e incluye empresa, contratos,
   asignaciones, marcaciones y comprobantes separados por espacio.
 - Elimina la simulación aislada de liquidación, que duplicaba el cálculo sin estar conectada al periodo.
 - Neutraliza ejemplos y valores personales para que Finanzas, Estudios, Salud, Proyectos, Hábitos y Trabajo sean claros para otras personas.
@@ -16,8 +34,7 @@ ATLAS SO reúne la operación personal y de RR. HH. en una aplicación instalabl
   encadenado de RR. HH.
 - Actualiza el lector de planillas a SheetJS 0.20.3 y deja la auditoría de
   dependencias de producción en cero vulnerabilidades.
-- El esquema nuevo incluye la asignación segura del primer administrador de
-  RR. HH. y las políticas RLS completas de marcaciones.
+- El esquema incluye las políticas RLS completas de marcaciones.
 
 ## RR. HH. v0.7
 
@@ -67,7 +84,7 @@ Los domingos, feriados, cruces de medianoche, jornadas incompletas y faltas pend
 
 - Módulo propio con búsqueda por funcionario.
 - Modelo automático por identificador estable del cliente.
-- Modelos iniciales AMANCER, BDP, ARCOR, POLO y GEOMAX.
+- Modelo contractual general, ampliable con plantillas revisadas jurídicamente.
 - Certificado de trabajo y adendas 1 y 2.
 - Vista previa, generación Word, impresión/PDF e historial.
 - Validación de datos faltantes —incluido el salario nominal real— antes de generar.
@@ -77,7 +94,7 @@ Los domingos, feriados, cruces de medianoche, jornadas incompletas y faltas pend
 
 ### Volumen y seguridad
 
-Los funcionarios no tienen un máximo configurado. Las marcaciones se guardan por fila y periodo en `hr_attendance_records`, con copia local en IndexedDB para trabajar sin conexión. El archivo `supabase/v0.7-rrhh-scale.sql` activa esta estructura con políticas RLS exclusivas para la cuenta administradora de RR. HH. Si una instalación existente ya ejecutó ese archivo, debe ejecutar después `supabase/v0.7.1-security-hardening.sql`.
+Los funcionarios no tienen un máximo configurado. Las marcaciones se guardan por fila y periodo en `hr_attendance_records`, con copia local en IndexedDB para trabajar sin conexión. Toda instalación debe terminar aplicando `supabase/v0.8-security-privacy-sync.sql`.
 
 ## Áreas personales
 
@@ -91,17 +108,18 @@ Los funcionarios no tienen un máximo configurado. Las marcaciones se guardan po
 ## Verificación
 
 ```bash
-npm install
+npm ci
 npm run check
+npm audit
 ```
 
-La suite valida sintaxis, autenticación, apertura y cambios sin conexión, copia
-por reemplazo, CRUD de los seis módulos personales, contexto empresa/cliente,
+La suite valida sintaxis, autenticación, apertura y cambios sin conexión, copias
+por combinación y reemplazo, CRUD de los seis módulos personales, contexto empresa/cliente,
 flujo completo de RR. HH., cálculo diurno/nocturno, feriados, tolerancias,
 faltas, reimportaciones de 10.000 registros y cálculo de 62.000 jornadas.
 
-El informe completo se encuentra en
-`AUDITORIA-ATLAS-SO-v0.7.1.md`.
+Los valores de `atlas-config.js` se entregan vacíos: deben cargarse la URL y la
+publishable key del proyecto Supabase antes de iniciar la aplicación.
 
 ## Instalación y móvil
 

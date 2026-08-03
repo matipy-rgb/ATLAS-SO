@@ -33,8 +33,7 @@ const staticChecks = [
     [
     contracts.includes("general:")
         && contracts.includes("Contrato general")
-        && !contracts.includes("Contrato BDP")
-        && !contracts.includes("Contrato GEOMAX"),
+        && (contracts.match(/label:/g) || []).length === 1,
     "El modelo contractual neutral no quedó configurado correctamente."
 ],
     [contracts.includes("Art. 46") && !contracts.includes("Art. 48") && !contracts.includes("sesenta (60) días"), "El contrato conserva una referencia legal o un periodo de prueba automático incorrecto."],
@@ -154,7 +153,8 @@ localStore.set("atlasHRAttendanceFallback__company__2026-07", [
 ]);
 const afterOfflineDelete = await Store.remove("company", "2026-07", "remove");
 assert.deepEqual(Array.from(afterOfflineDelete, item => item.id), ["keep"]);
-assert.deepEqual(localStore.get("atlasHRAttendanceDeletes__company"), ["remove"]);
+assert.equal(localStore.get("atlasHRAttendanceDeletes__company")[0].id, "remove");
+assert.ok(Number.isFinite(Date.parse(localStore.get("atlasHRAttendanceDeletes__company")[0].deletedAt)));
 assert.deepEqual(Array.from(await Store.getMonth("company", "2026-07"), item => item.id), ["keep"]);
 const base = Array.from({ length: 10000 }, (_, index) => ({
     id: `a-${index}`,

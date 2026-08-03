@@ -27,6 +27,7 @@ async function createRun({ saved = [], remoteRows = [], failUpsert = false } = {
     const { window } = dom;
     saved.forEach(([key, value]) => window.localStorage.setItem(key, value));
     const upserts = [];
+    const serverRows = structuredClone(remoteRows);
     const originalAppend = window.document.head.appendChild.bind(window.document.head);
     window.document.head.appendChild = node => {
         const result = originalAppend(node);
@@ -41,14 +42,39 @@ async function createRun({ saved = [], remoteRows = [], failUpsert = false } = {
                     return this;
                 },
                 async eq() {
-                    return { data: structuredClone(remoteRows), error: null };
-                },
-                async upsert(rows) {
-                    upserts.push(structuredClone(rows));
-                    return failUpsert
-                        ? { error: { message: "sin conexión" } }
-                        : { error: null };
+                    return { data: structuredClone(serverRows), error: null };
                 }
+            };
+        },
+        async rpc(name, args) {
+            assert.equal(name, "upsert_app_data_if_newer");
+            upserts.push([{
+                workspace_id: args.target_workspace,
+                data_key: args.target_key,
+                value: structuredClone(args.target_value),
+                client_updated_at: args.target_client_updated_at
+            }]);
+            if (failUpsert) return { data: null, error: { message: "sin conexión" } };
+            const existing = serverRows.find(row => row.data_key === args.target_key);
+            if (existing && Date.parse(existing.client_updated_at || existing.updated_at) > Date.parse(args.target_client_updated_at)) {
+                return {
+                    data: {
+                        applied: false,
+                        value: structuredClone(existing.value),
+                        client_updated_at: existing.client_updated_at || existing.updated_at,
+                        updated_at: existing.updated_at
+                    },
+                    error: null
+                };
+            }
+            return {
+                data: {
+                    applied: true,
+                    value: structuredClone(args.target_value),
+                    client_updated_at: args.target_client_updated_at,
+                    updated_at: new Date().toISOString()
+                },
+                error: null
             };
         }
     };
@@ -77,6 +103,7 @@ async function createRun({ saved = [], remoteRows = [], failUpsert = false } = {
 const remote = [{
     data_key: "atlasTasks",
     value: [{ id: "remote", text: "Copia vieja" }],
+    client_updated_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z"
 }];
 const first = await createRun({ remoteRows: remote, failUpsert: true });
@@ -93,6 +120,22 @@ assert.equal(second.upserts.length, 1);
 assert.equal(second.upserts[0][0].value[0].id, "local");
 assert.equal(second.window.localStorage.getItem("atlas:pending:workspace-test"), null);
 second.dom.window.close();
+
+const conflictSaved = [
+    ["atlas:workspace-test:atlasTasks", JSON.stringify([{ id: "local-old", text: "Cambio atrasado" }])],
+    ["atlas:modified:workspace-test", JSON.stringify({ atlasTasks: "2026-01-02T00:00:00.000Z" })],
+    ["atlas:pending:workspace-test", JSON.stringify({ atlasTasks: "2026-01-02T00:00:00.000Z" })]
+];
+const newerRemote = [{
+    data_key: "atlasTasks",
+    value: [{ id: "remote-new", text: "Cambio más reciente" }],
+    client_updated_at: "2026-02-01T00:00:00.000Z",
+    updated_at: "2026-02-01T00:00:01.000Z"
+}];
+const conflict = await createRun({ saved: conflictSaved, remoteRows: newerRemote });
+assert.equal(conflict.window.AtlasStore.read("atlasTasks", [])[0].id, "remote-new", "Un cambio offline atrasado no debe pisar la nube más nueva");
+assert.equal(conflict.window.localStorage.getItem("atlas:pending:workspace-test"), null);
+conflict.dom.window.close();
 
 const authDom = new JSDOM("<!doctype html><body></body>", {
     url: "https://atlas.test/app.html",
@@ -125,14 +168,14 @@ const offlineClient = {
 };
 authWindow.ATLAS_CONFIG = {
     supabaseUrl: "https://prueba.supabase.co",
-    supabasePublishableKey: "publishable-test"
+    supabasePublishableKey: "sb_publishable_test"
 };
 authWindow.supabase = { createClient: () => offlineClient };
 authWindow.console.warn = () => {};
 authWindow.eval(authCore);
 await authWindow.AtlasAuth.getSession();
 assert.equal((await authWindow.AtlasAuth.getWorkspace()).id, "workspace-test");
-assert.equal(await authWindow.AtlasAuth.isHRAdmin(), true);
+assert.equal(await authWindow.AtlasAuth.isHRAdmin(), false, "Un permiso de RRHH almacenado no debe sobrevivir a una verificación fallida");
 authDom.window.close();
 
-console.log("ATLAS SO v0.7.1: cambios sin conexión preservados y sincronizados tras reabrir.");
+console.log("ATLAS SO v0.8.0: cambios sin conexión preservados y permisos sensibles cerrados por defecto.");

@@ -81,10 +81,10 @@
             rosterName: String(item?.rosterName || legacyGeneral?.name || "Nómina general").trim(),
             logo: safeLogo(item?.logo),
             ruc: String(item?.ruc || ""),
-            patronalNumber: String(hasPatronal ? item.patronalNumber || "" : (item?.id === "a-support" ? "0005-82-01080" : "")),
+            patronalNumber: String(hasPatronal ? item.patronalNumber || "" : ""),
             representative: String(item?.representative || ""),
             representativeCI: String(item?.representativeCI || ""),
-            documentCity: String(hasDocumentCity ? item.documentCity || "" : "Asunción"),
+            documentCity: String(hasDocumentCity ? item.documentCity || "" : ""),
             address: String(item?.address || ""),
             active: item?.active !== false,
             clients: (Array.isArray(item?.clients) ? item.clients : [])
