@@ -1,4 +1,4 @@
-const CACHE_NAME = "atlas-so-v0.8.0";
+const CACHE_NAME = "atlas-so-v0.9.0";
 const APP_SHELL = [
     "./",
     "./app.html",
@@ -37,6 +37,9 @@ const APP_SHELL = [
     "./rrhh.js",
     "./rrhh-super.js",
     "./rrhh-context.js",
+    "./rrhh-v09-core.js",
+    "./rrhh-operation.js",
+    "./rrhh-bulk-import.js",
     "./rrhh-import.js",
     "./rrhh-calc.js",
     "./rrhh-storage.js",

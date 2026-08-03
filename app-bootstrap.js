@@ -17,6 +17,12 @@
         "atlasHRAbsences",
         "atlasHRClients",
         "atlasHRBranches",
+        "atlasHRAreas",
+        "atlasHRPositions",
+        "atlasHRAssignments",
+        "atlasHRAuditLog",
+        "atlasHRImportJobs",
+        "atlasHRLegalParameters",
         "atlasHRSchedules",
         "atlasHRAttendance",
         "atlasHRCompliance",
@@ -29,11 +35,10 @@
     let syncTimer = null;
     let retryTimer = null;
     let retryDelay = 1500;
-    let lastModifiedMs = 0;
+    let pendingVersion = 0;
     let workspaceId = "";
     let userId = "";
     let hrAuthorized = false;
-    const modifiedAt = new Map();
 
     function isHRDataKey(key) {
         return /^atlasHR/i.test(String(key || ""));
@@ -65,54 +70,6 @@
         return `atlas:pending:${workspaceId}`;
     }
 
-    function modifiedStorageKey() {
-        return `atlas:modified:${workspaceId}`;
-    }
-
-    function validTimestamp(value) {
-        const parsed = Date.parse(String(value || ""));
-        return Number.isFinite(parsed) ? new Date(parsed).toISOString() : "";
-    }
-
-    function nextTimestamp() {
-        const now = Date.now();
-        lastModifiedMs = Math.max(now, lastModifiedMs + 1);
-        return new Date(lastModifiedMs).toISOString();
-    }
-
-    function persistModified() {
-        if (!workspaceId) return;
-        if (!modifiedAt.size) {
-            localStorage.removeItem(modifiedStorageKey());
-            return;
-        }
-        localStorage.setItem(modifiedStorageKey(), JSON.stringify(Object.fromEntries(modifiedAt)));
-    }
-
-    function loadModified() {
-        modifiedAt.clear();
-        try {
-            const parsed = JSON.parse(localStorage.getItem(modifiedStorageKey()) || "{}");
-            Object.entries(parsed && typeof parsed === "object" ? parsed : {}).forEach(([key, value]) => {
-                const timestamp = validTimestamp(value);
-                if (!key || !timestamp || (!hrAuthorized && isHRDataKey(key))) return;
-                modifiedAt.set(key, timestamp);
-                lastModifiedMs = Math.max(lastModifiedMs, Date.parse(timestamp));
-            });
-            persistModified();
-        } catch {
-            localStorage.removeItem(modifiedStorageKey());
-        }
-    }
-
-    function setModified(key, value) {
-        const timestamp = validTimestamp(value) || nextTimestamp();
-        modifiedAt.set(key, timestamp);
-        lastModifiedMs = Math.max(lastModifiedMs, Date.parse(timestamp));
-        persistModified();
-        return timestamp;
-    }
-
     function persistPending() {
         if (!workspaceId) return;
         if (!durablePending.size) {
@@ -130,10 +87,8 @@
             Object.entries(parsed && typeof parsed === "object" ? parsed : {}).forEach(([key, version]) => {
                 if (!key || typeof version !== "string") return;
                 if (!hrAuthorized && isHRDataKey(key)) return;
-                const timestamp = validTimestamp(version) || modifiedAt.get(key) || nextTimestamp();
-                durablePending.set(key, timestamp);
-                pendingSync.set(key, timestamp);
-                setModified(key, timestamp);
+                durablePending.set(key, version);
+                pendingSync.set(key, version);
             });
             persistPending();
         } catch {
@@ -145,25 +100,20 @@
         try {
             const parsed = JSON.parse(raw || "{}");
             Object.entries(parsed && typeof parsed === "object" ? parsed : {}).forEach(([key, version]) => {
-                const timestamp = validTimestamp(version);
-                if (!key || !timestamp || (!hrAuthorized && isHRDataKey(key))) return;
-                const current = durablePending.get(key);
-                if (current && Date.parse(current) > Date.parse(timestamp)) return;
-                durablePending.set(key, timestamp);
-                pendingSync.set(key, timestamp);
-                setModified(key, timestamp);
+                if (!key || typeof version !== "string" || (!hrAuthorized && isHRDataKey(key))) return;
+                durablePending.set(key, version);
+                pendingSync.set(key, version);
             });
         } catch {
-            // Otro contexto pudo escribir mientras cambiaba la sesión; se ignora.
+            // Otro contexto pudo escribir mientras cambiaba la sesiÃ³n; se ignora.
         }
     }
 
-    function rememberPending(key, value = nextTimestamp()) {
-        const version = setModified(key, value);
+    function rememberPending(key) {
+        const version = `${Date.now()}-${pendingVersion += 1}`;
         pendingSync.set(key, version);
         durablePending.set(key, version);
         persistPending();
-        return version;
     }
 
     async function flush() {
@@ -178,35 +128,22 @@
                 continue;
             }
             let error = null;
-            let result = null;
             try {
-                const response = await window.AtlasAuth.client.rpc("upsert_app_data_if_newer", {
-                    target_workspace: workspaceId,
-                    target_key: key,
-                    target_value: readLocal(key, null),
-                    target_client_updated_at: version
-                });
-                error = response.error;
-                result = Array.isArray(response.data) ? response.data[0] : response.data;
-                if (!error && (!result || typeof result !== "object" || typeof result.applied !== "boolean")) {
-                    error = new Error("Supabase devolvió una confirmación de sincronización no válida.");
-                }
+                ({ error } = await window.AtlasAuth.client
+                    .from("app_data")
+                    .upsert({
+                        workspace_id: workspaceId,
+                        data_key: key,
+                        value: readLocal(key, null),
+                        updated_by: userId,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: "workspace_id,data_key" }));
             } catch (caught) {
                 error = caught;
             }
             if (error) {
                 failed = true;
                 continue;
-            }
-            if (result?.applied === false) {
-                writeLocal(key, result.value ?? null);
-                setModified(key, result.client_updated_at || result.updated_at || version);
-                window.dispatchEvent(new CustomEvent("atlas:data-changed", { detail: { key, source: "cloud-conflict" } }));
-                window.dispatchEvent(new CustomEvent("atlas:sync-conflict", {
-                    detail: { key, message: "Se conservó una versión más reciente guardada en la nube." }
-                }));
-            } else {
-                setModified(key, result?.client_updated_at || version);
             }
             if (pendingSync.get(key) === version) pendingSync.delete(key);
             if (durablePending.get(key) === version) durablePending.delete(key);
@@ -234,19 +171,19 @@
         return true;
     }
 
-    function queueSync(key, timestamp) {
-        rememberPending(key, timestamp);
+    function queueSync(key, value) {
+        void value;
+        rememberPending(key);
         window.dispatchEvent(new CustomEvent("atlas:sync-status", {
-            detail: { status: "syncing", message: "Sincronizando…" }
+            detail: { status: "syncing", message: "Sincronizandoâ€¦" }
         }));
         window.clearTimeout(syncTimer);
         syncTimer = window.setTimeout(() => flush().catch(console.error), 450);
     }
 
     function write(key, value) {
-        const timestamp = nextTimestamp();
         writeLocal(key, value);
-        queueSync(key, timestamp);
+        queueSync(key, value);
     }
 
     function legacySources() {
@@ -276,7 +213,7 @@
             return;
         }
         if (config.migrateLegacyDataOnFirstLogin === "confirm" && !window.confirm(
-            "Encontramos datos locales de una versión anterior sin cuenta asignada. ¿Vincularlos a la cuenta que acabás de abrir?"
+            "Encontramos datos locales de una versiÃ³n anterior sin cuenta asignada. Â¿Vincularlos a la cuenta que acabÃ¡s de abrir?"
         )) return;
 
         let migrated = 0;
@@ -287,13 +224,13 @@
             try {
                 const value = JSON.parse(raw);
                 writeLocal(key, value);
-                rememberPending(key, nextTimestamp());
+                rememberPending(key);
                 migrated += 1;
                 migratedKeys.add(key);
             } catch (error) {
                 if (key === "atlasQuickNotes") {
                     writeLocal(key, raw);
-                    rememberPending(key, nextTimestamp());
+                    rememberPending(key);
                     migrated += 1;
                     migratedKeys.add(key);
                 }
@@ -323,10 +260,6 @@
         for (const key of Array.from(durablePending.keys())) {
             if (isHRDataKey(key)) durablePending.delete(key);
         }
-        for (const key of Array.from(modifiedAt.keys())) {
-            if (isHRDataKey(key)) modifiedAt.delete(key);
-        }
-        persistModified();
         persistPending();
 
         if (!("indexedDB" in window)) return;
@@ -356,7 +289,6 @@
         const workspace = await window.AtlasAuth.getWorkspace();
         workspaceId = workspace.id;
         userId = window.AtlasAuth.user.id;
-        loadModified();
         loadPending();
         await purgeUnauthorizedHRData();
         localStorage.setItem("atlasActiveUserId", userId);
@@ -364,39 +296,19 @@
 
         const { data, error } = await window.AtlasAuth.client
             .from("app_data")
-            .select("data_key, value, client_updated_at, updated_at")
+            .select("data_key, value, updated_at")
             .eq("workspace_id", workspaceId);
 
         if (error) {
-            console.warn("ATLAS SO inició con la copia local:", error.message);
+            console.warn("ATLAS SO iniciÃ³ con la copia local:", error.message);
             if (pendingSync.size) window.setTimeout(() => flush().catch(console.error), retryDelay);
             return;
         }
 
         const rows = Array.isArray(data) ? data : [];
         await migrateLegacy(rows);
-        const remoteKeys = new Set(rows.map(row => row.data_key));
         rows.forEach(row => {
-            const key = row.data_key;
-            if (!key || (!hrAuthorized && isHRDataKey(key)) || durablePending.has(key)) return;
-            const remoteTimestamp = validTimestamp(row.client_updated_at || row.updated_at) || nextTimestamp();
-            const localTimestamp = validTimestamp(modifiedAt.get(key));
-            if (!hasLocal(key) || !localTimestamp || Date.parse(remoteTimestamp) >= Date.parse(localTimestamp)) {
-                writeLocal(key, row.value);
-                setModified(key, remoteTimestamp);
-            } else {
-                rememberPending(key, localTimestamp);
-            }
-        });
-        const prefix = `atlas:${workspaceId}:`;
-        const localKeys = [];
-        for (let index = 0; index < localStorage.length; index += 1) {
-            const storageKey = localStorage.key(index);
-            if (storageKey?.startsWith(prefix)) localKeys.push(storageKey.slice(prefix.length));
-        }
-        localKeys.forEach(key => {
-            if (!key || remoteKeys.has(key) || durablePending.has(key) || (!hrAuthorized && isHRDataKey(key))) return;
-            rememberPending(key, modifiedAt.get(key) || nextTimestamp());
+            if (!durablePending.has(row.data_key)) writeLocal(row.data_key, row.value);
         });
         if (pendingSync.size) await flush();
     }
@@ -475,7 +387,7 @@
         detail.textContent = String(error.message || error);
         const link = document.createElement("a");
         link.href = "login.html";
-        link.textContent = "Volver al inicio de sesión";
+        link.textContent = "Volver al inicio de sesiÃ³n";
         main.append(title, detail, link);
         document.body.appendChild(main);
     });

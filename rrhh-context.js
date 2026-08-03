@@ -10,6 +10,13 @@
         "atlasHRPeople",
         "atlasHRAbsences",
         "atlasHRBranches",
+        "atlasHRAreas",
+        "atlasHRPositions",
+        "atlasHRAssignments",
+        "atlasHRAuditLog",
+        "atlasHRImportJobs",
+        "atlasHRLegalParameters",
+        "atlasHRMigrationV09",
         "atlasHRSchedules",
         "atlasHRScheduleAssignments",
         "atlasHRAttendance",
@@ -81,10 +88,10 @@
             rosterName: String(item?.rosterName || legacyGeneral?.name || "Nómina general").trim(),
             logo: safeLogo(item?.logo),
             ruc: String(item?.ruc || ""),
-            patronalNumber: String(hasPatronal ? item.patronalNumber || "" : ""),
+            patronalNumber: String(hasPatronal ? item.patronalNumber || "" : (item?.id === "a-support" ? "0005-82-01080" : "")),
             representative: String(item?.representative || ""),
             representativeCI: String(item?.representativeCI || ""),
-            documentCity: String(hasDocumentCity ? item.documentCity || "" : ""),
+            documentCity: String(hasDocumentCity ? item.documentCity || "" : "Asunción"),
             address: String(item?.address || ""),
             active: item?.active !== false,
             clients: (Array.isArray(item?.clients) ? item.clients : [])
@@ -104,7 +111,14 @@
         const clientId = requestedClient === GENERAL_ID || company.clients.some(item => item.id === requestedClient)
             ? requestedClient
             : GENERAL_ID;
-        return { companyId: company.id, clientId };
+        const requestedBranch = String(candidate?.branchId || GENERAL_ID);
+        const branches = originalReadArray(companyKey("atlasHRBranches", company.id));
+        const branchId = clientId !== GENERAL_ID
+            && requestedBranch !== GENERAL_ID
+            && branches.some(item => String(item.id) === requestedBranch && String(item.clientId) === clientId)
+            ? requestedBranch
+            : GENERAL_ID;
+        return { companyId: company.id, clientId, branchId };
     }
 
     let active = validActive(originalReadJSON(ACTIVE_KEY, null));
@@ -196,18 +210,46 @@
             : currentCompany().clients.find(item => item.id === active.clientId) || null;
     }
 
+    function branches(companyId = active.companyId) {
+        return originalReadArray(companyKey("atlasHRBranches", companyId));
+    }
+
+    function currentBranch() {
+        return active.branchId === GENERAL_ID ? null : branches().find(item => String(item.id) === active.branchId) || null;
+    }
+
     function clientById(id, companyId = active.companyId) {
         return companies.find(item => item.id === companyId)?.clients.find(item => item.id === id) || null;
+    }
+
+    function upsertClient(input, companyId = active.companyId) {
+        const company = companies.find(item => item.id === companyId) || currentCompany();
+        const name = String(input?.name || "").trim();
+        if (!name) throw new Error("Ingresá el nombre del cliente.");
+        const duplicate = company.clients.find(item => String(item.id) !== String(input?.id || "") && item.name.toLowerCase() === name.toLowerCase());
+        if (duplicate) throw new Error("Ya existe un cliente con ese nombre.");
+        const existing = company.clients.find(item => String(item.id) === String(input?.id || ""));
+        const next = normalizeClient({ ...existing, ...input, id: existing?.id || input?.id || slug(name, "cliente"), name });
+        company.clients = existing ? company.clients.map(item => item.id === existing.id ? next : item) : [next, ...company.clients];
+        saveMeta();
+        renderContextBar();
+        renderContextDialog();
+        return next;
+    }
+
+    function branchById(id, companyId = active.companyId) {
+        return branches(companyId).find(item => String(item.id) === String(id)) || null;
     }
 
     function visible(records, field = "clientId") {
         const items = Array.isArray(records) ? records : [];
         if (active.clientId === GENERAL_ID) return items;
-        return items.filter(item => String(item?.[field] || "") === active.clientId);
+        return items.filter(item => String(item?.[field] || "") === active.clientId
+            && (active.branchId === GENERAL_ID || String(item?.branchId || "") === active.branchId));
     }
 
-    function select(companyId, clientId = GENERAL_ID, reload = true) {
-        active = validActive({ companyId, clientId });
+    function select(companyId, clientId = GENERAL_ID, branchId = GENERAL_ID, reload = true) {
+        active = validActive({ companyId, clientId, branchId });
         originalWriteJSON(ACTIVE_KEY, active);
         if (reload) location.reload();
     }
@@ -223,13 +265,18 @@
         get active() { return { ...active }; },
         get company() { return currentCompany(); },
         get client() { return currentClient(); },
+        get branch() { return currentBranch(); },
         get companies() { return companies; },
+        get branches() { return branches(); },
         get isGeneral() { return active.clientId === GENERAL_ID; },
+        get isBranchGeneral() { return active.branchId === GENERAL_ID; },
         scopedKey,
         companyKey,
         rawRead: originalReadJSON,
         rawWrite: originalWriteJSON,
         clientById,
+        upsertClient,
+        branchById,
         visible,
         select,
         statusLabel
@@ -243,6 +290,7 @@
     function renderContextBar() {
         const company = currentCompany();
         const client = currentClient();
+        const branch = currentBranch();
         const mark = document.querySelector("#hrContextLogo");
         if (mark) {
             if (company.logo) {
@@ -260,9 +308,11 @@
         }
         const title = document.querySelector("#hrContextTitle");
         const caption = document.querySelector("#hrContextCaption");
-        if (title) title.textContent = `${company.name} · ${client?.name || company.rosterName}`;
-        if (caption) caption.textContent = client
-            ? "Cliente seleccionado dentro de la empresa administrada"
+        if (title) title.textContent = `${company.name} · ${client?.name || company.rosterName}${branch ? ` · ${branch.name}` : ""}`;
+        if (caption) caption.textContent = branch
+            ? `Sucursal activa · ${branch.city || branch.address || "alcance operativo específico"}`
+            : client
+            ? `Todas las sucursales de ${client.name}`
             : `Vista consolidada · ${company.clients.length} cliente(s), sin duplicar funcionarios`;
         const patronal = document.querySelector("#ipsPatronal");
         if (patronal) patronal.textContent = `Patronal · ${company.patronalNumber || "Sin configurar"}`;
@@ -396,7 +446,7 @@
             dialog.dataset.mode = "client";
             renderContextDialog();
         } else if (clientChoice) {
-            select(clientChoice.dataset.companyId, clientChoice.dataset.chooseClient);
+            select(clientChoice.dataset.companyId, clientChoice.dataset.chooseClient, GENERAL_ID);
         } else if (editCompany) {
             openIdentity("company", editCompany.dataset.editCompany, editCompany.dataset.editCompany);
         } else if (editClient) {
@@ -467,7 +517,7 @@
                     clients: []
                 });
                 companies.push(next);
-                active = { companyId: next.id, clientId: GENERAL_ID };
+                active = { companyId: next.id, clientId: GENERAL_ID, branchId: GENERAL_ID };
             }
         } else if (type === "client") {
             const existing = company.clients.find(item => item.id === dialog.dataset.id);

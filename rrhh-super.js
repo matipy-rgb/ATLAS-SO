@@ -458,7 +458,11 @@
     }
 
     function periodRecords() {
-        return C.visible(attendance);
+        return C.visible(attendance.map(item => {
+            if (item.clientId && (item.branchId || C.active.branchId === C.GENERAL_ID)) return item;
+            const assignment = window.AtlasHROperation?.currentAssignment(item.employeeId, item.date);
+            return { ...item, clientId: item.clientId || assignment?.clientId || "", branchId: item.branchId || assignment?.branchId || "", assignmentId: item.assignmentId || assignment?.id || "" };
+        }));
     }
 
     async function loadAttendance() {
@@ -466,6 +470,7 @@
         q("#hrAttendancePeriod").value = period;
         attendance = await Store.getMonth(C.active.companyId, period);
         renderAttendance();
+        window.dispatchEvent(new CustomEvent("atlas:hr-attendance-loaded", { detail: { records: periodRecords(), period } }));
     }
 
     function renderAttendance() {
@@ -481,7 +486,7 @@
         const shown = records.slice(0, 500);
         q("#hrAttendanceList").innerHTML = `${records.length > shown.length ? `<p class="hr-table-note">Se muestran 500 de ${records.length.toLocaleString("es-PY")}; la exportación y el cálculo usan todos.</p>` : ""}<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th></th></tr></thead><tbody>${shown.map(item => {
             const raw = item.rawStatus === "FALTA" ? "FALTA pendiente" : item.resolvedStatus || "Marcación";
-            return `<tr><td>${esc(personById(item.employeeId)?.fullName || item.sourceName || "No vinculado")}</td><td>${esc(item.date)}</td><td>${esc(item.in || "—")}</td><td>${esc(item.out || (item.rawStatus === "FALTA" ? "FALTA" : "—"))}</td><td>${esc(Calc.STATUS[item.resolvedStatus || (item.rawStatus === "FALTA" ? "raw_missing" : "worked")] || raw)}</td><td><button data-delete-attendance="${esc(item.id)}" type="button">Eliminar</button></td></tr>`;
+            return `<tr><td>${esc(personById(item.employeeId)?.fullName || item.sourceName || "No vinculado")}</td><td>${esc(item.date)}</td><td>${esc(item.in || "—")}</td><td>${esc(item.out || (item.rawStatus === "FALTA" ? "FALTA" : "—"))}</td><td>${esc(Calc.STATUS[item.resolvedStatus || (item.rawStatus === "FALTA" ? "raw_missing" : "worked")] || raw)}</td><td><button data-edit-attendance="${esc(item.id)}" type="button">Corregir</button><button data-delete-attendance="${esc(item.id)}" type="button">Eliminar</button></td></tr>`;
         }).join("")}</tbody></table>`;
     }
 
@@ -529,11 +534,14 @@
                 || roster.find(item => item.ci && item.ci === row.clockId.replace(/\D/g, ""))
                 || roster.find(item => clean(item.fullName) === compactName);
             if (!person && row.clockId) stagedMappings.set(row.clockId, "");
+            const assignment = window.AtlasHROperation?.currentAssignment(person?.id, row.date);
             return {
                 ...row,
                 id: id("att-"),
                 employeeId: person?.id || "",
                 clientId: person?.clientId || "",
+                branchId: assignment?.branchId || person?.branchId || "",
+                assignmentId: assignment?.id || "",
                 resolvedStatus: "",
                 updatedAt: new Date().toISOString()
             };
@@ -592,7 +600,7 @@
         if (!select) return;
         stagedMappings.set(select.dataset.mapClock, select.value);
         stagedAttendance = stagedAttendance.map(item => item.clockId === select.dataset.mapClock && select.value
-            ? { ...item, employeeId: select.value, clientId: personById(select.value)?.clientId || "" }
+            ? { ...item, employeeId: select.value, clientId: window.AtlasHROperation?.currentAssignment(select.value, item.date)?.clientId || personById(select.value)?.clientId || "", branchId: window.AtlasHROperation?.currentAssignment(select.value, item.date)?.branchId || personById(select.value)?.branchId || "", assignmentId: window.AtlasHROperation?.currentAssignment(select.value, item.date)?.id || "" }
             : item);
         renderAttendanceStage();
     });
@@ -637,10 +645,16 @@
         if (!person) return A.notify("Seleccioná un funcionario.", "error");
         const date = q("#hrAttendanceDate").value;
         const status = q("#hrAttendanceStatus").value;
+        const editingId = q("#hrAttendanceEditId").value;
+        const previous = editingId ? attendance.find(entry => entry.id === editingId) : null;
+        if (previous && !q("#hrAttendanceReason").value.trim()) return A.notify("Indicá el motivo de la corrección.", "error");
+        const operationalAssignment = window.AtlasHROperation?.currentAssignment(person.id, date);
         const item = {
-            id: id("att-"),
+            id: previous?.id || id("att-"),
             employeeId: person.id,
-            clientId: person.clientId,
+            clientId: operationalAssignment?.clientId || person.clientId,
+            branchId: operationalAssignment?.branchId || person.branchId || "",
+            assignmentId: operationalAssignment?.id || "",
             clockId: person.clockId,
             sourceName: person.fullName,
             date,
@@ -648,19 +662,50 @@
             out: q("#hrAttendanceOut").value,
             rawStatus: status === "raw_missing" ? "FALTA" : "",
             resolvedStatus: status === "raw_missing" ? "" : status,
+            note: previous ? q("#hrAttendanceReason").value.trim() : "",
             updatedAt: new Date().toISOString()
         };
         const result = await Store.upsertMonth(C.active.companyId, date.slice(0, 7), [item]);
         q("#hrAttendancePeriod").value = date.slice(0, 7);
         form.reset();
+        q("#hrAttendanceEditId").value = "";
+        q("#hrAttendanceReason").required = false;
+        q("#hrAttendanceSaveManual").textContent = "Guardar manual";
+        q("#hrAttendanceCancelEdit").hidden = true;
+        if (previous) window.AtlasHROperation?.appendAudit({ entityType: "attendance", entityId: item.id, action: "correct", reason: item.note, clientId: item.clientId, branchId: item.branchId, changes: window.AtlasHRV09Core?.diff(previous, item, ["employeeId", "date", "in", "out", "rawStatus", "resolvedStatus"]) });
         await loadAttendance();
         A.notify(result.cloudSynced === false ? "Marcación guardada en este dispositivo; la nube quedó pendiente." : "Marcación guardada.", result.cloudSynced === false ? "warning" : "success");
     });
     q("#hrAttendanceList").addEventListener("click", async event => {
+        const edit = event.target.closest("[data-edit-attendance]");
         const button = event.target.closest("[data-delete-attendance]");
+        if (edit) {
+            const item = attendance.find(entry => entry.id === edit.dataset.editAttendance);
+            if (!item) return;
+            q("#hrAttendanceEditId").value = item.id;
+            q("#hrAttendanceEmployee").value = item.employeeId;
+            q("#hrAttendanceDate").value = item.date;
+            q("#hrAttendanceIn").value = item.in;
+            q("#hrAttendanceOut").value = item.out;
+            q("#hrAttendanceStatus").value = item.rawStatus === "FALTA" && !item.resolvedStatus ? "raw_missing" : item.resolvedStatus || "worked";
+            q("#hrAttendanceReason").value = "";
+            q("#hrAttendanceReason").required = true;
+            q("#hrAttendanceSaveManual").textContent = "Guardar corrección";
+            q("#hrAttendanceCancelEdit").hidden = false;
+            q("#hrAttendanceReason").focus();
+            return;
+        }
         if (!button || !window.confirm("¿Eliminar esta marcación?")) return;
+        const previous = attendance.find(item => item.id === button.dataset.deleteAttendance);
+        const reason = window.prompt("Motivo obligatorio para eliminar la marcación:");
+        if (!reason?.trim()) return A.notify("La eliminación requiere un motivo.", "error");
         attendance = await Store.remove(C.active.companyId, q("#hrAttendancePeriod").value, button.dataset.deleteAttendance);
+        if (previous) window.AtlasHROperation?.appendAudit({ entityType: "attendance", entityId: previous.id, action: "delete", reason: reason.trim(), clientId: previous.clientId, branchId: previous.branchId, changes: [{ field: "record", before: previous, after: null }] });
         renderAttendance();
+    });
+    q("#hrAttendanceCancelEdit").addEventListener("click", () => {
+        q("#hrAttendanceForm").reset(); q("#hrAttendanceEditId").value = ""; q("#hrAttendanceReason").required = false;
+        q("#hrAttendanceSaveManual").textContent = "Guardar manual"; q("#hrAttendanceCancelEdit").hidden = true; q("#hrAttendanceDate").value = A.localDate();
     });
     q("#hrAttendancePeriod").addEventListener("change", () => loadAttendance().catch(console.error));
     q("#hrExportAttendance").addEventListener("click", () => {
@@ -743,7 +788,7 @@
         const pending = calculations.reduce((sum, item) => sum + item.pending, 0);
         const incomplete = calculations.reduce((sum, item) => sum + item.incomplete, 0);
         const noSchedule = calculations.filter(item => !item.scheduleName).length;
-        q("#hrCalculationSummary").innerHTML = `<span><strong>${calculations.length}</strong> funcionarios</span><span><strong>${Calc.hours(totalField("actualMinutes"))}</strong> horas registradas</span><span><strong>${Calc.hours(totalField("extraDayMinutes"))}</strong> extra 50 %</span><span><strong>${Calc.hours(totalField("extraNightMinutes"))}</strong> extra 100 %</span><span><strong>${pending}</strong> FALTA pendiente</span>`;
+        q("#hrCalculationSummary").innerHTML = `<span><strong>${calculations.length}</strong> funcionarios</span><span><strong>${Calc.hours(totalField("actualMinutes"))}</strong> horas registradas</span><span><strong>${Calc.hours(totalField("extraDayMinutes"))}</strong> extras diurnas</span><span><strong>${Calc.hours(totalField("extraNightMinutes"))}</strong> extras nocturnas</span><span><strong>${pending}</strong> FALTA pendiente</span>`;
         const warnings = [];
         if (pending) warnings.push(`${pending} FALTA deben justificarse o confirmarse.`);
         if (incomplete) warnings.push(`${incomplete} marcaciones tienen entrada o salida faltante.`);
@@ -753,7 +798,7 @@
             q("#hrCalculationList").innerHTML = '<div class="empty-state">No hay funcionarios o asignaciones para calcular.</div>';
             return;
         }
-        q("#hrCalculationList").innerHTML = `<table class="hr-simple-table hr-calculation-table"><thead><tr><th>Funcionario</th><th>CI</th><th>Modalidad</th><th>Horario</th><th>Total horas</th><th>Días</th><th>Noct. 30 %</th><th>Extra 50 %</th><th>Extra 100 %</th><th>Dom./fer.</th><th>Dom./fer. noct.</th><th>Ausente</th><th>Horas faltantes</th><th>Vacaciones</th><th>Pendientes</th></tr></thead><tbody>${calculations.map(item => `<tr>
+        q("#hrCalculationList").innerHTML = `<table class="hr-simple-table hr-calculation-table"><thead><tr><th>Funcionario</th><th>CI</th><th>Modalidad</th><th>Horario</th><th>Total horas</th><th>Días</th><th>Nocturnas</th><th>Extra diurna</th><th>Extra nocturna</th><th>Dom./fer.</th><th>Dom./fer. noct.</th><th>Ausente</th><th>Horas faltantes</th><th>Vacaciones</th><th>Pendientes</th></tr></thead><tbody>${calculations.map(item => `<tr>
             <td><strong>${esc(item.person.fullName)}</strong><small>${esc(clientName(item.person))}</small></td><td>${esc(item.person.ci)}</td><td>${esc(item.person.workerType)}</td><td>${esc(item.scheduleName || "Sin asignar")}</td>
             <td>${Calc.hours(item.totals.actualMinutes)}</td><td>${item.details.filter(day => day.actualMinutes > 0).length}</td><td>${Calc.hours(item.totals.nightPremiumMinutes)}</td><td>${Calc.hours(item.totals.extraDayMinutes)}</td><td>${Calc.hours(item.totals.extraNightMinutes)}</td>
             <td>${Calc.hours(item.totals.sundayHolidayMinutes)}</td><td>${Calc.hours(item.totals.sundayHolidayNightMinutes)}</td><td>${item.totals.absentDays}</td><td>${Calc.hours(item.totals.missingMinutes)}</td><td>${item.totals.vacationDays}</td><td>${item.pending + item.incomplete}</td>
@@ -772,9 +817,9 @@
             "Horario": item.scheduleName,
             "Total horas": Calc.hours(item.totals.actualMinutes),
             "Días trabajados": item.details.filter(day => day.actualMinutes > 0).length,
-            "Nocturnas 30%": Calc.hours(item.totals.nightPremiumMinutes),
-            "Extras 50%": Calc.hours(item.totals.extraDayMinutes),
-            "Extras 100%": Calc.hours(item.totals.extraNightMinutes),
+            "Nocturnas ordinarias": Calc.hours(item.totals.nightPremiumMinutes),
+            "Extras diurnas": Calc.hours(item.totals.extraDayMinutes),
+            "Extras nocturnas": Calc.hours(item.totals.extraNightMinutes),
             "Domingos/Feriados": Calc.hours(item.totals.sundayHolidayMinutes),
             "Domingos/Feriados nocturnas": Calc.hours(item.totals.sundayHolidayNightMinutes),
             "Ausente": item.totals.absentDays,
@@ -793,9 +838,9 @@
             "Estado": day.statusLabel,
             "Horario previsto": Calc.hours(day.scheduledMinutes),
             "Horas registradas": Calc.hours(day.actualMinutes),
-            "Nocturnas 30%": Calc.hours(day.nightPremiumMinutes),
-            "Extras 50%": Calc.hours(day.extraDayMinutes),
-            "Extras 100%": Calc.hours(day.extraNightMinutes),
+            "Nocturnas ordinarias": Calc.hours(day.nightPremiumMinutes),
+            "Extras diurnas": Calc.hours(day.extraDayMinutes),
+            "Extras nocturnas": Calc.hours(day.extraNightMinutes),
             "Domingo/Feriado": Calc.hours(day.sundayHolidayMinutes),
             "Horas faltantes": Calc.hours(day.missingMinutes),
             "Observación": day.warnings.join(" ")
@@ -840,4 +885,5 @@
         assignmentFor,
         activeRevision
     };
+    window.AtlasHRAttendanceCurrent = () => attendance.slice();
 })();

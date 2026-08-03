@@ -70,5 +70,5 @@ using (
     and public.can_edit_workspace(workspace_id)
 );
 
-revoke all on public.hr_attendance_records from public, anon, authenticated;
-grant select on public.hr_attendance_records to authenticated;
+grant select, insert, update, delete on public.hr_attendance_records to authenticated;
+revoke all on public.hr_attendance_records from anon;

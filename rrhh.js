@@ -12,11 +12,20 @@
         maternity: "Maternidad",
         permission: "Permiso",
         suspension: "Suspensión",
+        unexcused: "Ausencia injustificada",
+        late: "Tardanza",
+        early: "Salida anticipada",
+        overtime: "Hora extra",
+        bonus: "Bonificación",
+        deduction: "Descuento",
         other: "Otro"
     };
     const q = selector => document.querySelector(selector);
     const esc = A.escapeHTML;
     let page = 1;
+    let sortField = "fullName";
+    let sortDirection = 1;
+    const selectedPeople = new Set();
 
     function derivedStatus(item) {
         const raw = item?.status || (item?.active === false ? "inactive" : "active");
@@ -38,6 +47,11 @@
             ci: String(item?.ci || "").replace(/\D/g, ""),
             fullName: String(item?.fullName || item?.name || "").trim(),
             clientId: String(linkedClient || ""),
+            branchId: String(item?.branchId || ""),
+            areaId: String(item?.areaId || ""),
+            positionId: String(item?.positionId || ""),
+            supervisorId: String(item?.supervisorId || ""),
+            scheduleId: String(item?.scheduleId || ""),
             position: String(item?.position || "").trim(),
             costCenter: String(item?.costCenter || "").trim(),
             clockId: String(item?.clockId || "").trim(),
@@ -67,11 +81,19 @@
         return {
             id: String(item?.id || A.createId()),
             employeeId: String(item?.employeeId || ""),
+            clientId: String(item?.clientId || ""),
+            branchId: String(item?.branchId || ""),
+            assignmentId: String(item?.assignmentId || ""),
             type: typeLabels[item?.type] ? item.type : "other",
             startDate: item?.startDate || "",
             endDate: item?.endDate || "",
             returnDate: item?.returnDate || "",
             note: String(item?.note || item?.notes || "").trim(),
+            hours: Number(item?.hours || 0),
+            status: ["pending", "approved", "rejected"].includes(item?.status) ? item.status : "pending",
+            impact: String(item?.impact || "attendance"),
+            documentRef: String(item?.documentRef || ""),
+            responsible: String(item?.responsible || ""),
             actualReturnDate: item?.actualReturnDate || "",
             cancelled: Boolean(item?.cancelled),
             createdAt: item?.createdAt || new Date().toISOString(),
@@ -95,6 +117,7 @@
     }
     function personById(id) { return people.find(item => String(item.id) === String(id)); }
     function clientName(person) { return C.clientById(person?.clientId)?.name || "Sin cliente"; }
+    function branchName(person) { return window.AtlasHROperation?.branchById(person?.branchId)?.name || "Sin sucursal"; }
     function scopedPeople() { return C.visible(people); }
     function scopedAbsences() {
         const ids = new Set(scopedPeople().map(person => String(person.id)));
@@ -169,11 +192,15 @@
         const status = q("#hrPeopleStatus").value;
         const client = q("#hrPeopleClient").value;
         return scopedPeople().filter(item => {
-            const text = `${item.fullName} ${item.ci} ${item.clockId} ${item.position} ${clientName(item)}`.toLocaleLowerCase("es");
+            const text = `${item.fullName} ${item.ci} ${item.clockId} ${item.position} ${clientName(item)} ${branchName(item)}`.toLocaleLowerCase("es");
             return (!query || text.includes(query))
                 && (status === "all" || item.status === status || (status === "inactive-month" && item.status !== "active" && item.endDate.slice(0, 7) === A.localDate().slice(0, 7)))
                 && (client === "all" || item.clientId === client);
-        }).sort((a, b) => a.fullName.localeCompare(b.fullName, "es"));
+        }).sort((a, b) => {
+            const left = sortField === "client" ? clientName(a) : sortField === "branch" ? branchName(a) : a[sortField] || "";
+            const right = sortField === "client" ? clientName(b) : sortField === "branch" ? branchName(b) : b[sortField] || "";
+            return String(left).localeCompare(String(right), "es", { numeric: true }) * sortDirection;
+        });
     }
 
     function renderPeopleFilters() {
@@ -196,20 +223,39 @@
         q("#hrPeopleNext").disabled = page >= maxPage;
         if (!slice.length) {
             q("#hrEmployeeList").innerHTML = '<div class="empty-state">No hay funcionarios con estos filtros.</div>';
+            renderBulkBar();
             return;
         }
-        q("#hrEmployeeList").innerHTML = `<table class="hr-simple-table"><thead><tr><th>Funcionario</th><th>Cédula</th><th>Reloj</th><th>Cliente</th><th>Cargo</th><th>Ingreso</th><th>Estado</th><th></th></tr></thead><tbody>${slice.map(item => `
+        const indicator = field => sortField === field ? (sortDirection > 0 ? " ↑" : " ↓") : "";
+        q("#hrEmployeeList").innerHTML = `<table class="hr-simple-table hr-people-table"><thead><tr><th><input data-select-page type="checkbox" aria-label="Seleccionar página" ${slice.every(item => selectedPeople.has(item.id)) ? "checked" : ""}></th><th><button data-sort-people="fullName" type="button">Funcionario${indicator("fullName")}</button></th><th><button data-sort-people="ci" type="button">Cédula${indicator("ci")}</button></th><th>Reloj</th><th><button data-sort-people="client" type="button">Cliente${indicator("client")}</button></th><th><button data-sort-people="branch" type="button">Sucursal${indicator("branch")}</button></th><th><button data-sort-people="position" type="button">Cargo${indicator("position")}</button></th><th><button data-sort-people="startDate" type="button">Ingreso${indicator("startDate")}</button></th><th><button data-sort-people="status" type="button">Estado${indicator("status")}</button></th><th></th></tr></thead><tbody>${slice.map(item => `
             <tr class="${item.status === "active" ? "" : "hr-row-inactive"}">
-                <td><strong>${esc(item.fullName)}</strong></td><td>${esc(item.ci || "—")}</td><td>${esc(item.clockId || "—")}</td>
-                <td>${esc(clientName(item))}</td><td>${esc(item.position || "—")}</td><td>${esc(item.startDate || "—")}</td>
+                <td><input data-select-person="${esc(item.id)}" type="checkbox" aria-label="Seleccionar ${esc(item.fullName)}" ${selectedPeople.has(item.id) ? "checked" : ""}></td><td><strong>${esc(item.fullName)}</strong></td><td>${esc(item.ci || "—")}</td><td>${esc(item.clockId || "—")}</td>
+                <td>${esc(clientName(item))}</td><td>${esc(branchName(item))}</td><td>${esc(item.position || window.AtlasHROperation?.positionById(item.positionId)?.name || "—")}</td><td>${esc(item.startDate || "—")}</td>
                 <td><span class="hr-person-status ${esc(item.status)}">${esc(statusLabel(item.status))}</span></td>
                 <td><button data-person-edit="${esc(item.id)}" type="button">Editar</button></td>
             </tr>`).join("")}</tbody></table>`;
+        renderBulkBar();
+    }
+
+    function renderBulkBar() {
+        const bar = q("#hrPeopleBulkBar");
+        if (!bar) return;
+        bar.hidden = selectedPeople.size === 0;
+        q("#hrPeopleSelectedCount").textContent = `${selectedPeople.size.toLocaleString("es-PY")} seleccionado(s)`;
     }
 
     function renderEmployeeClientOptions(selected = "") {
         q("#employeeClient").innerHTML = `<option value="">Seleccionar cliente</option>${C.company.clients.filter(item => item.active !== false).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("")}`;
         q("#employeeClient").value = selected || (C.isGeneral ? "" : C.active.clientId);
+    }
+
+    function renderEmployeeStructureOptions(clientId, branchId = "", areaId = "") {
+        const operation = window.AtlasHROperation;
+        if (!operation) return;
+        q("#employeeBranch").innerHTML = operation.branchOptions(clientId, branchId);
+        q("#employeeBranch").value = branchId || "";
+        q("#employeeArea").innerHTML = operation.catalogOptions(operation.areas, areaId, "Sin área");
+        q("#employeeArea").value = areaId || "";
     }
 
     function setField(id, value) {
@@ -227,14 +273,18 @@
     }
 
     function openEmployee(item = null) {
+        item = item ? window.AtlasHROperation?.resolvePerson(item) || item : null;
         q("#employeeForm").reset();
         setField("#employeeId", item?.id);
         setField("#employeeCI", item?.ci);
         setField("#employeeName", item?.fullName);
         setField("#employeeClockId", item?.clockId);
         renderEmployeeClientOptions(item?.clientId);
+        renderEmployeeStructureOptions(item?.clientId || q("#employeeClient").value, item?.branchId, item?.areaId);
         setField("#employeePosition", item?.position);
         setField("#employeeCostCenter", item?.costCenter);
+        setField("#employeeAssignmentFrom", item?.assignment?.from || item?.startDate || A.localDate());
+        setField("#employeeAssignmentReason", "");
         setField("#employeeStartDate", item?.startDate);
         setField("#employeeEndDate", item?.endDate);
         setField("#employeeStatus", item?.status === "active" || !item ? "active" : "inactive");
@@ -291,13 +341,15 @@
         const endDate = q("#employeeEndDate").value;
         if (status !== "active" && !endDate) return A.notify("Indicá la fecha de salida para inactivar al funcionario.", "error");
         if (startDate && endDate && A.parseDate(endDate) < A.parseDate(startDate)) return A.notify("La fecha de salida no puede ser anterior al ingreso.", "error");
-        const next = normalizePerson({
+        let next = normalizePerson({
             ...current,
             id: current?.id || String(A.createId()),
             ci,
             fullName: q("#employeeName").value,
             clockId: q("#employeeClockId").value,
             clientId: q("#employeeClient").value,
+            branchId: q("#employeeBranch").value,
+            areaId: q("#employeeArea").value,
             position: q("#employeePosition").value,
             costCenter: q("#employeeCostCenter").value,
             startDate,
@@ -318,6 +370,15 @@
             updatedAt: new Date().toISOString()
         });
         if (!next.clientId) return A.notify("Seleccioná el cliente real del funcionario.", "error");
+        try {
+            next = window.AtlasHROperation?.recordPersonChange(current, next, {
+                effectiveFrom: q("#employeeAssignmentFrom").value || startDate || A.localDate(),
+                reason: q("#employeeAssignmentReason").value,
+                note: q("#employeeStatusNote").value
+            }) || next;
+        } catch (error) {
+            return A.notify(error.message || "No se pudo registrar la asignación.", "error");
+        }
         people = current ? people.map(item => item.id === current.id ? next : item) : [next, ...people];
         savePeople();
         if (!current && next.status === "active") addCompliance(next, "entry");
@@ -355,10 +416,12 @@
             const person = personById(item.employeeId) || {};
             const state = absenceStatus(item);
             return `<article class="hr-absence-card" data-state="${esc(state.key)}">
-                <div><div class="hr-context"><span>${esc(clientName(person))}</span><span>CI ${esc(person.ci || "—")}</span></div>
+                <div><div class="hr-context"><span>${esc(clientName(person))}</span><span>${esc(branchName(person))}</span><span>CI ${esc(person.ci || "—")}</span></div>
                 <h3>${esc(person.fullName || "Funcionario no encontrado")}</h3>
-                <p><span class="hr-type-badge">${esc(typeLabels[item.type])}</span> <span class="hr-status-badge ${esc(state.key)}">${esc(state.label)}</span></p>
+                <p><span class="hr-type-badge">${esc(typeLabels[item.type])}</span> <span class="hr-status-badge ${esc(state.key)}">${esc(state.label)}</span> <span class="hr-status-badge">${esc(item.status === "approved" ? "Aprobada" : item.status === "rejected" ? "Rechazada" : "Pendiente")}</span></p>
                 <p class="hr-date-line">${A.formatDate(item.startDate)} → ${A.formatDate(item.endDate)} · reintegro ${A.formatDate(item.returnDate)}</p>
+                ${item.hours ? `<p class="hr-date-line">${Number(item.hours)} hora(s) · impacto ${esc(item.impact || "attendance")}</p>` : ""}
+                ${item.documentRef ? `<p class="hr-date-line">Respaldo: ${esc(item.documentRef)}</p>` : ""}
                 ${item.note ? `<p class="hr-note">${esc(item.note)}</p>` : ""}</div>
                 <div class="hr-card-actions">
                     ${!item.actualReturnDate && !item.cancelled && state.key !== "upcoming" ? `<button data-absence-return="${esc(item.id)}" type="button">Confirmar reintegro</button>` : ""}
@@ -382,6 +445,10 @@
         setField("#absenceStart", item?.startDate || A.localDate());
         setField("#absenceEnd", item?.endDate || A.localDate());
         setField("#absenceReturn", item?.returnDate || firstWorkdayAfter(A.localDate(), item?.employeeId));
+        setField("#absenceHours", item?.hours || 0);
+        setField("#absenceWorkflowStatus", item?.status || "pending");
+        setField("#absenceImpact", item?.impact || "attendance");
+        setField("#absenceDocumentRef", item?.documentRef);
         setField("#absenceNote", item?.note);
         q("#absenceDialogTitle").textContent = item ? "Editar novedad" : "Registrar ausencia";
         updateAbsencePreview();
@@ -400,8 +467,11 @@
         event.preventDefault();
         const id = q("#absenceId").value;
         if (!calendarDays(q("#absenceStart").value, q("#absenceEnd").value)) return A.notify("El rango de fechas no es válido.", "error");
-        if (A.parseDate(q("#absenceReturn").value) <= A.parseDate(q("#absenceEnd").value)) return A.notify("El reintegro debe ser posterior al último día.", "error");
+        const requiresReturn = ["vacation", "medical", "maternity", "permission", "suspension", "unexcused", "other"].includes(q("#absenceType").value);
+        if (requiresReturn && (!q("#absenceReturn").value || A.parseDate(q("#absenceReturn").value) <= A.parseDate(q("#absenceEnd").value))) return A.notify("El reintegro debe ser posterior al último día.", "error");
         const current = absences.find(item => item.id === id);
+        const person = personById(q("#absenceEmployee").value);
+        const assignment = window.AtlasHROperation?.currentAssignment(person?.id, q("#absenceStart").value);
         const overlaps = absences.some(item => item.id !== id
             && item.employeeId === q("#absenceEmployee").value
             && !item.cancelled
@@ -412,15 +482,28 @@
             ...current,
             id: current?.id || String(A.createId()),
             employeeId: q("#absenceEmployee").value,
+            clientId: assignment?.clientId || person?.clientId || "",
+            branchId: assignment?.branchId || person?.branchId || "",
+            assignmentId: assignment?.id || "",
             type: q("#absenceType").value,
             startDate: q("#absenceStart").value,
             endDate: q("#absenceEnd").value,
-            returnDate: q("#absenceReturn").value,
+            returnDate: q("#absenceReturn").value || addDays(q("#absenceEnd").value, 1),
+            hours: q("#absenceHours").value,
+            status: q("#absenceWorkflowStatus").value,
+            impact: q("#absenceImpact").value,
+            documentRef: q("#absenceDocumentRef").value,
+            responsible: window.AtlasStore?.userId || "local-admin",
             note: q("#absenceNote").value,
             updatedAt: new Date().toISOString()
         });
         absences = current ? absences.map(item => item.id === id ? next : item) : [next, ...absences];
         saveAbsences();
+        window.AtlasHROperation?.appendAudit({
+            entityType: "news", entityId: next.id, action: current ? "update" : "create",
+            reason: next.note || typeLabels[next.type], clientId: next.clientId, branchId: next.branchId,
+            changes: window.AtlasHRV09Core?.diff(current || {}, next, ["type", "startDate", "endDate", "returnDate", "hours", "status", "impact", "documentRef"])
+        });
         q("#absenceDialog").close();
         renderAll();
         A.notify(current ? "Novedad actualizada." : "Novedad registrada.");
@@ -441,6 +524,40 @@
     q("#hrEmployeeList").addEventListener("click", event => {
         const button = event.target.closest("[data-person-edit]");
         if (button) openEmployee(personById(button.dataset.personEdit));
+        const sort = event.target.closest("[data-sort-people]");
+        if (sort) {
+            if (sortField === sort.dataset.sortPeople) sortDirection *= -1;
+            else { sortField = sort.dataset.sortPeople; sortDirection = 1; }
+            renderPeople();
+        }
+    });
+    q("#hrEmployeeList").addEventListener("change", event => {
+        const person = event.target.closest("[data-select-person]");
+        if (person) {
+            if (person.checked) selectedPeople.add(person.dataset.selectPerson); else selectedPeople.delete(person.dataset.selectPerson);
+            renderBulkBar();
+        }
+        if (event.target.matches("[data-select-page]")) {
+            q("#hrEmployeeList").querySelectorAll("[data-select-person]").forEach(input => {
+                input.checked = event.target.checked;
+                if (input.checked) selectedPeople.add(input.dataset.selectPerson); else selectedPeople.delete(input.dataset.selectPerson);
+            });
+            renderBulkBar();
+        }
+    });
+    q("#hrClearSelectedPeople").addEventListener("click", () => { selectedPeople.clear(); renderPeople(); });
+    q("#hrCopySelectedPeople").addEventListener("click", async () => {
+        const rows = people.filter(item => selectedPeople.has(item.id)).map(item => [item.ci, item.fullName, clientName(item), branchName(item), item.position].join("\t"));
+        const value = ["Cédula\tFuncionario\tCliente\tSucursal\tCargo", ...rows].join("\n");
+        try {
+            await navigator.clipboard.writeText(value);
+            A.notify(`${rows.length} fila(s) copiadas para pegar en Excel.`);
+        } catch { A.notify("El navegador no permitió copiar. Usá la exportación de nómina.", "error"); }
+    });
+    q("#hrToggleCompact").addEventListener("click", event => {
+        const compact = q("#hrEmployeeList").classList.toggle("hr-compact-table");
+        event.currentTarget.setAttribute("aria-pressed", String(compact));
+        event.currentTarget.textContent = compact ? "Vista completa" : "Vista compacta";
     });
     q("#hrAbsenceList").addEventListener("click", event => {
         const edit = event.target.closest("[data-absence-edit]");
@@ -448,18 +565,23 @@
         const cancelled = event.target.closest("[data-absence-cancel]");
         if (edit) openAbsence(absences.find(item => item.id === edit.dataset.absenceEdit));
         if (returned) {
-            absences = absences.map(item => item.id === returned.dataset.absenceReturn ? { ...item, actualReturnDate: A.localDate(), updatedAt: new Date().toISOString() } : item);
+            const previous = absences.find(item => item.id === returned.dataset.absenceReturn);
+            const updated = { ...previous, actualReturnDate: A.localDate(), status: "approved", updatedAt: new Date().toISOString() };
+            absences = absences.map(item => item.id === returned.dataset.absenceReturn ? updated : item);
             saveAbsences(); renderAll();
+            window.AtlasHROperation?.appendAudit({ entityType: "news", entityId: updated.id, action: "return", reason: "Reintegro confirmado", clientId: updated.clientId, branchId: updated.branchId, changes: window.AtlasHRV09Core?.diff(previous, updated, ["actualReturnDate", "status"]) });
         }
         if (cancelled && window.confirm(cancelled.textContent.trim() === "Reactivar" ? "¿Reactivar esta novedad?" : "¿Anular esta novedad sin borrar su historial?")) {
-            absences = absences.map(item => item.id === cancelled.dataset.absenceCancel
-                ? { ...item, cancelled: !item.cancelled, updatedAt: new Date().toISOString() }
-                : item);
+            const previous = absences.find(item => item.id === cancelled.dataset.absenceCancel);
+            const updated = { ...previous, cancelled: !previous.cancelled, updatedAt: new Date().toISOString() };
+            absences = absences.map(item => item.id === cancelled.dataset.absenceCancel ? updated : item);
             saveAbsences(); renderAll();
+            window.AtlasHROperation?.appendAudit({ entityType: "news", entityId: updated.id, action: updated.cancelled ? "cancel" : "reactivate", reason: updated.cancelled ? "Novedad anulada sin borrarla" : "Novedad reactivada", clientId: updated.clientId, branchId: updated.branchId, changes: [{ field: "cancelled", before: previous.cancelled, after: updated.cancelled }] });
         }
     });
     ["#hrPeopleSearch", "#hrPeopleStatus", "#hrPeopleClient"].forEach(selector => q(selector).addEventListener("input", () => { page = 1; renderPeople(); }));
     q("#employeeWorkerType").addEventListener("change", updateSalaryHelp);
+    q("#employeeClient").addEventListener("change", event => renderEmployeeStructureOptions(event.target.value));
     ["#hrSearch", "#hrStatusFilter", "#hrTypeFilter"].forEach(selector => q(selector).addEventListener("input", renderAbsences));
     q("#hrPeoplePrev").addEventListener("click", () => { page = Math.max(1, page - 1); renderPeople(); });
     q("#hrPeopleNext").addEventListener("click", () => { page += 1; renderPeople(); });
