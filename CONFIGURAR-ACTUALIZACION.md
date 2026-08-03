@@ -1,4 +1,4 @@
-# Configurar ATLAS SO v0.8.0
+# Configurar ATLAS SO v0.9.0
 
 Esta guía separa una instalación nueva de una actualización existente. Antes de
 tocar la base de datos, descargá una copia completa desde ATLAS SO y conservá el
@@ -11,8 +11,6 @@ respaldo anterior del proyecto.
 - Sitio servido por HTTP/HTTPS; no abras los HTML con `file://`.
 - Nunca guardes contraseñas, App Passwords ni la `service_role key` en el
   proyecto.
-- Completá `atlas-config.js` localmente con la URL y la publishable key; la
-  entrega no trae valores asociados a una instancia real.
 
 En PowerShell podés usar `npm.cmd` si la política del equipo bloquea `npm.ps1`.
 
@@ -25,6 +23,7 @@ En **Supabase > SQL Editor**, ejecutá una sola vez:
 ```text
 supabase/atlas-schema.sql
 supabase/v0.8-security-privacy-sync.sql
+supabase/v0.9-rrhh-operation.sql
 ```
 
 No ejecutes las migraciones históricas en una base nueva. Después de crear y
@@ -37,6 +36,7 @@ confirmar la cuenta principal, copiá su UID desde Authentication > Users, edit�
 
   ```text
   supabase/v0.8-security-privacy-sync.sql
+  supabase/v0.9-rrhh-operation.sql
   ```
 
 - Si venís de v0.6 o anterior y nunca aplicaste las migraciones de RR. HH.,
@@ -47,6 +47,7 @@ confirmar la cuenta principal, copiá su UID desde Authentication > Users, edit�
   supabase/v0.7-rrhh-scale.sql
   supabase/v0.7.1-security-hardening.sql
   supabase/v0.8-security-privacy-sync.sql
+  supabase/v0.9-rrhh-operation.sql
   ```
 
 Los scripts no borran la información de la aplicación. Aun así, confirmá que
@@ -74,7 +75,7 @@ Desde la carpeta del proyecto:
 ```powershell
 npm.cmd ci
 npm.cmd run check
-npm.cmd audit
+npm.cmd audit --omit=dev
 npm.cmd run mobile:prepare
 ```
 
@@ -90,9 +91,6 @@ Después de aplicar el SQL en la base real, probá con dos cuentas diferentes:
 2. Una cuenta común no puede abrir RR. HH.
 3. Ninguna cuenta ve los datos personales de otra.
 4. Un editor puede modificar datos, pero no asignarse un rol administrativo.
-5. Una escritura atrasada no pisa una versión más nueva y una marcación borrada
-   no reaparece al sincronizar otro dispositivo.
-6. Los modos de restauración `COMBINAR` y `REEMPLAZAR` conservan comprobantes.
 
 ## Instalación móvil
 

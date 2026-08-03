@@ -53,7 +53,6 @@ async function page(htmlFile, scriptFile, seed = {}) {
     };
     window.Element.prototype.scrollIntoView = function () {};
     window.confirm = () => true;
-    window.prompt = () => "REEMPLAZAR";
     window.alert = message => alerts.push(String(message));
     window.URL.createObjectURL = () => "blob:atlas-test";
     window.URL.revokeObjectURL = () => {};
@@ -135,7 +134,6 @@ async function testDashboardAndGlobalTools() {
     window.Element.prototype.scrollIntoView = function () {};
     window.confirm = () => true;
     window.alert = () => {};
-    window.prompt = () => "REEMPLAZAR";
     window.ATLAS_IS_HR_ADMIN = false;
     window.AtlasAuth = {
         user: { email: "prueba@example.com", user_metadata: { full_name: "Persona Prueba" } },
@@ -212,7 +210,7 @@ async function testDashboardAndGlobalTools() {
 
     data.set("atlasProjects", [{ id: "old-project", name: "Dato que debe reemplazarse" }]);
     const backup = {
-        version: "8.0",
+        version: "7.1",
         schema: "atlas-so-backup",
         exportedAt: new Date().toISOString(),
         workspace: {
@@ -234,39 +232,7 @@ async function testDashboardAndGlobalTools() {
     await settle();
     assert.equal(data.get("atlasTasks")[0].id, "restored-task");
     assert.equal(data.get("atlasProjects"), null, "Restaurar debe reemplazar datos ausentes de la copia");
-    assert.match(document.querySelector("#backupStatus").textContent, /reemplazada/i);
-
-    data.set("atlasTasks", [{ id: "current-task", text: "Tarea actual", updatedAt: "2026-08-02T10:00:00.000Z" }]);
-    data.set("atlasProjects", [{ id: "current-project", name: "Proyecto actual" }]);
-    const mergeBackup = {
-        version: "8.0",
-        schema: "atlas-so-backup",
-        exportedAt: new Date().toISOString(),
-        workspace: {
-            entries: {
-                atlasTasks: [
-                    { id: "current-task", text: "Tarea importada más nueva", updatedAt: "2026-08-02T11:00:00.000Z" },
-                    { id: "imported-task", text: "Tarea adicional" }
-                ]
-            },
-            attendance: [],
-            receipts: []
-        }
-    };
-    window.prompt = () => "COMBINAR";
-    Object.defineProperty(document.querySelector("#backupFile"), "files", {
-        configurable: true,
-        value: [{
-            size: JSON.stringify(mergeBackup).length,
-            text: async () => JSON.stringify(mergeBackup)
-        }]
-    });
-    document.querySelector("#backupFile").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await settle();
-    assert.equal(data.get("atlasTasks").length, 2, "Combinar no debe duplicar registros con el mismo ID");
-    assert.equal(data.get("atlasTasks").find(item => item.id === "current-task").text, "Tarea importada más nueva");
-    assert.equal(data.get("atlasProjects")[0].id, "current-project", "Combinar debe conservar grupos ausentes en la copia");
-    assert.match(document.querySelector("#backupStatus").textContent, /combinada/i);
+    assert.match(document.querySelector("#backupStatus").textContent, /restaurada/i);
     assert.equal(errors.length, 0, errors.map(error => error.message).join("\n"));
     dom.window.close();
 }
@@ -453,6 +419,7 @@ async function testRRHHCore() {
     const { window, document, data, notices } = test;
     window.CSS = { escape: value => String(value).replaceAll('"', '\\"') };
     window.HTMLAnchorElement.prototype.click = function () {};
+    window.eval(await read("rrhh-v09-core.js"));
     window.eval(await read("rrhh-calc.js"));
 
 Object.assign(window.AtlasHRContext.company, {
@@ -473,6 +440,7 @@ window.AtlasHRContext.company.clients.push({
     active: true
 });
 
+window.eval(await read("rrhh-operation.js"));
 window.eval(await read("rrhh.js"));
 
     click(window, "#openEmployeeDialog");
@@ -492,9 +460,11 @@ window.eval(await read("rrhh.js"));
 assert.ok(companyId, "Debe existir una empresa activa");
 const peopleKey = `atlasHRPeople__${companyId}`;
 const absencesKey = `atlasHRAbsences__${companyId}`;
-const complianceKey = `atlasHRCompliance__${companyId}`;
+    const complianceKey = `atlasHRCompliance__${companyId}`;
+    const operationalAssignmentsKey = `atlasHRAssignments__${companyId}`;
     assert.equal(data.get(peopleKey).length, 1);
     assert.equal(data.get(complianceKey).length, 1);
+    assert.equal(data.get(operationalAssignmentsKey).length, 1);
 
     click(window, "#openAbsenceDialog");
     document.querySelector("#absenceEmployee").value = data.get(peopleKey)[0].id;
@@ -601,21 +571,14 @@ async function testStaticSafety() {
         read("package.json")
     ]);
     const publicCopy = `${index}\n${study}\n${work}`;
-    [
-        "Mat" + "ías",
-        "UT" + "CD",
-        "ITS" + "SMAR",
-        "146" + "35",
-        "Pago de " + "moto",
-        "ASU" + "POR"
-    ].forEach(token => {
+    ["Matías", "UTCD", "ITSSMAR", "14635", "Pago de moto", "ASUPOR"].forEach(token => {
         assert.ok(!publicCopy.includes(token), `Quedó un valor personal predefinido: ${token}`);
     });
     assert.ok(!rrhh.includes('data-hr-tab="payroll"'), "La simulación aislada de liquidación todavía aparece");
     assert.ok(!bootstrap.includes("<p>${String(error.message"), "El error de arranque no debe inyectar HTML");
     assert.match(schema, /can_manage_workspace/);
     assert.match(privacy, /marcaciones de Recursos Humanos/i);
-    assert.equal(JSON.parse(packageSource).version, "0.8.0");
+    assert.equal(JSON.parse(packageSource).version, "0.9.0");
 }
 
 await testHealth();
@@ -628,4 +591,4 @@ await testRRHHCore();
 await testDashboardAndGlobalTools();
 await testStaticSafety();
 
-console.log("ATLAS SO v0.8.0: CRUD, tablero y recorrido RRHH completo verificados.");
+console.log("ATLAS SO v0.9.0: regresión CRUD, tablero y recorrido RRHH completo verificados.");

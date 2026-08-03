@@ -242,18 +242,18 @@
 
     function payable({ salary = 0, totals = {}, workerType = "monthly", rates = {} } = {}) {
         const baseSalary = Number(salary || 0);
-        const divisor = Number(rates.monthlyHours || 240);
+        const divisor = Math.max(1, Number(rates.monthlyHours || 1));
         const hourly = workerType === "parttime"
             ? Number(rates.partTimeHour || baseSalary / divisor)
             : workerType === "daily"
-                ? Number(rates.dailyHour || baseSalary / Number(rates.dailyHours || 8))
+                ? Number(rates.dailyHour || baseSalary / Math.max(1, Number(rates.dailyHours || 1)))
                 : baseSalary / divisor;
-        const ordinaryNightPremium = hours(totals.nightPremiumMinutes) * hourly * 0.30;
-        const extraDay = hours(totals.extraDayMinutes) * hourly * 1.50;
-        const extraNight = hours(totals.extraNightMinutes) * hourly * 2;
-        const sundayHoliday = hours(Math.max(0, totals.sundayHolidayMinutes - totals.sundayHolidayNightMinutes)) * hourly * 2;
-        const sundayHolidayNight = hours(totals.sundayHolidayNightMinutes) * hourly * 2.6;
-        const absenceDiscount = workerType === "monthly" ? (baseSalary / 30) * Number(totals.absentDays || 0) : 0;
+        const ordinaryNightPremium = hours(totals.nightPremiumMinutes) * hourly * Number(rates.nightPremium || 0);
+        const extraDay = hours(totals.extraDayMinutes) * hourly * Number(rates.extraDayMultiplier || 1);
+        const extraNight = hours(totals.extraNightMinutes) * hourly * Number(rates.extraNightMultiplier || 1);
+        const sundayHoliday = hours(Math.max(0, totals.sundayHolidayMinutes - totals.sundayHolidayNightMinutes)) * hourly * Number(rates.sundayHolidayMultiplier || 1);
+        const sundayHolidayNight = hours(totals.sundayHolidayNightMinutes) * hourly * Number(rates.sundayHolidayNightMultiplier || 1);
+        const absenceDiscount = workerType === "monthly" ? (baseSalary / Math.max(1, Number(rates.absenceDivisor || 1))) * Number(totals.absentDays || 0) : 0;
         return {
             hourly,
             ordinaryNightPremium,
