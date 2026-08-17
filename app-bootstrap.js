@@ -29,6 +29,11 @@
         "atlasHRPayrollSettings",
         "atlasHRHolidays"
     ];
+    const FINANCE_DATA_KEYS = Object.freeze([
+        "atlasTransactions",
+        "atlasObligations",
+        "atlasReceiptDeletes"
+    ]);
 
     const pendingSync = new Map();
     const durablePending = new Map();
@@ -37,6 +42,8 @@
     let retryDelay = 1500;
     let pendingVersion = 0;
     let workspaceId = "";
+    let workspaceRole = "";
+    let workspaceName = "";
     let userId = "";
     let hrAuthorized = false;
 
@@ -44,11 +51,22 @@
         return /^atlasHR/i.test(String(key || ""));
     }
 
+    function isFinanceDataKey(key) {
+        return FINANCE_DATA_KEYS.includes(String(key || ""));
+    }
+
+    function canUseDataKey(key) {
+        if (!hrAuthorized && isHRDataKey(key)) return false;
+        if (workspaceRole && workspaceRole !== "owner" && isFinanceDataKey(key)) return false;
+        return true;
+    }
+
     function scopedKey(key) {
         return `atlas:${workspaceId}:${key}`;
     }
 
     function readLocal(key, fallback) {
+        if (!canUseDataKey(key)) return fallback;
         try {
             const raw = localStorage.getItem(scopedKey(key));
             return raw === null ? fallback : JSON.parse(raw);
@@ -63,6 +81,7 @@
     }
 
     function hasLocal(key) {
+        if (!canUseDataKey(key)) return false;
         return localStorage.getItem(scopedKey(key)) !== null;
     }
 
@@ -86,7 +105,7 @@
             const parsed = JSON.parse(localStorage.getItem(pendingStorageKey()) || "{}");
             Object.entries(parsed && typeof parsed === "object" ? parsed : {}).forEach(([key, version]) => {
                 if (!key || typeof version !== "string") return;
-                if (!hrAuthorized && isHRDataKey(key)) return;
+                if (!canUseDataKey(key)) return;
                 durablePending.set(key, version);
                 pendingSync.set(key, version);
             });
@@ -100,7 +119,7 @@
         try {
             const parsed = JSON.parse(raw || "{}");
             Object.entries(parsed && typeof parsed === "object" ? parsed : {}).forEach(([key, version]) => {
-                if (!key || typeof version !== "string" || (!hrAuthorized && isHRDataKey(key))) return;
+                if (!key || typeof version !== "string" || !canUseDataKey(key)) return;
                 durablePending.set(key, version);
                 pendingSync.set(key, version);
             });
@@ -122,7 +141,7 @@
         const batch = Array.from(pendingSync);
         let failed = false;
         for (const [key, version] of batch) {
-            if (!hrAuthorized && isHRDataKey(key)) {
+            if (!canUseDataKey(key)) {
                 if (pendingSync.get(key) === version) pendingSync.delete(key);
                 if (durablePending.get(key) === version) durablePending.delete(key);
                 continue;
@@ -182,6 +201,7 @@
     }
 
     function write(key, value) {
+        if (!canUseDataKey(key)) throw new Error("Esta cuenta no puede guardar datos en ese módulo.");
         writeLocal(key, value);
         queueSync(key, value);
     }
@@ -189,7 +209,7 @@
     function legacySources() {
         return DATA_KEYS.flatMap(key => {
             const sources = key === "atlasTasks" ? [key, "tasks"] : [key];
-            if (!hrAuthorized && isHRDataKey(key)) return [];
+            if (!canUseDataKey(key)) return [];
             return sources.filter(source => localStorage.getItem(source) !== null).map(source => ({ key, source }));
         });
     }
@@ -285,19 +305,83 @@
         });
     }
 
+    async function purgeUnauthorizedFinanceData() {
+        if (!workspaceId || workspaceRole === "owner") return;
+        FINANCE_DATA_KEYS.forEach(key => localStorage.removeItem(scopedKey(key)));
+        for (const key of Array.from(pendingSync.keys())) {
+            if (isFinanceDataKey(key)) pendingSync.delete(key);
+        }
+        for (const key of Array.from(durablePending.keys())) {
+            if (isFinanceDataKey(key)) durablePending.delete(key);
+        }
+        persistPending();
+
+        try {
+            if (!window.AtlasFinanceStorage) await loadScript("finance-storage.js");
+            const Storage = window.AtlasFinanceStorage?.FinanceStorage;
+            if (!Storage) return;
+            const storage = new Storage();
+            await storage.open();
+            for (const name of Object.keys(window.AtlasFinanceStorage.STORES)) {
+                await storage.clearWorkspace(name, workspaceId);
+            }
+            storage.close();
+        } catch (error) {
+            console.warn("No se pudo limpiar la copia financiera local:", error.message);
+        }
+
+        if (!("indexedDB" in window)) return;
+        await new Promise(resolve => {
+            const request = indexedDB.open("atlasSOFiles", 1);
+            request.onupgradeneeded = () => {
+                if (!request.result.objectStoreNames.contains("paymentReceipts")) {
+                    request.result.createObjectStore("paymentReceipts", { keyPath: "paymentId" });
+                }
+            };
+            request.onerror = () => resolve();
+            request.onsuccess = () => {
+                const database = request.result;
+                if (!database.objectStoreNames.contains("paymentReceipts")) {
+                    database.close();
+                    resolve();
+                    return;
+                }
+                const transaction = database.transaction("paymentReceipts", "readwrite");
+                const cursorRequest = transaction.objectStore("paymentReceipts").openCursor();
+                cursorRequest.onsuccess = () => {
+                    const cursor = cursorRequest.result;
+                    if (!cursor) return;
+                    const record = cursor.value;
+                    if (record?.workspaceId === workspaceId
+                        || String(record?.paymentId || "").startsWith(`${workspaceId}:`)) cursor.delete();
+                    cursor.continue();
+                };
+                transaction.oncomplete = () => { database.close(); resolve(); };
+                transaction.onerror = () => { database.close(); resolve(); };
+            };
+        });
+    }
+
     async function hydrate() {
         const workspace = await window.AtlasAuth.getWorkspace();
         workspaceId = workspace.id;
+        workspaceRole = workspace.role || "member";
+        workspaceName = workspace.name || "Mi espacio";
         userId = window.AtlasAuth.user.id;
         loadPending();
         await purgeUnauthorizedHRData();
+        await purgeUnauthorizedFinanceData();
         localStorage.setItem("atlasActiveUserId", userId);
         localStorage.setItem("atlasActiveWorkspaceId", workspaceId);
 
-        const { data, error } = await window.AtlasAuth.client
+        let dataQuery = window.AtlasAuth.client
             .from("app_data")
             .select("data_key, value, updated_at")
             .eq("workspace_id", workspaceId);
+        if (workspaceRole !== "owner") {
+            dataQuery = dataQuery.not("data_key", "in", `(${FINANCE_DATA_KEYS.join(",")})`);
+        }
+        const { data, error } = await dataQuery;
 
         if (error) {
             console.warn("ATLAS SO iniciÃ³ con la copia local:", error.message);
@@ -349,6 +433,8 @@
             has: hasLocal,
             flush,
             get workspaceId() { return workspaceId; },
+            get workspaceRole() { return workspaceRole; },
+            get workspaceName() { return workspaceName; },
             get userId() { return userId; }
         };
         window.ATLAS_IS_HR_ADMIN = hrAuthorized;

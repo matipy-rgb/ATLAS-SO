@@ -5,91 +5,144 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self'; media-src 'self' blob:; manifest-src 'self'">
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0b1220">
-    <title>Finanzas | ATLAS SO</title>
+    <meta name="theme-color" content="#071b18">
+    <title>Finanzas y patrimonio v0.10 | ATLAS SO</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/atlas-192.png">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="module.css">
     <link rel="stylesheet" href="finance.css">
     <script src="vendor/supabase.js"></script>
+    <script src="vendor/xlsx.full.min.js"></script>
     <script src="atlas-config.js"></script>
     <script src="auth-core.js"></script>
+    <script src="finance-core.js" defer></script>
+    <script src="finance-domain.js" defer></script>
+    <script src="finance-storage.js" defer></script>
+    <script src="finance-repository.js" defer></script>
+    <script src="finance-migration.js" defer></script>
     <script src="app-bootstrap.js" defer></script>
 </head>
-<body data-page="finance" data-script="finance.js" data-context="Cuentas, pagos, movimientos y comprobantes" data-protected>
+<body data-page="finance" data-script="finance.js" data-context="Finanzas y control patrimonial v0.10" data-protected>
     <div class="app-frame"><div class="app-workspace">
-        <main class="page-content">
-            <section class="page-hero">
-                <div><p class="page-eyebrow">FINANZAS</p><h1>Control financiero</h1><p>Separá compromisos futuros de dinero que ya se movió. Un pago recién es gasto cuando lo registrás.</p></div>
-                <div class="page-hero-actions"><button id="focusObligation" class="primary-button" type="button">＋ Cuenta por pagar</button><button id="focusTransaction" class="secondary-button" type="button">Registrar movimiento</button></div>
+        <main class="page-content finance-page" id="financeMain">
+            <section class="finance-stage-banner" aria-label="Estado de esta versión">
+                <span>ATLAS SO v0.10</span>
+                <p>Finanzas, compromisos, planificación, patrimonio y cierre mensual · moneda única PYG</p>
             </section>
 
-            <section class="summary-grid" aria-label="Resumen financiero">
-                <article class="summary-item"><span>Balance registrado</span><strong id="balanceAmount">₲ 0</strong><small>Ingresos menos gastos</small></article>
-                <article class="summary-item positive"><span>Ingresos del mes</span><strong id="incomeAmount">₲ 0</strong><small>Dinero que entró</small></article>
-                <article class="summary-item negative"><span>Gastos del mes</span><strong id="expenseAmount">₲ 0</strong><small>Dinero que salió</small></article>
-                <article class="summary-item warning"><span>Cuentas por pagar</span><strong id="pendingAmount">₲ 0</strong><small id="pendingCount">0 pendientes</small></article>
+            <section class="finance-scopebar" aria-label="Alcance financiero activo">
+                <label class="scope-field"><span>Contexto</span><select id="financeContext" aria-label="Contexto financiero activo"></select></label>
+                <label class="scope-field month-field"><span>Mes</span><input id="financeMonth" type="month" aria-label="Mes financiero activo"></label>
+                <label class="scope-search"><span class="sr-only">Buscar en Finanzas</span><input id="financeSearch" type="search" maxlength="100" placeholder="Buscar concepto, contraparte, etiqueta…"></label>
+                <span id="financeSyncState" class="finance-sync-state" data-state="local" aria-live="polite">Preparando copia local…</span>
+            </section>
+            <section id="financeAccessNotice" class="finance-access-notice" hidden></section>
+            <section id="financeConflictNotice" class="finance-conflict-notice" hidden aria-live="assertive"></section>
+
+            <nav class="finance-view-tabs" aria-label="Secciones de Finanzas">
+                <button type="button" data-finance-nav="home" class="active">Inicio</button>
+                <button type="button" data-finance-nav="movements">Movimientos</button>
+                <button type="button" data-quick-open>＋ Nuevo</button>
+                <button type="button" data-finance-nav="accounts">Cuentas</button>
+                <button type="button" data-finance-nav="more">Más</button>
+            </nav>
+
+            <section class="finance-view active" data-finance-view="home" aria-labelledby="financeHomeTitle">
+                <header class="finance-hero">
+                    <div><p class="section-kicker">CONTROL DEL MES</p><h1 id="financeHomeTitle">Tu dinero y tus compromisos, sin mezclar contextos</h1><p id="financeScopeCopy">Preparando el contexto y el mes activos.</p></div>
+                    <button class="primary-button finance-primary-action" type="button" data-quick-action="operation">＋ Registrar operación</button>
+                </header>
+                <section class="finance-summary-grid finance-summary-grid-six" aria-label="Resumen financiero">
+                    <button class="finance-summary-card available" type="button" data-open-view="accounts"><span>Disponible</span><strong id="summaryAvailable">₲ 0</strong><small>Cuentas líquidas activas</small></button>
+                    <button class="finance-summary-card income" type="button" data-open-view="movements" data-movement-type="income"><span>Ingresos</span><strong id="summaryIncome">₲ 0</strong><small>Confirmados del mes</small></button>
+                    <button class="finance-summary-card expense" type="button" data-open-view="movements" data-movement-type="expense"><span>Gastos</span><strong id="summaryExpense">₲ 0</strong><small>Sin transferencias</small></button>
+                    <button class="finance-summary-card result" type="button" data-open-view="movements"><span>Resultado</span><strong id="summaryResult">₲ 0</strong><small>Ingresos menos gastos</small></button>
+                    <button class="finance-summary-card" type="button" data-open-view="commitments" data-commitment-state="attention"><span>Requiere atención</span><strong id="summaryDue">₲ 0</strong><small id="summaryDueCopy">Sin compromisos próximos</small></button>
+                    <button class="finance-summary-card income" type="button" data-open-view="commitments" data-commitment-state="receivable"><span>Cobros pendientes</span><strong id="summaryReceivable">₲ 0</strong><small id="summaryReceivableCopy">Sin cuentas por cobrar</small></button>
+                    <button class="finance-summary-card" type="button" data-open-view="planning" data-planning-target="budgets"><span>Presupuesto libre</span><strong id="summaryBudget">₲ 0</strong><small id="summaryBudgetCopy">Plan del mes</small></button>
+                    <button class="finance-summary-card" type="button" data-open-view="planning" data-planning-target="goals"><span>Metas de ahorro</span><strong id="summaryGoals">₲ 0</strong><small id="summaryGoalsCopy">Sin metas activas</small></button>
+                    <button class="finance-summary-card" type="button" data-open-view="more" data-focus-close><span>Cierre mensual</span><strong id="summaryClose">Abierto</strong><small id="summaryCloseCopy">Revisar y cerrar el mes</small></button>
+                </section>
+                <section class="finance-home-grid">
+                    <article class="finance-panel"><header><div><p class="section-kicker">CUENTAS</p><h2>Saldos actuales</h2></div><button type="button" class="text-button" data-open-view="accounts">Ver todas</button></header><div id="homeAccounts" class="finance-card-list"></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">PRÓXIMOS 7 DÍAS</p><h2>Qué requiere atención</h2></div><button type="button" class="text-button" data-open-view="commitments">Administrar</button></header><div id="homeCommitments" class="finance-card-list"></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">PATRIMONIO</p><h2>Activos menos pasivos</h2></div><button type="button" class="text-button" data-open-view="planning" data-planning-target="assets">Ver detalle</button></header><div id="homeNetWorth" class="worth-card"></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">CONTEXTOS</p><h2>De dónde sale el total</h2></div></header><div id="contextBreakdown" class="context-breakdown"></div></article>
+                </section>
             </section>
 
-            <section id="financeAlerts" class="finance-alert" hidden></section>
+            <section class="finance-view" data-finance-view="movements" aria-labelledby="movementsTitle" hidden>
+                <header class="finance-section-heading"><div><p class="section-kicker">OPERACIÓN DIARIA</p><h1 id="movementsTitle">Movimientos de <span id="movementsMonthLabel"></span></h1><p>Ingresos, gastos, transferencias, ajustes, aportes, retiros, cobros y pagos.</p></div><button class="primary-button" type="button" data-quick-action="operation">＋ Movimiento</button></header>
+                <section class="finance-filterbar" aria-label="Filtros de movimientos">
+                    <select id="movementTypeFilter" aria-label="Tipo"><option value="">Todos los tipos</option></select>
+                    <select id="movementAccountFilter" aria-label="Cuenta"><option value="">Todas las cuentas</option></select>
+                    <select id="movementCategoryFilter" aria-label="Categoría"><option value="">Todas las categorías</option></select>
+                    <select id="movementMethodFilter" aria-label="Medio de pago"><option value="">Todos los medios</option></select>
+                    <label class="compact-date"><span>Desde</span><input id="movementDateFrom" type="date"></label><label class="compact-date"><span>Hasta</span><input id="movementDateTo" type="date"></label><select id="movementStatusFilter" aria-label="Estado"><option value="">Todos los estados</option><option value="confirmed">Confirmados</option><option value="pending">Pendientes</option><option value="void">Anulados</option></select>
+                    <button id="saveMovementFilter" class="secondary-button" type="button">Guardar filtro</button>
+                </section>
+                <div class="finance-toolbar"><span id="movementCount">0 movimientos</span><div><button id="exportMovementsCsv" class="secondary-button" type="button">CSV</button><button id="exportMovementsXlsx" class="secondary-button" type="button">Excel</button></div></div>
+                <div id="savedFilters" class="saved-filter-list"></div>
+                <div id="movementsList" class="finance-movement-list"></div>
+                <button id="loadPreviousMonth" class="secondary-button load-previous" type="button">Cargar mes anterior</button>
+            </section>
 
-            <section class="finance-layout">
-                <div class="finance-main-column">
-                    <article class="panel finance-card">
-                        <header class="panel-header"><div><p class="section-kicker">COMPROMISOS</p><h2>Cuentas por pagar</h2><p>Vencimientos, cuotas, pagos parciales e historial.</p></div></header>
-                        <form id="obligationForm" class="finance-form obligation-form">
-                            <label class="field field-wide"><span>Cuenta o compromiso</span><input id="obligationName" type="text" maxlength="80" placeholder="Ej: Alquiler del mes" required></label>
-                            <label class="field"><span>Monto de esta cuota</span><input id="obligationAmount" type="number" min="1" step="1" placeholder="350000" required></label>
-                            <label class="field"><span>Vencimiento</span><input id="obligationDueDate" type="date" required></label>
-                            <label class="field"><span>Frecuencia</span><select id="obligationFrequency"><option value="once">Pago único</option><option value="monthly">Mensual</option><option value="installment">En cuotas</option></select></label>
-                            <div id="installmentFields" class="installment-fields" hidden>
-                                <label class="field"><span>Cuota actual</span><input id="installmentNumber" type="number" min="1" step="1" value="1"></label>
-                                <label class="field"><span>Total de cuotas</span><input id="installmentTotal" type="number" min="2" step="1" value="12"></label>
-                            </div>
-                            <button class="primary-button form-button" type="submit">Agregar cuenta</button>
-                        </form>
-                        <div id="obligationsList" class="obligations-list"></div>
-                    </article>
+            <section class="finance-view" data-finance-view="accounts" aria-labelledby="accountsTitle" hidden>
+                <header class="finance-section-heading"><div><p class="section-kicker">SALDOS Y MEDIOS</p><h1 id="accountsTitle">Cuentas</h1><p>El saldo usa el efecto real de cada movimiento; tarjetas y pasivos se muestran como deuda.</p></div><button class="primary-button" type="button" data-quick-action="account">＋ Cuenta</button></header>
+                <div id="accountsList" class="finance-account-grid"></div>
+            </section>
+
+            <section class="finance-view" data-finance-view="commitments" aria-labelledby="commitmentsTitle" hidden>
+                <header class="finance-section-heading"><div><p class="section-kicker">DEUDAS, CUOTAS Y COBROS</p><h1 id="commitmentsTitle">Compromisos</h1><p>Pagos parciales, vencimientos, recurrencias y recordatorios.</p></div><button class="primary-button" type="button" data-quick-action="obligation">＋ Compromiso</button></header>
+                <section class="finance-filterbar"><select id="commitmentStateFilter"><option value="">Todos los estados</option><option value="attention">Requieren atención</option><option value="receivable">Cobros pendientes</option><option value="overdue">Vencidos</option><option value="due_today">Vencen hoy</option><option value="due_soon">Por vencer</option><option value="partial">Parciales</option><option value="pending">Pendientes</option><option value="paid">Pagados</option><option value="collected">Cobrados</option></select><button id="generateRecurrences" class="secondary-button" type="button">Generar recurrencias del mes</button></section>
+                <div id="commitmentsList" class="finance-card-list finance-wide-list"></div>
+                <article class="finance-panel finance-subpanel"><header><div><p class="section-kicker">CALENDARIO INDEPENDIENTE</p><h2>Recurrencias</h2></div><button class="secondary-button" type="button" data-quick-action="recurrence">＋ Recurrencia</button></header><div id="recurrencesList" class="finance-card-list"></div></article>
+            </section>
+
+            <section class="finance-view" data-finance-view="planning" aria-labelledby="planningTitle" hidden>
+                <header class="finance-section-heading"><div><p class="section-kicker">PLANIFICACIÓN Y PATRIMONIO</p><h1 id="planningTitle">Decidir antes de gastar</h1><p>Presupuestos, metas de ahorro, activos, pasivos y evolución patrimonial.</p></div></header>
+                <nav class="finance-subtabs" aria-label="Herramientas de planificación"><button class="active" data-planning-tab="budgets" type="button">Presupuestos</button><button data-planning-tab="goals" type="button">Metas</button><button data-planning-tab="assets" type="button">Patrimonio</button></nav>
+                <section data-planning-panel="budgets"><div class="finance-toolbar"><strong id="budgetTotals">Sin presupuesto</strong><div><button id="copyBudgets" class="secondary-button" type="button">Copiar al mes siguiente</button><button class="primary-button" type="button" data-quick-action="budget">＋ Presupuesto</button></div></div><div id="budgetsList" class="finance-card-list finance-wide-list"></div></section>
+                <section data-planning-panel="goals" hidden><div class="finance-toolbar"><strong>Metas con aportes y retiros trazables</strong><button class="primary-button" type="button" data-quick-action="goal">＋ Meta</button></div><div id="goalsList" class="finance-account-grid"></div></section>
+                <section data-planning-panel="assets" hidden><div id="netWorthSummary" class="net-worth-summary"></div><div class="finance-toolbar"><strong>Valuaciones manuales, sin precios inventados</strong><button class="primary-button" type="button" data-quick-action="asset">＋ Activo o pasivo</button></div><div id="assetsList" class="finance-account-grid"></div></section>
+            </section>
+
+            <section class="finance-view" data-finance-view="more" aria-labelledby="moreTitle" hidden>
+                <header class="finance-section-heading"><div><p class="section-kicker">CONTROL Y CONFIGURACIÓN</p><h1 id="moreTitle">Más herramientas</h1><p>Cierre mensual, informes, medios de pago, categorías, contextos y migración.</p></div></header>
+                <div class="finance-more-grid">
+                    <article class="finance-panel"><header><div><p class="section-kicker">PLANIFICACIÓN</p><h2>Presupuesto, metas y patrimonio</h2></div></header><div class="migration-actions"><button class="secondary-button" type="button" data-open-view="planning" data-planning-target="budgets">Presupuestos</button><button class="secondary-button" type="button" data-open-view="planning" data-planning-target="goals">Metas</button><button class="secondary-button" type="button" data-open-view="planning" data-planning-target="assets">Patrimonio</button></div></article>
+                    <article class="finance-panel report-panel"><header><div><p class="section-kicker">CIERRE MENSUAL</p><h2 id="closeStateTitle">Mes abierto</h2></div><span id="closeStateBadge" class="status-badge">Abierto</span></header><div id="closePreview"></div><div class="migration-actions"><button id="printMonthlyReport" class="secondary-button" type="button">Vista imprimible / PDF</button><button id="exportMonthlyReport" class="secondary-button" type="button">Exportar Excel</button><button id="openCloseDialog" class="primary-button" type="button">Cerrar mes</button></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">COMPARACIÓN</p><h2>Mes actual vs. anterior</h2></div></header><div id="monthComparison"></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">MEDIOS DE PAGO</p><h2>Opciones configurables</h2></div><button class="secondary-button" type="button" data-quick-action="paymentMethod">＋ Medio</button></header><div id="paymentMethodsList" class="finance-card-list"></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">CONTEXTOS</p><h2>Personal y emprendimientos</h2></div><button class="secondary-button" type="button" data-quick-action="context">＋ Emprendimiento</button></header><div id="contextsList" class="finance-card-list"></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">CATEGORÍAS</p><h2>Ingresos y gastos</h2></div><button class="secondary-button" type="button" data-quick-action="category">＋ Categoría</button></header><div id="categoriesList" class="finance-card-list"></div></article>
+                    <article class="finance-panel"><header><div><p class="section-kicker">AUDITORÍA</p><h2>Historial de cambios</h2></div></header><p>Usuario, sesión disponible, fecha, valores y motivo confirmados por el servidor.</p><div id="auditLogList" class="finance-card-list"></div></article>
+                    <article class="finance-panel migration-panel" id="migrationPanel"><header><div><p class="section-kicker">MIGRACIÓN v0.9</p><h2>Detectar, comparar e importar</h2></div><span id="migrationBadge" class="status-badge">Sin revisar</span></header><p id="migrationIntro">El origen se conserva. Revisá cantidades, totales y errores antes de importar.</p><div id="migrationPreview" class="migration-preview" hidden></div><div class="migration-actions"><button id="detectMigration" class="secondary-button" type="button">Analizar datos v0.9</button><button id="downloadMigrationErrors" class="secondary-button" type="button" hidden>Descargar errores</button><button id="openMigration" class="primary-button" type="button" hidden>Elegir destino e importar</button></div></article>
                 </div>
-
-                <aside class="finance-side-column">
-                    <article class="panel finance-card">
-                        <header class="panel-header"><div><p class="section-kicker">MOVIMIENTOS</p><h2>Ingresos y gastos</h2><p>Los pagos de cuentas se agregan automáticamente.</p></div></header>
-                        <form id="transactionForm" class="finance-form transaction-form">
-                            <label class="field"><span>Tipo</span><select id="transactionType"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
-                            <label class="field"><span>Fecha</span><input id="transactionDate" type="date" required></label>
-                            <label class="field field-wide"><span>Descripción</span><input id="transactionDescription" type="text" maxlength="80" placeholder="Ej: Compra del supermercado" required></label>
-                            <label class="field"><span>Monto</span><input id="transactionAmount" type="number" min="1" step="1" placeholder="150000" required></label>
-                            <button class="primary-button form-button" type="submit">Registrar</button>
-                        </form>
-                        <div id="transactionsList" class="transactions-list"></div>
-                    </article>
-                </aside>
             </section>
         </main>
     </div></div>
 
-    <dialog id="paymentDialog" class="payment-dialog">
-        <form id="paymentForm">
-            <div class="dialog-heading"><div><p class="section-kicker">REGISTRAR PAGO</p><h2 id="paymentTitle">Cuenta</h2></div><button id="closePaymentDialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
-            <input id="paymentObligationId" type="hidden"><p id="paymentRemaining" class="remaining-copy"></p>
-            <label class="field"><span>Monto pagado</span><input id="paymentAmount" type="number" min="1" step="1" required></label>
-            <label class="field"><span>Fecha del pago</span><input id="paymentDate" type="date" required></label>
-            <label class="field"><span>Referencia o número</span><input id="paymentReference" type="text" maxlength="100" placeholder="Opcional"></label>
-            <label class="field"><span>Nota</span><textarea id="paymentNote" rows="3" maxlength="250" placeholder="Opcional"></textarea></label>
-            <label class="field receipt-field"><span>Comprobante</span><input id="paymentReceipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"><small class="field-help">Captura, foto o PDF de hasta 10 MB. Se guarda en este dispositivo y en la copia completa.</small></label>
-            <p id="receiptSelection" class="receipt-selection" hidden></p>
-            <div class="dialog-actions"><button id="cancelPayment" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Confirmar pago</button></div>
-        </form>
-    </dialog>
+    <nav class="finance-bottom-nav" aria-label="Navegación móvil de Finanzas">
+        <button type="button" data-finance-nav="home" class="active"><span>⌂</span>Inicio</button><button type="button" data-finance-nav="movements"><span>↕</span>Movimientos</button><button type="button" class="finance-new-button" data-quick-open><span>＋</span>Nuevo</button><button type="button" data-finance-nav="accounts"><span>▣</span>Cuentas</button><button type="button" data-finance-nav="more"><span>•••</span>Más</button>
+    </nav>
+    <article id="financePrintReport" aria-label="Informe financiero imprimible"></article>
 
-    <dialog id="receiptDialog" class="payment-dialog receipt-dialog">
-        <div class="dialog-content receipt-dialog-content">
-            <div class="dialog-heading"><div><p class="section-kicker">COMPROBANTE</p><h2 id="receiptTitle">Comprobante de pago</h2></div><button id="closeReceiptDialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
-            <div id="receiptViewer" class="receipt-viewer"></div>
-            <div class="dialog-actions"><button id="doneReceiptDialog" class="secondary-button" type="button">Cerrar</button><a id="downloadReceipt" class="primary-button" href="#" download>Descargar</a></div>
-        </div>
-    </dialog>
+    <dialog id="quickDialog" class="finance-dialog quick-dialog"><div class="dialog-heading"><div><p class="section-kicker">REGISTRAR</p><h2>¿Qué querés crear?</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><div class="quick-actions"><button type="button" data-quick-action="operation"><span>↕</span><strong>Operación</strong><small>Ingreso, gasto, transferencia o ajuste</small></button><button type="button" data-quick-action="obligation"><span>◷</span><strong>Compromiso</strong><small>Deuda, cuota, cobro o recurrencia</small></button><button type="button" data-quick-action="budget"><span>◎</span><strong>Presupuesto</strong><small>Límite mensual por categoría</small></button><button type="button" data-quick-action="goal"><span>◆</span><strong>Meta</strong><small>Objetivo de ahorro</small></button><button type="button" data-quick-action="asset"><span>▣</span><strong>Patrimonio</strong><small>Activo o pasivo manual</small></button><button type="button" data-quick-action="account"><span>₲</span><strong>Cuenta</strong><small>Efectivo, banco, tarjeta y más</small></button></div></dialog>
+
+    <dialog id="operationDialog" class="finance-dialog finance-dialog-wide"><form id="operationForm"><div class="dialog-heading"><div><p class="section-kicker">OPERACIÓN</p><h2 id="operationDialogTitle">Nuevo movimiento</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><input id="operationId" type="hidden"><input id="operationGroupId" type="hidden"><div class="form-grid"><label class="field"><span>Tipo</span><select id="operationKind" required></select></label><label class="field"><span>Estado</span><select id="operationStatus"><option value="confirmed">Confirmado</option><option value="pending">Pendiente</option></select></label><label class="field"><span>Importe PYG</span><input id="operationAmount" type="number" min="1" step="1" inputmode="numeric" required></label><label class="field"><span>Cuenta</span><select id="operationAccount" required></select></label><label id="operationDestinationField" class="field" hidden><span>Cuenta de destino</span><select id="operationDestination"></select></label><label id="operationDirectionField" class="field" hidden><span>Dirección del ajuste</span><select id="operationDirection"><option value="expense">Restar saldo</option><option value="income">Sumar saldo</option></select></label><label class="field"><span>Fecha y hora</span><input id="operationDate" type="datetime-local" required></label><label class="field"><span>Categoría</span><select id="operationCategory"></select></label><label class="field"><span>Medio de pago</span><select id="operationMethod"></select></label><label class="field"><span>Contraparte</span><input id="operationCounterparty" maxlength="120"></label><label class="field field-span"><span>Descripción</span><input id="operationDescription" maxlength="160" required></label><label class="field field-span"><span>Etiquetas separadas por coma</span><input id="operationTags" maxlength="300"></label><label class="field field-span"><span>Nota</span><textarea id="operationNote" maxlength="1000"></textarea></label><label class="field field-span"><span>Comprobante (JPG, PNG, WebP o PDF; máximo 10 MB)</span><input id="operationReceipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"></label></div><div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>Cancelar</button><button class="primary-button" type="submit">Guardar operación</button></div></form></dialog>
+
+    <dialog id="obligationDialog" class="finance-dialog"><form id="obligationForm"><div class="dialog-heading"><div><p class="section-kicker">COMPROMISO</p><h2 id="obligationDialogTitle">Nuevo compromiso</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><input id="obligationId" type="hidden"><label class="field"><span>Tipo</span><select id="obligationType" required></select></label><label class="field"><span>Nombre</span><input id="obligationName" maxlength="120" required></label><label class="field"><span>Contraparte</span><input id="obligationCounterparty" maxlength="120"></label><label class="field"><span>Importe base PYG</span><input id="obligationAmount" type="number" min="1" step="1" required></label><div class="form-grid"><label class="field"><span>Interés opcional</span><input id="obligationInterest" type="number" min="0" step="1" value="0"></label><label class="field"><span>Recargo opcional</span><input id="obligationSurcharge" type="number" min="0" step="1" value="0"></label></div><label class="field"><span>Vencimiento</span><input id="obligationDueDate" type="date" required></label><label class="field"><span>Categoría</span><select id="obligationCategory"></select></label><label class="field"><span>Cuenta asociada</span><select id="obligationAccount"></select></label><div id="installmentFields" class="form-grid" hidden><label class="field"><span>Cuota número</span><input id="installmentNumber" type="number" min="1"></label><label class="field"><span>Total de cuotas</span><input id="installmentTotal" type="number" min="2" max="600"></label></div><label class="field"><span>Avisar con cuántos días</span><input id="obligationReminderDays" type="number" min="0" max="365" value="3"></label><label class="field"><span>Nota</span><textarea id="obligationNote" maxlength="1000"></textarea></label><div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>Cancelar</button><button class="primary-button" type="submit">Guardar compromiso</button></div></form></dialog>
+
+    <dialog id="paymentDialog" class="finance-dialog"><form id="paymentForm"><div class="dialog-heading"><div><p class="section-kicker">PAGO O COBRO PARCIAL</p><h2 id="paymentDialogTitle">Registrar</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><input id="paymentId" type="hidden"><input id="paymentObligationId" type="hidden"><p id="paymentBalanceCopy"></p><label class="field"><span>Importe PYG</span><input id="paymentAmount" type="number" min="1" step="1" required></label><label class="field"><span>Fecha</span><input id="paymentDate" type="date" required></label><label class="field"><span>Cuenta</span><select id="paymentAccount" required></select></label><label class="field"><span>Medio</span><select id="paymentMethod"></select></label><label class="field"><span>Referencia</span><input id="paymentReference" maxlength="160"></label><label class="field"><span>Nota</span><textarea id="paymentNote" maxlength="1000"></textarea></label><label class="field"><span>Comprobante</span><input id="paymentReceipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"></label><div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>Cancelar</button><button class="primary-button" type="submit">Confirmar</button></div></form></dialog>
+
+    <dialog id="simpleDialog" class="finance-dialog"><form id="simpleForm"><div class="dialog-heading"><div><p id="simpleKicker" class="section-kicker">CONFIGURACIÓN</p><h2 id="simpleTitle">Nuevo registro</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><input id="simpleEntity" type="hidden"><input id="simpleId" type="hidden"><div id="simpleFields"></div><div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>Cancelar</button><button class="primary-button" type="submit">Guardar</button></div></form></dialog>
+
+    <dialog id="migrationDialog" class="finance-dialog"><form id="migrationForm"><div class="dialog-heading"><div><p class="section-kicker">CONFIRMAR MIGRACIÓN</p><h2>Elegí el destino</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><p>Los datos originales v0.9 permanecen intactos y una repetición no crea duplicados.</p><label class="field"><span>Contexto</span><select id="migrationContext" required></select></label><label class="field"><span>Cuenta</span><select id="migrationAccount" required></select></label><label class="field"><span>Categoría</span><select id="migrationCategory"></select></label><label class="confirmation-check"><input id="migrationConfirm" type="checkbox" required><span>Revisé las cantidades y los totales.</span></label><div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>Cancelar</button><button class="primary-button" type="submit">Importar copia normalizada</button></div></form></dialog>
+
+    <dialog id="closeDialog" class="finance-dialog"><form id="closeForm"><div class="dialog-heading"><div><p class="section-kicker">CONTROL MENSUAL</p><h2 id="closeDialogTitle">Cerrar mes</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><section id="closeReconciliationField"><h3>Conciliar saldos</h3><p>Confirmá el saldo contado o informado. La diferencia queda registrada en la fotografía.</p><div id="closeReconciliation" class="close-reconciliation"></div></section><div id="closeChecklist" class="close-checklist"></div><label id="closeObservationsField" class="field"><span>Observaciones del cierre</span><textarea id="closeObservations" maxlength="1000" placeholder="Opcional: aclaraciones que quedarán en la fotografía"></textarea></label><label id="reopenReasonField" class="field" hidden><span>Motivo obligatorio de reapertura</span><textarea id="reopenReason" maxlength="500"></textarea></label><label id="closeConfirmationField" class="confirmation-check"><input id="closeConfirmation" type="checkbox"><span>Revisé los diez controles y confirmo esta fotografía mensual.</span></label><div class="dialog-actions"><button class="secondary-button" type="button" data-close-dialog>Cancelar</button><button class="primary-button" type="submit">Confirmar</button></div></form></dialog>
+
+    <dialog id="conflictDialog" class="finance-dialog"><div class="dialog-heading"><div><p class="section-kicker">CONFLICTO DE SINCRONIZACIÓN</p><h2>Dos dispositivos cambiaron el mismo registro</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Cerrar">×</button></div><p>No se sobrescribe nada en silencio.</p><div id="conflictDetails" class="conflict-details"></div><div class="dialog-actions"><button id="keepServerVersion" class="secondary-button" type="button">Conservar servidor</button><button id="retryLocalVersion" class="primary-button" type="button">Conservar este dispositivo</button></div></dialog>
 </body>
 </html>

@@ -10,6 +10,10 @@
         rrhh: { label: "RRHH", href: "rrhh.html", icon: "R" }
     };
 
+    function canAccessFinance() {
+        return window.AtlasStore?.workspaceRole === "owner";
+    }
+
     function readJSON(key, fallback) {
         return window.AtlasStore?.read(key, fallback) ?? fallback;
     }
@@ -160,7 +164,7 @@
 
                     <div class="capture-type-grid" role="group" aria-label="Tipo de registro">
                         <button class="active" data-capture-type="task" type="button"><span>✓</span>Tarea</button>
-                        <button data-capture-type="expense" type="button"><span>₲</span>Dinero</button>
+                        ${canAccessFinance() ? '<button data-capture-type="expense" type="button"><span>₲</span>Dinero</button>' : ""}
                         <button data-capture-type="study" type="button"><span>▣</span>Estudio</button>
                         <button data-capture-type="health" type="button"><span>＋</span>Salud</button>
                         <button data-capture-type="note" type="button"><span>✎</span>Nota</button>
@@ -173,19 +177,19 @@
                             <input id="captureTaskText" type="text" maxlength="140" placeholder="Ej: llamar al proveedor">
                         </label>
                         <div class="form-grid">
-                            <label class="field span-4"><span>Área</span><select id="captureTaskArea"><option value="personal">Personal</option><option value="finance">Finanzas</option><option value="study">Estudios</option><option value="health">Salud</option><option value="projects">Proyectos</option><option value="work">Trabajo</option></select></label>
+                            <label class="field span-4"><span>Área</span><select id="captureTaskArea"><option value="personal">Personal</option>${canAccessFinance() ? '<option value="finance">Finanzas</option>' : ""}<option value="study">Estudios</option><option value="health">Salud</option><option value="projects">Proyectos</option><option value="work">Trabajo</option></select></label>
                             <label class="field span-4"><span>Fecha</span><input id="captureTaskDate" type="date"></label>
                             <label class="field span-4"><span>Prioridad</span><select id="captureTaskPriority"><option value="normal">Normal</option><option value="high">Alta</option></select></label>
                         </div>
                     </div>
 
-                    <div class="capture-fields" data-capture-panel="expense" hidden>
+                    ${canAccessFinance() ? `<div class="capture-fields" data-capture-panel="expense" hidden>
                         <div class="form-grid">
                             <label class="field span-4"><span>Tipo</span><select id="captureMoneyType"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
                             <label class="field span-8"><span>Descripción</span><input id="captureMoneyDescription" type="text" maxlength="100" placeholder="Ej: supermercado"></label>
                             <label class="field span-12"><span>Monto (Gs.)</span><input id="captureMoneyAmount" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></label>
                         </div>
-                    </div>
+                    </div>` : ""}
 
                     <div class="capture-fields" data-capture-panel="study" hidden>
                         <div class="form-grid">
@@ -243,7 +247,8 @@
 
     function getSearchItems() {
         const items = Object.entries(pageMap)
-            .filter(([key]) => key !== "rrhh" || window.ATLAS_IS_HR_ADMIN)
+            .filter(([key]) => (key !== "rrhh" || window.ATLAS_IS_HR_ADMIN)
+                && (key !== "finance" || canAccessFinance()))
             .map(([key, page]) => ({
                 type: "Área",
                 icon: page.icon,
@@ -260,13 +265,15 @@
             href: "app.html#tasks"
         }));
 
-        readArray("atlasObligations").forEach(item => items.push({
-            type: "Finanzas",
-            icon: "₲",
-            title: item.name || "Cuenta por pagar",
-            detail: `${formatMoney(obligationRemaining(item))} pendiente`,
-            href: "finance.html"
-        }));
+        if (canAccessFinance()) {
+            readArray("atlasObligations").forEach(item => items.push({
+                type: "Finanzas",
+                icon: "₲",
+                title: item.name || "Cuenta por pagar",
+                detail: `${formatMoney(obligationRemaining(item))} pendiente`,
+                href: "finance.html"
+            }));
+        }
 
         readArray("atlasStudyEvents").forEach(item => items.push({
             type: "Estudios",
@@ -323,7 +330,8 @@
     }
 
     function setCaptureType(type) {
-        const allowed = new Set(["task", "expense", "study", "health", "note"]);
+        const allowed = new Set(["task", "study", "health", "note"]);
+        if (canAccessFinance()) allowed.add("expense");
         const selected = allowed.has(type) ? type : "task";
         const input = document.querySelector("#atlasCaptureType");
         if (input) input.value = selected;
@@ -379,6 +387,7 @@
         }
 
         if (type === "expense") {
+            if (!canAccessFinance()) return false;
             const description = document.querySelector("#captureMoneyDescription").value.trim();
             const amount = Math.round(Number(document.querySelector("#captureMoneyAmount").value));
             if (!description || !Number.isFinite(amount) || amount <= 0) return fail("Completá una descripción y un monto válido.");
@@ -532,7 +541,8 @@
             </a>
             <p class="sidebar-label">Tu espacio</p>
             <nav class="sidebar-nav">
-                ${Object.entries(pageMap).filter(([key]) => key !== "rrhh" || window.ATLAS_IS_HR_ADMIN).map(([key, item]) => `
+                ${Object.entries(pageMap).filter(([key]) => (key !== "rrhh" || window.ATLAS_IS_HR_ADMIN)
+                    && (key !== "finance" || canAccessFinance())).map(([key, item]) => `
                     <a class="nav-item ${key === current ? "active" : ""}" href="${item.href}">
                         <span class="nav-icon" aria-hidden="true">${item.icon}</span>
                         <span>${item.label}</span>
@@ -552,7 +562,7 @@
             <div class="sidebar-system-card">
                 <span>Una idea simple</span>
                 <strong>Lo que no se mide, no se mejora.</strong>
-                <small>ATLAS SO · v0.9.0</small>
+                <small>ATLAS SO · v0.10 · Etapa 1</small>
             </div>
         `;
 
@@ -587,11 +597,13 @@
         mobileNav.setAttribute("aria-label", "Navegación móvil");
         mobileNav.innerHTML = `
             <a class="${current === "dashboard" ? "active" : ""}" href="app.html"><span>⌂</span>Hoy</a>
-            <a class="${current === "finance" ? "active" : ""}" href="finance.html"><span>₲</span>Dinero</a>
+            ${canAccessFinance() ? `<a class="${current === "finance" ? "active" : ""}" href="finance.html"><span>₲</span>Dinero</a>` : ""}
             <button class="mobile-add-button" data-atlas-capture="task" type="button" aria-label="Registrar algo"><span>＋</span>Nuevo</button>
             <button id="mobileMore" type="button"><span>☰</span>Más</button>
         `;
-        document.body.appendChild(mobileNav);
+        if (current !== "finance") {
+            document.body.appendChild(mobileNav);
+        }
         document.body.insertAdjacentHTML("beforeend", captureDialogMarkup() + searchDialogMarkup());
 
         const closeMenu = () => document.body.classList.remove("sidebar-open");

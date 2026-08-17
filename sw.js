@@ -1,4 +1,4 @@
-const CACHE_NAME = "atlas-so-v0.9.0";
+const CACHE_NAME = "atlas-so-v0.10-finance-complete";
 const APP_SHELL = [
     "./",
     "./app.html",
@@ -32,6 +32,11 @@ const APP_SHELL = [
     "./atlas.js",
     "./dashboard.js",
     "./finance.js",
+    "./finance-core.js",
+    "./finance-domain.js",
+    "./finance-storage.js",
+    "./finance-repository.js",
+    "./finance-migration.js",
     "./study.js",
     "./work.js",
     "./rrhh.js",

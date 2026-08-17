@@ -1,5 +1,7 @@
 (function () {
     const A = window.Atlas;
+    const financeAllowed = window.AtlasStore?.workspaceRole === "owner";
+    const legacyFinanceKeys = new Set(["atlasTransactions", "atlasObligations", "atlasReceiptDeletes"]);
     const categoryLabels = {
         work: "Trabajo",
         hr: "RRHH",
@@ -45,6 +47,10 @@
     const backupDialog = document.querySelector("#backupDialog");
     const backupStatus = document.querySelector("#backupStatus");
     const backupFile = document.querySelector("#backupFile");
+    if (!financeAllowed) {
+        document.querySelector('[data-atlas-capture="expense"]')?.remove();
+        document.querySelector('input[name="focusArea"][value="finance"]')?.closest("label")?.remove();
+    }
 
     let tasks = normalizeTasks(A.loadTasks());
     let taskFilter = "pending";
@@ -154,7 +160,7 @@
             });
         });
 
-        data.obligations.forEach(item => {
+        if (financeAllowed) data.obligations.forEach(item => {
             const remaining = A.obligationRemaining(item);
             const days = A.daysUntil(item.dueDate);
             if (remaining <= 0 || !Number.isFinite(days) || days > 14) return;
@@ -282,7 +288,8 @@
     function moduleOrder() {
         const preferences = A.readJSON("atlasPreferences", {});
         const favorites = Array.isArray(preferences.favoriteAreas) ? preferences.favoriteAreas : [];
-        const all = ["finance", "study", "health", "projects", "personal", "work"];
+        const all = ["study", "health", "projects", "personal", "work"];
+        if (financeAllowed) all.unshift("finance");
         if (window.ATLAS_IS_HR_ADMIN) all.push("rrhh");
         return [...new Set([...favorites, ...all])].filter(key => all.includes(key));
     }
@@ -439,7 +446,7 @@
         const undoneHabits = data.habits.filter(item => !(Array.isArray(item.history) && item.history.includes(A.localDate())));
         const stalledProjects = data.projects.filter(item => item.status !== "completed" && Number(item.progress || 0) < 100 && !String(item.nextAction || "").trim());
 
-        if (overduePayments.length) insights.push({ icon: "₲", tone: "danger", title: "Revisá tus pagos atrasados", detail: `${overduePayments.length} cuenta${overduePayments.length === 1 ? "" : "s"} ya superó el vencimiento.`, href: "finance.html" });
+        if (financeAllowed && overduePayments.length) insights.push({ icon: "₲", tone: "danger", title: "Revisá tus pagos atrasados", detail: `${overduePayments.length} cuenta${overduePayments.length === 1 ? "" : "s"} ya superó el vencimiento.`, href: "finance.html" });
         if (overdueStudies.length) insights.push({ icon: "▣", tone: "danger", title: "Cerrá la brecha académica", detail: `${overdueStudies.length} actividad${overdueStudies.length === 1 ? "" : "es"} figura${overdueStudies.length === 1 ? "" : "n"} vencida${overdueStudies.length === 1 ? "" : "s"}.`, href: "study.html" });
         if (!data.health.some(item => item.date === A.localDate())) insights.push({ icon: "+", tone: "blue", title: "Medí cómo viene tu día", detail: "Agua, sueño o energía: un dato ya mejora la lectura.", href: "health.html" });
         if (soonStudies.length) insights.push({ icon: "▣", tone: "purple", title: "Prepará lo que viene", detail: `${soonStudies.length} actividad${soonStudies.length === 1 ? "" : "es"} académica${soonStudies.length === 1 ? "" : "s"} llega${soonStudies.length === 1 ? "" : "n"} esta semana.`, href: "study.html" });
@@ -574,7 +581,9 @@
     document.querySelector("#skipOnboarding").addEventListener("click", () => {
         A.writeJSON("atlasPreferences", {
             onboardingDone: true,
-            favoriteAreas: ["finance", "study", "health", "projects"]
+            favoriteAreas: financeAllowed
+                ? ["finance", "study", "health", "projects"]
+                : ["study", "health", "projects"]
         });
         onboardingDialog.close();
         renderAll();
@@ -624,6 +633,7 @@
     function allowedBackupKey(key) {
         const text = String(key || "");
         if (/^atlasHR/i.test(text) && !window.ATLAS_IS_HR_ADMIN) return false;
+        if (!financeAllowed && legacyFinanceKeys.has(text)) return false;
         if (BACKUP_KEYS.includes(text)) return true;
         if (!text.startsWith("atlasHR")) return false;
         return /^atlasHR[A-Za-z0-9]+(?:__[A-Za-z0-9_-]+){0,2}$/.test(text);
@@ -633,6 +643,273 @@
         return JSON.parse(JSON.stringify(value, (key, item) =>
             ["__proto__", "prototype", "constructor"].includes(key) ? undefined : item
         ));
+    }
+
+    const FINANCE_BACKUP_STORES = [
+        "contexts", "accounts", "categories", "paymentMethods", "recurrences",
+        "obligations", "transactions", "payments", "attachments", "budgets",
+        "goals", "goalEntries", "assets", "valuations", "monthlyCloses",
+        "savedFilters", "migrationRuns", "migrationErrors", "auditLog"
+    ];
+    const RESTORABLE_FINANCE_ENTITIES = new Set([
+        "contexts", "accounts", "categories", "paymentMethods", "recurrences",
+        "obligations", "transactions", "payments", "attachments", "budgets",
+        "goals", "goalEntries", "assets", "valuations", "monthlyCloses", "savedFilters"
+    ]);
+
+    async function openFinanceStorage() {
+        const Storage = window.AtlasFinanceStorage?.FinanceStorage;
+        if (!Storage || window.AtlasStore?.workspaceRole !== "owner") return null;
+        const storage = new Storage();
+        await storage.open();
+        return storage;
+    }
+
+    async function exportFinanceBase() {
+        const storage = await openFinanceStorage();
+        if (!storage) return null;
+        const workspaceId = window.AtlasStore?.workspaceId || "";
+        try {
+            const stores = {};
+            for (const name of FINANCE_BACKUP_STORES) {
+                stores[name] = safeBackupValue(await storage.list(name, { workspace_id: workspaceId }));
+            }
+            return {
+                schema: "atlas-so-finance-base",
+                version: "0.10",
+                stores
+            };
+        } finally {
+            storage.close();
+        }
+    }
+
+    function validateFinanceBase(finance) {
+        if (finance === null || finance === undefined) return null;
+        if (finance?.schema !== "atlas-so-finance-base" || !["0.10-stage1", "0.10"].includes(finance?.version)) {
+            throw new Error("La sección financiera de la copia no es válida.");
+        }
+        if (window.AtlasStore?.workspaceRole !== "owner") {
+            throw new Error("Solo el propietario puede restaurar Finanzas.");
+        }
+        const limits = {
+            contexts: 100,
+            accounts: 1000,
+            categories: 5000,
+            paymentMethods: 1000,
+            recurrences: 10000,
+            transactions: 250000,
+            obligations: 50000,
+            payments: 100000,
+            attachments: 100000,
+            budgets: 100000,
+            goals: 10000,
+            goalEntries: 250000,
+            assets: 10000,
+            valuations: 100000,
+            monthlyCloses: 10000,
+            savedFilters: 1000,
+            migrationRuns: 1000,
+            migrationErrors: 100000,
+            auditLog: 250000
+        };
+        const stores = {};
+        for (const name of FINANCE_BACKUP_STORES) {
+            const records = finance.stores?.[name] ?? (finance.version === "0.10-stage1" || name === "auditLog" ? [] : null);
+            if (!Array.isArray(records) || records.length > limits[name]) {
+                throw new Error(`La copia financiera contiene un volumen no permitido en ${name}.`);
+            }
+            stores[name] = records.map(record => {
+                if (!record || typeof record !== "object" || Array.isArray(record) || !record.id) {
+                    throw new Error(`La copia financiera contiene un registro no válido en ${name}.`);
+                }
+                return safeBackupValue(record);
+            });
+        }
+        const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+        const index = name => {
+            const records = stores[name];
+            const map = new Map(records.map(record => [record.id, record]));
+            if (map.size !== records.length) throw new Error(`La copia financiera repite identificadores en ${name}.`);
+            return map;
+        };
+        const contexts = index("contexts");
+        const accounts = index("accounts");
+        const categories = index("categories");
+        const paymentMethods = index("paymentMethods");
+        const recurrences = index("recurrences");
+        const transactions = index("transactions");
+        const obligations = index("obligations");
+        const payments = index("payments");
+        index("attachments");
+        const budgets = index("budgets");
+        const goals = index("goals");
+        const goalEntries = index("goalEntries");
+        const assets = index("assets");
+        const valuations = index("valuations");
+        index("monthlyCloses");
+        index("savedFilters");
+        for (const context of contexts.values()) {
+            if (!uuid(context.id) || !["personal", "business"].includes(context.kind)
+                || !["active", "archived"].includes(context.status) || !String(context.name || "").trim()) {
+                throw new Error("La copia contiene un contexto financiero no válido.");
+            }
+        }
+        for (const account of accounts.values()) {
+            if (!uuid(account.id) || !contexts.has(account.context_id)
+                || !window.AtlasFinanceCore.ACCOUNT_TYPES.some(type => type.value === account.account_type)
+                || account.currency !== "PYG" || !Number.isSafeInteger(Number(account.opening_balance))
+                || !window.AtlasFinanceCore.isISODate(account.opened_on)
+                || !["active", "archived"].includes(account.status) || !String(account.name || "").trim()) {
+                throw new Error("La copia contiene una cuenta financiera no válida.");
+            }
+        }
+        for (const category of categories.values()) {
+            const parent = category.parent_id ? categories.get(category.parent_id) : null;
+            if (!uuid(category.id) || !contexts.has(category.context_id)
+                || !["income", "expense", "both"].includes(category.flow_type)
+                || !["active", "archived"].includes(category.status) || !String(category.name || "").trim()
+                || !/^#[0-9a-f]{6}$/i.test(String(category.color || ""))
+                || (category.parent_id && (!parent || parent.context_id !== category.context_id || parent.parent_id))) {
+                throw new Error("La copia contiene una categoría financiera no válida.");
+            }
+        }
+        for (const transaction of transactions.values()) {
+            const account = accounts.get(transaction.account_id);
+            const category = transaction.category_id ? categories.get(transaction.category_id) : null;
+            if (!uuid(transaction.id) || !account || account.context_id !== transaction.context_id
+                || (transaction.category_id && (!category || category.context_id !== transaction.context_id))
+                || !["income", "expense"].includes(transaction.transaction_type)
+                || !window.AtlasFinanceCore.OPERATION_TYPES.some(type => type.value === (transaction.operation_kind || transaction.transaction_type))
+                || !["income", "expense", "neutral"].includes(transaction.reporting_effect || transaction.transaction_type)
+                || !Number.isSafeInteger(Number(transaction.balance_delta ?? (transaction.transaction_type === "income" ? transaction.amount : -transaction.amount)))
+                || !["pending", "confirmed", "void"].includes(transaction.status)
+                || !window.AtlasFinanceCore.positiveMoney(transaction.amount)
+                || Number.isNaN(Date.parse(transaction.occurred_at)) || !String(transaction.description || "").trim()) {
+                throw new Error("La copia contiene un movimiento financiero no válido.");
+            }
+        }
+        for (const obligation of obligations.values()) {
+            const account = obligation.account_id ? accounts.get(obligation.account_id) : null;
+            if (!uuid(obligation.id) || (obligation.account_id && (!account || account.context_id !== obligation.context_id))
+                || !window.AtlasFinanceCore.positiveMoney(obligation.principal_amount)
+                || !Number.isSafeInteger(Number(obligation.interest_amount || 0)) || Number(obligation.interest_amount || 0) < 0
+                || !Number.isSafeInteger(Number(obligation.surcharge_amount || 0)) || Number(obligation.surcharge_amount || 0) < 0
+                || !Number.isSafeInteger(Number(obligation.paid_amount))
+                || Number(obligation.paid_amount) < 0
+                || Number(obligation.paid_amount) > Number(obligation.principal_amount) + Number(obligation.interest_amount || 0) + Number(obligation.surcharge_amount || 0)
+                || !window.AtlasFinanceCore.isISODate(obligation.due_date)
+                || !["once", "weekly", "monthly", "quarterly", "yearly", "installment"].includes(obligation.frequency)
+                || !["pending", "partial", "paid", "void"].includes(obligation.status)) {
+                throw new Error("La copia contiene una obligación financiera no válida.");
+            }
+        }
+        for (const payment of payments.values()) {
+            const obligation = obligations.get(payment.obligation_id);
+            const account = accounts.get(payment.account_id);
+            if (!uuid(payment.id) || !obligation || !account
+                || obligation.context_id !== payment.context_id || account.context_id !== payment.context_id
+                || (payment.linked_transaction_id && !transactions.has(payment.linked_transaction_id))
+                || !window.AtlasFinanceCore.positiveMoney(payment.amount)
+                || !window.AtlasFinanceCore.isISODate(payment.paid_on)) {
+                throw new Error("La copia contiene un pago financiero no válido.");
+            }
+        }
+        for (const attachment of stores.attachments) {
+            if (!uuid(attachment.id)
+                || (attachment.payment_id ? !payments.has(attachment.payment_id) : !transactions.has(attachment.transaction_id))
+                || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(attachment.mime_type)
+                || attachment.bucket_id !== "atlas-finance-files"
+                || !["local_pending", "remote", "removed"].includes(attachment.sync_state)
+                || !Number.isSafeInteger(Number(attachment.byte_size))
+                || Number(attachment.byte_size) < 0 || Number(attachment.byte_size) > 10485760) {
+                throw new Error("La copia contiene un comprobante financiero no válido.");
+            }
+        }
+        for (const method of paymentMethods.values()) {
+            if (!uuid(method.id) || !contexts.has(method.context_id)
+                || !window.AtlasFinanceCore.PAYMENT_METHOD_TYPES.some(type => type.value === method.method_type)) {
+                throw new Error("La copia contiene un medio de pago no válido.");
+            }
+        }
+        for (const recurrence of recurrences.values()) {
+            if (!uuid(recurrence.id) || !contexts.has(recurrence.context_id)
+                || !["weekly", "monthly", "quarterly", "yearly"].includes(recurrence.frequency)
+                || !window.AtlasFinanceCore.isISODate(recurrence.starts_on)) {
+                throw new Error("La copia contiene una recurrencia no válida.");
+            }
+        }
+        for (const budget of budgets.values()) {
+            if (!uuid(budget.id) || !categories.has(budget.category_id)
+                || !/^\d{4}-\d{2}$/.test(budget.month) || !window.AtlasFinanceCore.positiveMoney(budget.planned_amount)) {
+                throw new Error("La copia contiene un presupuesto no válido.");
+            }
+        }
+        for (const goal of goals.values()) {
+            if (!uuid(goal.id) || !contexts.has(goal.context_id) || !window.AtlasFinanceCore.positiveMoney(goal.target_amount)) {
+                throw new Error("La copia contiene una meta no válida.");
+            }
+        }
+        for (const entry of goalEntries.values()) {
+            if (!uuid(entry.id) || !goals.has(entry.goal_id) || !["contribution", "withdrawal"].includes(entry.entry_type)
+                || !window.AtlasFinanceCore.positiveMoney(entry.amount) || !window.AtlasFinanceCore.isISODate(entry.occurred_on)) {
+                throw new Error("La copia contiene un movimiento de meta no válido.");
+            }
+        }
+        for (const asset of assets.values()) {
+            if (!uuid(asset.id) || !contexts.has(asset.context_id) || !["asset", "liability"].includes(asset.asset_class)
+                || !window.AtlasFinanceCore.positiveMoney(asset.opening_value)) {
+                throw new Error("La copia contiene un activo o pasivo no válido.");
+            }
+        }
+        for (const valuation of valuations.values()) {
+            if (!uuid(valuation.id) || !assets.has(valuation.asset_id) || !Number.isSafeInteger(Number(valuation.value))
+                || Number(valuation.value) < 0 || !window.AtlasFinanceCore.isISODate(valuation.valued_on)) {
+                throw new Error("La copia contiene una valuación no válida.");
+            }
+        }
+        return { schema: finance.schema, version: "0.10", stores };
+    }
+
+    async function restoreFinanceBase(finance) {
+        if (!finance) return 0;
+        const storage = await openFinanceStorage();
+        if (!storage) throw new Error("No se pudo abrir el almacenamiento financiero local.");
+        const workspaceId = window.AtlasStore?.workspaceId || "";
+        const userId = window.AtlasStore?.userId || "";
+        let restored = 0;
+        try {
+            for (const name of FINANCE_BACKUP_STORES) {
+                await storage.clearWorkspace(name, workspaceId);
+                const records = finance.stores[name].map(record => ({
+                    ...record,
+                    workspace_id: workspaceId,
+                    ...(Object.hasOwn(record, "migration_run_id") ? { migration_run_id: null } : {}),
+                    ...(record.created_by ? { created_by: userId } : {}),
+                    ...(record.updated_by ? { updated_by: userId } : {})
+                })).sort((left, right) => name === "categories"
+                    ? Number(Boolean(left.parent_id)) - Number(Boolean(right.parent_id))
+                    : 0);
+                await storage.bulkPut(name, records);
+                restored += records.length;
+                if (RESTORABLE_FINANCE_ENTITIES.has(name)) {
+                    for (const record of records) {
+                        await storage.queue({
+                            operationId: window.AtlasFinanceCore?.createId?.() || `${Date.now()}-${Math.random()}`,
+                            idempotencyKey: `restore:${name}:${record.id}:${record.version || 1}`,
+                            workspace_id: workspaceId,
+                            entity: name,
+                            action: "restore",
+                            baseVersion: 0,
+                            record
+                        });
+                    }
+                }
+            }
+            return restored;
+        } finally {
+            storage.close();
+        }
     }
 
     function exportAppEntries() {
@@ -910,6 +1187,7 @@
     }
 
     async function exportReceipts() {
+        if (!financeAllowed) return [];
         const db = await openReceiptDatabase();
         if (!db) return [];
         const records = await new Promise((resolve, reject) => {
@@ -1031,9 +1309,10 @@
                 return;
             }
             if (requestBackupPassword(true) !== password) throw new Error("Las contraseñas de la copia no coinciden.");
-            const [receipts, attendance] = await Promise.all([
+            const [receipts, attendance, finance] = await Promise.all([
                 exportReceipts(),
-                exportAttendanceRecords()
+                exportAttendanceRecords(),
+                exportFinanceBase()
             ]);
             const backup = {
                 version: "8.0",
@@ -1043,7 +1322,8 @@
                     id: window.AtlasStore?.workspaceId || "",
                     entries: exportAppEntries(),
                     attendance,
-                    receipts
+                    receipts,
+                    finance
                 }
             };
             const envelope = await encryptBackup(backup, password);
@@ -1056,7 +1336,10 @@
             link.click();
             link.remove();
             URL.revokeObjectURL(url);
-            backupStatus.textContent = `Copia cifrada completa: ${Object.keys(backup.workspace.entries).length} grupos de datos, ${attendance.length} marcaciones y ${receipts.length} comprobante(s).`;
+            const financeCount = finance
+                ? Object.values(finance.stores).reduce((sum, records) => sum + records.length, 0)
+                : 0;
+            backupStatus.textContent = `Copia cifrada completa: ${Object.keys(backup.workspace.entries).length} grupos de datos, ${attendance.length} marcaciones, ${receipts.length} comprobante(s) y ${financeCount} registro(s) financieros normalizados.`;
         } catch (error) {
             console.error(error);
             backupStatus.textContent = `No se pudo completar la copia: ${String(error.message || "error desconocido")}.`;
@@ -1098,6 +1381,11 @@
         if (!window.ATLAS_IS_HR_ADMIN && parsed.workspace.attendance.length) {
             throw new Error("Esta cuenta no tiene permiso para restaurar marcaciones de RRHH.");
         }
+        if (!financeAllowed && (
+            entries.some(([key]) => legacyFinanceKeys.has(key))
+            || parsed.workspace.receipts.length
+            || parsed.workspace.finance
+        )) throw new Error("Solo el propietario puede restaurar información financiera.");
         parsed.workspace.receipts.forEach(record => {
             if (!record || typeof record !== "object") throw new Error("Hay un comprobante no válido.");
             if (record.dataUrl && (
@@ -1113,7 +1401,8 @@
         return {
             entries: entries.map(([key, value]) => [key, safeBackupValue(value)]),
             attendance: parsed.workspace.attendance.map(item => safeBackupValue(item)),
-            receipts: parsed.workspace.receipts.map(item => safeBackupValue(item))
+            receipts: parsed.workspace.receipts.map(item => safeBackupValue(item)),
+            finance: validateFinanceBase(parsed.workspace.finance)
         };
     }
 
@@ -1189,11 +1478,20 @@
                 const entryMap = Object.fromEntries(entries);
                 await restoreAttendanceRecords(validated.attendance);
                 await restoreReceipts(validated.receipts, entryMap.atlasObligations);
+                const restoredFinance = await restoreFinanceBase(validated.finance);
                 clearCurrentEntries();
                 entries.forEach(([key, value]) => A.writeJSON(key, value));
+                if (restoredFinance) {
+                    window.dispatchEvent(new CustomEvent("atlas:finance-restored", { detail: { records: restoredFinance } }));
+                }
             } else {
                 const data = parsed.data || parsed;
                 if (!data || typeof data !== "object") throw new Error("Formato anterior no válido.");
+                if (!financeAllowed && (
+                    Array.isArray(data.transactions) && data.transactions.length
+                    || Array.isArray(data.obligations) && data.obligations.length
+                    || Array.isArray(data.receipts) && data.receipts.length
+                )) throw new Error("Solo el propietario puede restaurar información financiera.");
                 await restoreReceipts(Array.isArray(data.receipts) ? data.receipts : [], data.obligations);
                 clearCurrentEntries();
                 const arrayMapping = {
