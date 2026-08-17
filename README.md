@@ -1,6 +1,22 @@
-# ATLAS SO · v0.9.0
+# ATLAS SO · v0.10.0 · Finanzas y Control Patrimonial
 
-ATLAS SO reúne la operación personal y de RR. HH. en una aplicación instalable, privada y sincronizada.
+ATLAS SO reúne la operación personal y de RR. HH. en una aplicación instalable, privada y sincronizada. Esta rama contiene la construcción completa de Finanzas v0.10; todavía no es una publicación final.
+
+## Finanzas y Control Patrimonial v0.10
+
+- Contextos separados para uso personal y emprendimientos, con una vista general de solo lectura.
+- Cuentas y categorías editables sin borrar el historial: se archivan y pueden recuperarse.
+- Base local normalizada por registro en IndexedDB, cola durable y estados visibles de sincronización.
+- Acceso financiero reservado al propietario tanto en la aplicación como en las políticas RLS.
+- Migración asistida desde `atlasTransactions` y `atlasObligations`, con previsualización, validación, idempotencia, conciliación e informe de errores.
+- Navegación financiera permanente de cinco destinos, diseñada primero para una pantalla móvil de 360 px.
+- Copia cifrada compatible con la nueva base financiera y restauración que no sobrescribe cambios remotos de forma silenciosa.
+- Operaciones editables: ingresos, gastos, transferencias atómicas, ajustes, aportes, retiros, reembolsos, cobros y pagos, con medios configurables, etiquetas y comprobantes privados.
+- Compromisos por pagar o cobrar, préstamos, cuotas, tarjetas, pagos parciales, recurrencias de calendario y recordatorios accionables.
+- Presupuestos por categoría con gasto, comprometido, disponible, proyección, alertas y copia controlada al mes siguiente.
+- Metas con aportes y retiros; activos, pasivos, valuaciones manuales y patrimonio neto mensual.
+- Cierre mensual de diez controles, fotografía inmutable, reapertura con motivo, versiones históricas, comparación, CSV, Excel e informe imprimible/PDF.
+- Meses cerrados protegidos tanto en la interfaz como en PostgreSQL; conflictos simples y compuestos requieren decisión explícita.
 
 ## RR. HH. Operación Real y Gestión Masiva v0.9
 
@@ -146,13 +162,32 @@ por reemplazo, CRUD de los seis módulos personales, contexto empresa/cliente,
 flujo completo de RR. HH., cálculo diurno/nocturno, feriados, tolerancias,
 faltas, reimportaciones de 10.000 registros, cálculo de 62.000 jornadas y el
 aislamiento de 1.500 funcionarios sintéticos entre cinco clientes y quince
-sucursales. También verifica que no existan secretos ni artefactos empresariales
-preparados para Git.
+sucursales. En Finanzas v0.10 también valida 10 contextos, 50 cuentas, 100
+categorías, 10.000 movimientos, 1.000 compromisos y 60 cierres, acceso exclusivo del propietario,
+persistencia local, migración repetida sin duplicados, operaciones compuestas,
+pagos parciales, comprobantes privados, presupuestos, metas, patrimonio, conciliación,
+cierre/reapertura, auditoría y estructura RLS. También
+verifica que no existan secretos ni artefactos empresariales preparados para Git.
 
-El informe completo se encuentra en
-`AUDITORIA-ATLAS-SO-v0.9.md`.
+El cierre técnico se encuentra en
+`AUDITORIA-ATLAS-SO-v0.10.md`. La validación visual local en teléfono y
+computadora quedó completada; la ejecución de la migración y las pruebas con
+sesión real en un Supabase aislado continúan siendo puertas obligatorias antes
+de publicar.
 
-## Migración desde v0.8
+## Preparación de v0.10 desde v0.9
+
+1. Partir de `main` correspondiente a la publicación v0.9.0.
+2. Trabajar en `v0.10-finanzas-control-patrimonial`.
+3. Mantener `atlas-config.js` sin credenciales en Git.
+4. Ejecutar y revisar `supabase/v0.10-finance-base.sql` primero en un proyecto aislado.
+5. Ejecutar `npm install` y `npm run check`.
+6. Validar las cinco etapas con datos sintéticos en teléfono y computadora antes de solicitar aprobación de publicación.
+
+La migración SQL es aditiva e idempotente. No debe aplicarse sobre Supabase
+productivo ni fusionarse esta rama sin la validación final del usuario.
+
+## Migración histórica desde v0.8 a v0.9
 
 1. Trabajar desde `main` limpia y etiquetada como `v0.8.0`.
 2. Crear la rama `v0.9-rrhh-operacion-real`.

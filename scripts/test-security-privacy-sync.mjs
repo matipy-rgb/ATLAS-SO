@@ -16,7 +16,11 @@ const [
     baseSchema,
     privacy,
     config,
-    packageSource
+    packageSource,
+    financeStorage,
+    financeRepository,
+    financeMigration,
+    financeSchema
 ] = await Promise.all([
     read("auth-core.js"),
     read("app-bootstrap.js"),
@@ -27,10 +31,14 @@ const [
     read("supabase/atlas-schema.sql"),
     read("privacy.html"),
     read("atlas-config.js"),
-    read("package.json")
+    read("package.json"),
+    read("finance-storage.js"),
+    read("finance-repository.js"),
+    read("finance-migration.js"),
+    read("supabase/v0.10-finance-base.sql")
 ]);
 
-assert.equal(JSON.parse(packageSource).version, "0.9.0");
+assert.equal(JSON.parse(packageSource).version, "0.10.0");
 assert.match(config, /sb_publishable_/);
 assert.doesNotMatch(config, /service_role\s*[:=]\s*["']/i);
 
@@ -40,6 +48,10 @@ assert.match(auth, /hrAdmin\s*=\s*false/);
 assert.doesNotMatch(auth, /hrAdmin\s*=\s*localStorage\.getItem/);
 
 assert.match(bootstrap, /purgeUnauthorizedHRData/);
+assert.match(bootstrap, /purgeUnauthorizedFinanceData/);
+assert.match(bootstrap, /workspaceRole\s*!==\s*"owner"/);
+assert.match(bootstrap, /dataQuery\.not\("data_key", "in"/);
+assert.match(bootstrap, /atlasSOFiles/);
 assert.match(bootstrap, /migrateLegacyDataOnFirstLogin\s*===\s*"confirm"/);
 assert.match(bootstrap, /for \(const \[key, version\] of batch\)/);
 assert.match(bootstrap, /addEventListener\("storage"/);
@@ -50,14 +62,24 @@ assert.match(dashboard, /AES-GCM/);
 assert.match(dashboard, /PBKDF2/);
 assert.match(dashboard, /validateBackupPayload\(parsed\)/);
 assert.match(dashboard, /restore_hr_attendance_backup/);
+assert.match(dashboard, /legacyFinanceKeys/);
+assert.match(dashboard, /Solo el propietario puede restaurar información financiera/);
 assert.ok(
     dashboard.indexOf("const validated = validateBackupPayload(parsed)") < dashboard.indexOf("await restoreAttendanceRecords(validated.attendance)"),
     "La copia debe validarse antes de modificar marcaciones"
 );
 
-assert.match(finance, /syncPendingReceipts/);
-assert.match(finance, /atlasReceiptDeletes/);
-assert.match(finance, /cloudPending/);
+assert.match(finance, /workspaceRole/);
+assert.match(financeStorage, /indexedDB/);
+assert.match(financeStorage, /outbox/);
+assert.match(financeRepository, /baseVersion/);
+assert.match(financeRepository, /conflict/);
+assert.match(financeMigration, /sourcePreserved/);
+assert.match(financeSchema, /finance_is_workspace_owner/);
+assert.match(financeSchema, /is_finance_data_key/);
+assert.match(financeSchema, /can_access_app_data/);
+assert.match(financeSchema, /atlas-finance-files/);
+assert.doesNotMatch(financeSchema, /can_edit_workspace\(workspace_id\)/);
 
 assert.match(worker, /SENSITIVE_QUERY_KEYS/);
 assert.match(worker, /cleanCacheKey/);
@@ -89,4 +111,4 @@ const privacyText = (await Promise.all(privacyFiles.map(read))).join("\n");
 assert.doesNotMatch(privacyText, /Mat[ií]as|ASUPOR|Gesti[oó]n y Cambio/i);
 assert.doesNotMatch(privacyText, /;5469180;|;1989608;/);
 
-console.log("ATLAS SO v0.9.0: privacidad, permisos, sincronización, copias cifradas y caché segura verificados.");
+console.log("ATLAS SO v0.10: privacidad, permisos, sincronización, copias cifradas y caché segura verificados.");

@@ -31,15 +31,15 @@
         </section>
         <section>
             <h2>Separación y acceso</h2>
-            <p>Cada cuenta trabaja en un espacio independiente. Las reglas de acceso de la base de datos impiden que una cuenta consulte o modifique los registros de otra. Recursos Humanos requiere, además, que Supabase confirme en línea el permiso de la cuenta administradora; si esa verificación falla, el acceso se bloquea.</p>
+            <p>Cada cuenta trabaja en un espacio independiente. Las reglas de acceso de la base de datos impiden que una cuenta consulte o modifique los registros de otra. Finanzas es privada para la cuenta propietaria del espacio, incluso si existen otras personas con acceso a otros módulos. Recursos Humanos requiere, además, que Supabase confirme en línea el permiso de la cuenta administradora; si esa verificación falla, el acceso se bloquea.</p>
         </section>
         <section>
             <h2>Copias y archivos</h2>
-            <p>Podés descargar una copia completa desde la aplicación. Incluye los grupos de datos de tu espacio, comprobantes disponibles localmente y, para la cuenta autorizada, marcaciones de Recursos Humanos. Las copias nuevas se cifran con una contraseña elegida al exportar; ATLAS SO no guarda ni puede recuperar esa contraseña. Los comprobantes se conservan localmente y también se intenta sincronizarlos con el depósito privado de Supabase. Si una carga o eliminación queda pendiente por falta de conexión, la aplicación vuelve a intentarla.</p>
+            <p>Podés descargar una copia completa desde la aplicación. Incluye los grupos de datos de tu espacio, la base financiera normalizada, comprobantes disponibles localmente y, para la cuenta autorizada, marcaciones de Recursos Humanos. Las copias nuevas se cifran con una contraseña elegida al exportar; ATLAS SO no guarda ni puede recuperar esa contraseña. Los comprobantes financieros se almacenan en un depósito privado de Supabase. Si una carga o eliminación queda pendiente por falta de conexión, la aplicación vuelve a intentarla.</p>
         </section>
         <section>
             <h2>Copia local del dispositivo</h2>
-            <p>Para funcionar sin conexión, el navegador conserva una copia local separada por espacio de trabajo. En un equipo compartido, usá un perfil protegido del sistema operativo y cerrá sesión al terminar. Si una cuenta pierde el permiso de Recursos Humanos, ATLAS SO elimina de su espacio local las copias de RR. HH. que ya no está autorizada a usar.</p>
+            <p>Para funcionar sin conexión, el navegador conserva una copia local separada por espacio de trabajo. Finanzas guarda cada registro por separado y mantiene una cola de cambios hasta que el servidor confirma la sincronización. Si dos dispositivos cambian el mismo registro, la aplicación exige resolver el conflicto en vez de sobrescribirlo silenciosamente. En un equipo compartido, usá un perfil protegido del sistema operativo y cerrá sesión al terminar. Si una cuenta pierde el permiso de Recursos Humanos, ATLAS SO elimina de su espacio local las copias de RR. HH. que ya no está autorizada a usar.</p>
         </section>
         <section>
             <h2>Archivos procesados en el dispositivo</h2>

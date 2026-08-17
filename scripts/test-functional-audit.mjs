@@ -52,6 +52,8 @@ async function page(htmlFile, scriptFile, seed = {}) {
         this.open = false;
     };
     window.Element.prototype.scrollIntoView = function () {};
+    window.scrollTo = function () {};
+    window.structuredClone = structuredClone;
     window.confirm = () => true;
     window.alert = message => alerts.push(String(message));
     window.URL.createObjectURL = () => "blob:atlas-test";
@@ -60,6 +62,7 @@ async function page(htmlFile, scriptFile, seed = {}) {
     window.AtlasStore = {
         workspaceId: "workspace-test",
         userId: "user-test",
+        workspaceRole: "owner",
         read: (key, fallback) => data.has(key) ? data.get(key) : fallback,
         write: (key, value) => data.set(key, structuredClone(value)),
         has: key => data.has(key)
@@ -143,6 +146,7 @@ async function testDashboardAndGlobalTools() {
     window.AtlasStore = {
         workspaceId: "workspace-test",
         userId: "user-test",
+        workspaceRole: "owner",
         read: (key, fallback) => data.has(key) ? structuredClone(data.get(key)) : fallback,
         write: (key, value) => data.set(key, structuredClone(value)),
         has: key => data.has(key)
@@ -377,40 +381,68 @@ async function testStudy() {
 }
 
 async function testFinance() {
-    const test = await page("finance.html", "finance.js");
+    const legacyTransactions = [{
+        id: 10,
+        description: "Compra anterior",
+        amount: 25000,
+        type: "expense",
+        createdAt: "2026-08-15T12:00:00"
+    }];
+    const legacyObligations = [{
+        id: 20,
+        name: "Servicio anterior",
+        amount: 100000,
+        dueDate: "2026-08-25",
+        frequency: "once",
+        payments: []
+    }];
+    const test = await page("finance.html", "finance-core.js", {
+        atlasTransactions: legacyTransactions,
+        atlasObligations: legacyObligations
+    });
     const { window, document, data } = test;
-    document.querySelector("#obligationName").value = "Servicio";
-    document.querySelector("#obligationAmount").value = "100000";
-    document.querySelector("#obligationDueDate").value = localDate();
-    submit(window, "#obligationForm");
-    assert.equal(data.get("atlasObligations").length, 1);
-
-    document.querySelector("#transactionDate").value = "2026-01-15";
-    document.querySelector("#transactionDescription").value = "Compra";
-    document.querySelector("#transactionAmount").value = "25000";
-    submit(window, "#transactionForm");
-    assert.equal(data.get("atlasTransactions")[0].createdAt, "2026-01-15T12:00:00");
-
-    click(window, '[data-action="pay"]');
-    document.querySelector("#paymentAmount").value = "40000";
-    document.querySelector("#paymentDate").value = localDate();
-    submit(window, "#paymentForm");
+    window.eval(await read("finance-domain.js"));
+    window.eval(await read("finance-storage.js"));
+    window.eval(await read("finance-repository.js"));
+    window.eval(await read("finance-migration.js"));
+    window.eval(await read("finance.js"));
     await settle();
-    assert.equal(data.get("atlasObligations")[0].paidAmount, 40000);
-    assert.equal(data.get("atlasTransactions").length, 2);
-    click(window, '[data-action="undo-payment"]');
     await settle();
-    assert.equal(data.get("atlasObligations")[0].paidAmount, 0);
-    assert.equal(data.get("atlasTransactions").length, 1);
 
-    const extra = { id: 9999, description: "Captura rápida", amount: 1, type: "expense", createdAt: new Date().toISOString() };
-    data.set("atlasTransactions", [...data.get("atlasTransactions"), extra]);
-    window.dispatchEvent(new window.CustomEvent("atlas:data-changed", { detail: { key: "atlasTransactions" } }));
-    assert.equal(document.querySelectorAll("#transactionsList .transaction-item").length, 2);
-    click(window, '[data-action="delete-transaction"]');
-    assert.equal(data.get("atlasTransactions").length, 1);
-    click(window, '[data-action="delete-obligation"]');
-    assert.equal(data.get("atlasObligations").length, 0);
+    assert.equal(document.querySelectorAll("#financeContext option").length, 2, "Debe existir Vista general y Personal");
+    assert.match(document.querySelector("#migrationPreview").textContent, /1/);
+    assert.equal(document.querySelector("#migrationPreview").hidden, false);
+
+    click(window, '[data-quick-action="context"]');
+    document.querySelector('#simpleFields [name="name"]').value = "Tienda Norte";
+    document.querySelector('#simpleFields [name="description"]').value = "Emprendimiento separado";
+    submit(window, "#simpleForm");
+    await wait(20);
+    assert.match(document.querySelector("#contextsList").textContent, /Tienda Norte/);
+    assert.equal(document.querySelector("#financeContext").value === "general", false);
+
+    click(window, '[data-quick-action="account"]');
+    document.querySelector('#simpleFields [name="name"]').value = "Caja principal";
+    document.querySelector('#simpleFields [name="account_type"]').value = "business_cash";
+    document.querySelector('#simpleFields [name="opening_balance"]').value = "500000";
+    document.querySelector('#simpleFields [name="opened_on"]').value = "2026-08-01";
+    submit(window, "#simpleForm");
+    await wait(15);
+    assert.match(document.querySelector("#accountsList").textContent, /Caja principal/);
+    assert.match(document.querySelector("#summaryAvailable").textContent, /500[.\s]?000/);
+
+    click(window, '#accountsList [data-simple-edit="account"]');
+    document.querySelector('#simpleFields [name="name"]').value = "Caja operativa";
+    submit(window, "#simpleForm");
+    await wait(10);
+    assert.match(document.querySelector("#accountsList").textContent, /Caja operativa/);
+
+    click(window, '#accountsList [data-entity="accounts"][data-action="archive"]');
+    await wait(10);
+    assert.match(document.querySelector("#accountsList").textContent, /Reactivar/);
+
+    assert.deepEqual(data.get("atlasTransactions"), legacyTransactions, "La migración v0.10 no debe alterar el origen de movimientos");
+    assert.deepEqual(data.get("atlasObligations"), legacyObligations, "La migración v0.10 no debe alterar el origen de obligaciones");
     test.dom.window.close();
 }
 
@@ -578,7 +610,7 @@ async function testStaticSafety() {
     assert.ok(!bootstrap.includes("<p>${String(error.message"), "El error de arranque no debe inyectar HTML");
     assert.match(schema, /can_manage_workspace/);
     assert.match(privacy, /marcaciones de Recursos Humanos/i);
-    assert.equal(JSON.parse(packageSource).version, "0.9.0");
+    assert.equal(JSON.parse(packageSource).version, "0.10.0");
 }
 
 await testHealth();
@@ -591,4 +623,4 @@ await testRRHHCore();
 await testDashboardAndGlobalTools();
 await testStaticSafety();
 
-console.log("ATLAS SO v0.9.0: regresión CRUD, tablero y recorrido RRHH completo verificados.");
+console.log("ATLAS SO v0.10: regresión CRUD, tablero y recorrido RRHH completo verificados.");

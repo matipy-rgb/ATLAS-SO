@@ -55,4 +55,4 @@ const trackedConfig = fromGit
 assert.match(trackedConfig, /supabaseUrl:\s*""/);
 assert.match(trackedConfig, /supabasePublishableKey:\s*""/);
 
-console.log("ATLAS SO v0.9.0: secretos y artefactos empresariales preparados para Git = 0.");
+console.log("ATLAS SO v0.10: secretos y artefactos empresariales preparados para Git = 0.");
