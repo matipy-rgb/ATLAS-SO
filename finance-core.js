@@ -43,7 +43,12 @@
         ["Salud", "expense", "#14b8a6", "+"],
         ["Educación", "expense", "#6366f1", "▣"],
         ["Ingresos", "income", "#16a34a", "↑"],
-        ["Otros", "both", "#64748b", "●"]
+        ["Otros", "both", "#64748b", "●"],
+        ["Salario", "income", "#0f9f76", "₲"],
+        ["Trabajos extra", "income", "#22a06b", "+"],
+        ["Otros ingresos", "income", "#4f8f46", "↑"],
+        ["Compras", "expense", "#d97706", "▤"],
+        ["Estudios", "expense", "#4f46e5", "▣"]
     ]);
 
     function createId() {
@@ -85,6 +90,17 @@
     function positiveMoney(value) {
         const amount = safeInteger(value);
         return amount !== null && amount > 0 && amount <= MAX_PYG ? amount : null;
+    }
+
+    function splitMoney(value, count, { allowZero = false } = {}) {
+        const amount = safeInteger(value);
+        const parts = safeInteger(count);
+        if (amount === null || amount < (allowZero ? 0 : 1) || !parts || parts < 1) throw new Error("El monto y la cantidad de cuotas no son válidos.");
+        if (amount > MAX_PYG) throw new Error("El monto supera el máximo permitido.");
+        if (!allowZero && amount < parts) throw new Error("El monto total debe permitir al menos ₲ 1 por cuota.");
+        const base = Math.floor(amount / parts);
+        const remainder = amount % parts;
+        return Array.from({ length: parts }, (_, index) => base + (index < remainder ? 1 : 0));
     }
 
     function isISODate(value) {
@@ -340,7 +356,9 @@
     }
 
     function searchText(value) {
-        return cleanText(value, 300).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        let text = String(value ?? "").trim().slice(0, 300).toLowerCase();
+        if (/\s{2,}/.test(text)) text = text.replace(/\s+/g, " ");
+        return /[^\x00-\x7f]/.test(text) ? text.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : text;
     }
 
     root.AtlasFinanceCore = Object.freeze({
@@ -355,6 +373,7 @@
         cleanText,
         safeInteger,
         positiveMoney,
+        splitMoney,
         isISODate,
         datePart,
         currentMonth,

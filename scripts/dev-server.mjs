@@ -20,6 +20,7 @@ const types = {
     ".js": "text/javascript; charset=utf-8",
     ".json": "application/json; charset=utf-8",
     ".png": "image/png",
+    ".svg": "image/svg+xml; charset=utf-8",
     ".wasm": "application/wasm",
     ".webmanifest": "application/manifest+json; charset=utf-8"
 };

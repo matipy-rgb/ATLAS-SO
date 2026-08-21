@@ -381,10 +381,22 @@
         if (workspaceRole !== "owner") {
             dataQuery = dataQuery.not("data_key", "in", `(${FINANCE_DATA_KEYS.join(",")})`);
         }
-        const { data, error } = await dataQuery;
+        const { data, error, timedOut } = await Promise.race([
+            Promise.resolve(dataQuery),
+            new Promise(resolve => window.setTimeout(() => resolve({
+                data: null,
+                error: { message: "La sincronización está tardando más de lo esperado." },
+                timedOut: true
+            }), 3500))
+        ]);
 
         if (error) {
             console.warn("ATLAS SO iniciÃ³ con la copia local:", error.message);
+            if (timedOut) {
+                window.dispatchEvent(new CustomEvent("atlas:sync-status", {
+                    detail: { status: "offline", message: "Abierto desde este dispositivo" }
+                }));
+            }
             if (pendingSync.size) window.setTimeout(() => flush().catch(console.error), retryDelay);
             return;
         }
@@ -405,6 +417,90 @@
             script.onerror = () => reject(new Error(`No se pudo cargar ${source}`));
             document.head.appendChild(script);
         });
+    }
+
+    async function clearFinanceLocal(targetWorkspace) {
+        try {
+            if (!window.AtlasFinanceStorage) await loadScript("finance-storage.js");
+            const Storage = window.AtlasFinanceStorage?.FinanceStorage;
+            if (!Storage) return;
+            const storage = new Storage();
+            await storage.open();
+            for (const name of Object.keys(window.AtlasFinanceStorage.STORES)) {
+                await storage.clearWorkspace(name, targetWorkspace);
+            }
+            storage.close();
+        } catch (error) {
+            console.warn("No se pudo limpiar la copia financiera local:", error.message);
+        }
+    }
+
+    function clearIndexedWorkspace(databaseName, version, storeName, belongsToWorkspace) {
+        return new Promise(resolve => {
+            if (!("indexedDB" in window)) return resolve();
+            const request = indexedDB.open(databaseName, version);
+            request.onerror = () => resolve();
+            request.onsuccess = () => {
+                const database = request.result;
+                if (!database.objectStoreNames.contains(storeName)) {
+                    database.close();
+                    resolve();
+                    return;
+                }
+                const transaction = database.transaction(storeName, "readwrite");
+                const cursorRequest = transaction.objectStore(storeName).openCursor();
+                cursorRequest.onsuccess = () => {
+                    const cursor = cursorRequest.result;
+                    if (!cursor) return;
+                    if (belongsToWorkspace(cursor.value)) cursor.delete();
+                    cursor.continue();
+                };
+                transaction.oncomplete = () => { database.close(); resolve(); };
+                transaction.onerror = () => { database.close(); resolve(); };
+            };
+        });
+    }
+
+    async function clearLocalWorkspaceData(targetWorkspace) {
+        await clearFinanceLocal(targetWorkspace);
+        await Promise.all([
+            clearIndexedWorkspace("atlas-so-rrhh", 1, "attendance", record => record?.workspaceId === targetWorkspace),
+            clearIndexedWorkspace("atlasSOFiles", 1, "paymentReceipts", record => record?.workspaceId === targetWorkspace
+                || String(record?.paymentId || "").startsWith(`${targetWorkspace}:`))
+        ]);
+        const prefix = `atlas:${targetWorkspace}:`;
+        const removals = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (key?.startsWith(prefix) || key === `atlas:pending:${targetWorkspace}` || key === `atlas:migrated:${targetWorkspace}`) {
+                removals.push(key);
+            }
+        }
+        removals.forEach(key => localStorage.removeItem(key));
+        pendingSync.clear();
+        durablePending.clear();
+        window.clearTimeout(syncTimer);
+        window.clearTimeout(retryTimer);
+    }
+
+    async function resetWorkspaceData() {
+        if (!workspaceId || workspaceRole !== "owner") {
+            throw new Error("Solo el propietario puede borrar todos los datos de este espacio.");
+        }
+        const targetWorkspace = workspaceId;
+        const client = window.AtlasAuth?.client;
+        if (!client) throw new Error("Se necesita conexión para borrar la copia sincronizada.");
+
+        const { data, error } = await client.rpc("atlas_reset_workspace_data", { target_workspace: targetWorkspace });
+        if (error) {
+            if (["42883", "PGRST202"].includes(error.code)) {
+                throw new Error("La limpieza total todavía no está instalada en Supabase. No se borró ningún dato. Instalá la configuración de limpieza desde Acerca de y volvé a intentar.");
+            }
+            throw error;
+        }
+
+        await clearLocalWorkspaceData(targetWorkspace);
+        return { cloudComplete: true, deletedRows: Number(data?.deleted_rows || 0) };
     }
 
     async function start() {
@@ -432,6 +528,7 @@
             write,
             has: hasLocal,
             flush,
+            resetWorkspaceData,
             get workspaceId() { return workspaceId; },
             get workspaceRole() { return workspaceRole; },
             get workspaceName() { return workspaceName; },

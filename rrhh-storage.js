@@ -291,10 +291,60 @@
         return records;
     }
 
+    async function removeClient(companyId, clientId) {
+        if (!companyId || !clientId) throw new Error("No se pudo identificar el cliente.");
+        if (cloudAvailable()) {
+            const { error } = await window.AtlasAuth.client
+                .from("hr_attendance_records")
+                .delete()
+                .eq("workspace_id", window.AtlasStore.workspaceId)
+                .eq("company_id", companyId)
+                .eq("client_id", clientId);
+            if (error && !["42P01", "PGRST205"].includes(error.code)) throw error;
+        }
+
+        try {
+            const db = await openDB();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE, "readwrite");
+                const request = tx.objectStore(STORE).openCursor();
+                request.onsuccess = () => {
+                    const cursor = request.result;
+                    if (!cursor) return;
+                    const bucket = cursor.value;
+                    if (bucket?.workspaceId === window.AtlasStore?.workspaceId && bucket?.companyId === companyId) {
+                        const records = (bucket.records || []).filter(item => String(item?.clientId || "") !== clientId);
+                        if (records.length !== (bucket.records || []).length) cursor.update({ ...bucket, records, updatedAt: new Date().toISOString() });
+                    }
+                    cursor.continue();
+                };
+                tx.oncomplete = resolve;
+                tx.onerror = () => reject(tx.error);
+            });
+            db.close();
+        } catch (error) {
+            console.warn("No se pudo limpiar la copia local de marcaciones:", error.message);
+        }
+
+        const prefix = `atlas:${window.AtlasStore?.workspaceId}:atlasHRAttendanceFallback__${companyId}__`;
+        const keys = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (key?.startsWith(prefix)) keys.push(key);
+        }
+        keys.forEach(storageKey => {
+            const dataKey = storageKey.slice(`atlas:${window.AtlasStore.workspaceId}:`.length);
+            const records = window.AtlasStore.read(dataKey, []);
+            if (Array.isArray(records)) window.AtlasStore.write(dataKey, records.filter(item => String(item?.clientId || "") !== clientId));
+        });
+        return true;
+    }
+
     window.AtlasHRStorage = {
         getMonth,
         upsertMonth,
         remove,
+        removeClient,
         mergeRecords,
         normalize,
         periodEnd,

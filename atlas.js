@@ -3,11 +3,14 @@
         dashboard: { label: "Mi día", href: "app.html", icon: "⌂" },
         finance: { label: "Finanzas", href: "finance.html", icon: "₲" },
         study: { label: "Estudios", href: "study.html", icon: "▣" },
-        health: { label: "Salud", href: "health.html", icon: "+" },
+        // Salud ya muestra el estado del día dentro del módulo. Evitamos usar
+        // un "1" en el menú para no confundir un recordatorio con datos cargados.
+        health: { label: "Salud", href: "health.html", icon: "+", countable: false },
         projects: { label: "Proyectos", href: "projects.html", icon: "◆" },
         personal: { label: "Hábitos", href: "personal.html", icon: "○" },
         work: { label: "Trabajo", href: "work.html", icon: "▤" },
-        rrhh: { label: "RRHH", href: "rrhh.html", icon: "R" }
+        rrhh: { label: "RRHH", href: "rrhh.html", icon: "R" },
+        about: { label: "Acerca de", href: "about.html", icon: "i", countable: false }
     };
 
     function canAccessFinance() {
@@ -536,7 +539,7 @@
         sidebar.setAttribute("aria-label", "Navegación principal");
         sidebar.innerHTML = `
             <a class="sidebar-brand" href="app.html" aria-label="ATLAS SO - Mi día">
-                <span class="brand-mark">A</span>
+                <img class="brand-mark" src="icons/atlas-logo.svg" alt="">
                 <span><strong>ATLAS SO</strong><span>Sistema personal</span></span>
             </a>
             <p class="sidebar-label">Tu espacio</p>
@@ -546,7 +549,7 @@
                     <a class="nav-item ${key === current ? "active" : ""}" href="${item.href}">
                         <span class="nav-icon" aria-hidden="true">${item.icon}</span>
                         <span>${item.label}</span>
-                        <span class="nav-badge" data-nav-count="${key}"></span>
+                        ${item.countable === false ? "" : `<span class="nav-badge" data-nav-count="${key}"></span>`}
                     </a>
                 `).join("")}
             </nav>
@@ -559,11 +562,11 @@
                 </span>
                 <button id="sidebarLogout" class="sidebar-logout" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">↪</button>
             </div>
-            <div class="sidebar-system-card">
-                <span>Una idea simple</span>
+            <a class="sidebar-system-card" href="about.html">
+                <span>ATLAS SO</span>
                 <strong>Lo que no se mide, no se mejora.</strong>
-                <small>ATLAS SO · v0.10 · Etapa 1</small>
-            </div>
+                <small>Acerca de, novedades y datos</small>
+            </a>
         `;
 
         const topbar = document.createElement("header");

@@ -52,7 +52,7 @@
         }
 
         assertOwner() {
-            if (this.workspaceRole !== "owner") throw new Error("Finanzas v0.10 es privada para el propietario.");
+            if (this.workspaceRole !== "owner") throw new Error("Finanzas es privada para el propietario.");
         }
 
         emit(type, detail = {}) {
@@ -82,7 +82,7 @@
                 } catch (error) {
                     if (!isMissingSchema(error) && !isConnectivityError(error)) throw error;
                     this.remoteReady = false;
-                    this.syncStatus("offline", isMissingSchema(error) ? "Base v0.10 pendiente de instalar" : "Cambios guardados en este dispositivo");
+                    this.syncStatus("offline", isMissingSchema(error) ? "Base financiera pendiente de instalar" : "Cambios guardados en este dispositivo");
                 }
             }
             if (!contexts.some(context => context.kind === "personal")) {
@@ -91,19 +91,8 @@
                 await this.queueCreate("contexts", personal, false);
                 contexts.push(personal);
             }
-            const personal = contexts.find(context => context.kind === "personal");
-            if (!(await this.list("categories", { context_id: personal.id })).length) {
-                const defaults = Core.defaultCategories(personal.id, this.options());
-                await this.storage.bulkPut("categories", defaults);
-                for (const category of defaults) await this.queueCreate("categories", category, false);
-            }
-            if (!(await this.list("paymentMethods", { context_id: personal.id })).length) {
-                const methods = Core.PAYMENT_METHOD_TYPES.slice(0, 7).map((method, index) => Domain.paymentMethodRecord({
-                    id: Core.derivedId(personal.id, 2000 + index), context_id: personal.id, name: method.label, method_type: method.value
-                }, this.options()));
-                await this.storage.bulkPut("paymentMethods", methods);
-                for (const method of methods) await this.queueCreate("paymentMethods", method, false);
-            }
+            // Categorías y medios de pago pertenecen al usuario. Un espacio nuevo
+            // empieza vacío y nunca vuelve a crear sugerencias eliminadas.
             if ((await this.storage.pending(this.workspaceId)).length) this.flush().catch(error => console.warn("Sincronización financiera:", error.message));
             return this.snapshot();
         }
@@ -220,6 +209,42 @@
             if (!current) throw new Error("No encontramos el registro.");
             if (entity === "contexts" && current.kind === "personal" && archived) throw new Error("El contexto Personal no se puede archivar.");
             return this.save(entity, { ...current, status: archived ? "archived" : "active", archived_at: archived ? new Date().toISOString() : null });
+        }
+
+        async archiveMany(entity, ids, archived = true) {
+            this.assertOwner();
+            if (!ARCHIVABLE.has(entity)) throw new Error("Esta entidad no se puede archivar.");
+            const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+            const currentRecords = (await Promise.all(uniqueIds.map(id => this.storage.get(ENTITIES[entity].store, id)))).filter(Boolean);
+            if (entity === "contexts" && archived && currentRecords.some(record => record.kind === "personal")) {
+                throw new Error("El contexto Personal no se puede archivar.");
+            }
+            const now = new Date().toISOString();
+            const records = currentRecords.map(current => this.makeRecord(entity, {
+                ...current,
+                status: archived ? "archived" : "active",
+                archived_at: archived ? now : null
+            }, current));
+            const operations = [];
+            records.forEach((record, index) => {
+                operations.push({ store: ENTITIES[entity].store, value: record });
+                operations.push({
+                    store: "outbox",
+                    value: {
+                        ...this.outbox(entity, "update", record, currentRecords[index].version || 0),
+                        state: "pending",
+                        attempts: 0,
+                        createdAt: now,
+                        updatedAt: now
+                    }
+                });
+            });
+            await this.storage.atomic(operations);
+            if (records.length) {
+                this.afterLocalChange(entity, records[0]);
+                this.flush().catch(error => console.warn("Sincronización financiera:", error.message));
+            }
+            return records;
         }
 
         afterLocalChange(entity, record) {
@@ -711,7 +736,7 @@
                 const remote = await this.fetchOne(operation.entity, operation.record.id);
                 if (remote) return this.acceptRemote(operation, remote);
             }
-            if (isMissingSchema(error)) { this.remoteReady = false; this.syncStatus("offline", "Base v0.10 pendiente de instalar"); return "retry"; }
+            if (isMissingSchema(error)) { this.remoteReady = false; this.syncStatus("offline", "Base financiera pendiente de instalar"); return "retry"; }
             if (isConnectivityError(error)) { await this.storage.queue({ ...operation, state: "retrying", attempts: Number(operation.attempts || 0) + 1 }); return "retry"; }
             if (error.code === "40001" || /finance_(version|obligation|payment)_conflict/i.test(String(error.message || ""))) {
                 await this.storage.conflict(operation, { code: error.code, message: String(error.message || "Conflicto compuesto") });

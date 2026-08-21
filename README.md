@@ -1,6 +1,6 @@
-# ATLAS SO · v0.10.0 · Finanzas y Control Patrimonial
+# ATLAS SO · v0.11.0 · Experiencia simple y finanzas personales
 
-ATLAS SO reúne la operación personal y de RR. HH. en una aplicación instalable, privada y sincronizada. Esta rama contiene la construcción completa de Finanzas v0.10; todavía no es una publicación final.
+ATLAS SO reúne la operación personal y de RR. HH. en una aplicación instalable, privada y sincronizada. La v0.11 incorpora el rediseño simple, Finanzas personales y una limpieza completa del espacio controlada por su propietario.
 
 ## Finanzas y Control Patrimonial v0.10
 

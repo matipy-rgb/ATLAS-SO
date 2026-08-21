@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>ATLAS SO · RR. HH. simple · Fixture</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../module.css">
+    <link rel="stylesheet" href="../rrhh.css">
+    <link rel="stylesheet" href="../experience-v011.css">
+</head>
+<body data-page="rrhh">
+    <main class="boot-error"><strong>Preparando demostración de RR. HH.…</strong></main>
+    <script>
+        (async function () {
+            const source = await fetch("../rrhh.html").then(response => response.text());
+            const parsed = new DOMParser().parseFromString(source, "text/html");
+            const body = document.importNode(parsed.body, true);
+            document.body.replaceWith(body);
+            document.body.classList.add("auth-ready");
+            document.querySelector("#hrPeopleCount").textContent = "24";
+            document.querySelector("#hrPeopleCaption").textContent = "24 personas activas";
+            document.querySelector("#hrInactiveMonthCount").textContent = "2";
+            document.querySelector("#hrActiveCount").textContent = "1";
+            document.querySelector("#hrActiveCaption").textContent = "1 ausencia activa";
+            document.querySelector("#hrOverdueCount").textContent = "3";
+            document.querySelector("#hrNextReturn").textContent = "Revisar hoy";
+            document.querySelector("#hrComplianceAlerts").innerHTML = '<button type="button"><strong>3 controles pendientes</strong><span>Altas, reintegros y marcaciones</span></button>';
+        })();
+    </script>
+</body>
+</html>

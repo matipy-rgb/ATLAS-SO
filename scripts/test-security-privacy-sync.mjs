@@ -38,7 +38,7 @@ const [
     read("supabase/v0.10-finance-base.sql")
 ]);
 
-assert.equal(JSON.parse(packageSource).version, "0.10.0");
+assert.equal(JSON.parse(packageSource).version, "0.11.0");
 assert.match(config, /sb_publishable_/);
 assert.doesNotMatch(config, /service_role\s*[:=]\s*["']/i);
 

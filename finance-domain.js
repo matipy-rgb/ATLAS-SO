@@ -1,6 +1,6 @@
 (function (root) {
     const Core = root.AtlasFinanceCore;
-    if (!Core) throw new Error("El núcleo financiero debe cargarse antes del dominio v0.10.");
+    if (!Core) throw new Error("El núcleo financiero debe cargarse antes del dominio.");
 
     const OBLIGATION_TYPES = Object.freeze([
         ["payable", "Cuenta por pagar"], ["receivable", "Cuenta por cobrar"],

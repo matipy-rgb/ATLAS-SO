@@ -55,6 +55,7 @@
     let tasks = normalizeTasks(A.loadTasks());
     let taskFilter = "pending";
     let notesTimer = null;
+    let financeSnapshot = null;
 
     function normalizeTasks(items) {
         return items.map(item => ({
@@ -72,8 +73,8 @@
     function getData() {
         tasks = normalizeTasks(A.loadTasks());
         return {
-            obligations: A.readArray("atlasObligations"),
-            transactions: A.readArray("atlasTransactions"),
+            obligations: financeSnapshot?.obligations || A.readArray("atlasObligations"),
+            transactions: financeSnapshot?.transactions || A.readArray("atlasTransactions"),
             studies: A.readArray("atlasStudyEvents"),
             health: A.readArray("atlasHealthRecords"),
             projects: A.readArray("atlasProjects"),
@@ -657,12 +658,59 @@
         "goals", "goalEntries", "assets", "valuations", "monthlyCloses", "savedFilters"
     ]);
 
+    function loadOptionalScript(source) {
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector(`script[src="${source}"]`);
+            if (existing?.dataset.loaded === "true") return resolve();
+            const script = existing || document.createElement("script");
+            script.src = source;
+            script.addEventListener("load", () => { script.dataset.loaded = "true"; resolve(); }, { once: true });
+            script.addEventListener("error", () => reject(new Error(`No se pudo cargar ${source}.`)), { once: true });
+            if (!existing) document.head.appendChild(script);
+        });
+    }
+
     async function openFinanceStorage() {
+        if (!window.AtlasFinanceStorage && window.AtlasStore?.workspaceRole === "owner") {
+            await loadOptionalScript("finance-storage.js");
+        }
         const Storage = window.AtlasFinanceStorage?.FinanceStorage;
         if (!Storage || window.AtlasStore?.workspaceRole !== "owner") return null;
         const storage = new Storage();
         await storage.open();
         return storage;
+    }
+
+    async function refreshFinanceSnapshot() {
+        if (!financeAllowed) return;
+        const storage = await openFinanceStorage();
+        if (!storage) return;
+        try {
+            const workspaceId = window.AtlasStore?.workspaceId || "";
+            const [obligations, transactions] = await Promise.all([
+                storage.list("obligations", { workspace_id: workspaceId }),
+                storage.list("transactions", { workspace_id: workspaceId })
+            ]);
+            if (!obligations.length && !transactions.length) return;
+            financeSnapshot = {
+                obligations: obligations.filter(item => item.status !== "void").map(item => ({
+                    ...item,
+                    name: item.name || "Pago pendiente",
+                    amount: Number(item.principal_amount || 0) + Number(item.interest_amount || 0) + Number(item.surcharge_amount || 0),
+                    paidAmount: Number(item.paid_amount || 0),
+                    dueDate: item.due_date || ""
+                })),
+                transactions: transactions.filter(item => item.status === "confirmed").map(item => ({
+                    ...item,
+                    type: item.reporting_effect,
+                    amount: Number(item.amount || 0),
+                    createdAt: item.occurred_at
+                }))
+            };
+            renderAll();
+        } finally {
+            storage.close();
+        }
     }
 
     async function exportFinanceBase() {
@@ -1113,7 +1161,7 @@
         });
         if (error) {
             if (["42883", "PGRST202"].includes(error.code)) {
-                throw new Error("Falta aplicar supabase/v0.8-security-privacy-sync.sql y supabase/v0.9-rrhh-operation.sql antes de restaurar marcaciones.");
+                throw new Error("Falta completar la configuración segura del servidor antes de restaurar marcaciones.");
             }
             throw error;
         }
@@ -1560,5 +1608,8 @@
 
     if (location.hash === "#backup") window.setTimeout(() => backupDialog.showModal(), 250);
     renderAll();
+    const queueFinanceRefresh = () => refreshFinanceSnapshot().catch(error => console.warn("Resumen financiero local:", error.message));
+    if ("requestIdleCallback" in window) window.requestIdleCallback(queueFinanceRefresh, { timeout: 1800 });
+    else window.setTimeout(queueFinanceRefresh, 300);
     maybeShowOnboarding();
 })();

@@ -63,15 +63,11 @@ button { cursor: pointer; }
     text-decoration: none;
 }
 .auth-brand-mark {
-    display: grid;
     width: 44px;
     height: 44px;
-    place-items: center;
-    border: 1px solid rgba(147, 197, 253, .3);
     border-radius: 13px;
-    background: linear-gradient(145deg, #2563eb, #0891b2);
     box-shadow: 0 14px 34px rgba(37, 99, 235, .3);
-    font-weight: 900;
+    object-fit: contain;
 }
 .auth-brand strong { display: block; letter-spacing: .13em; }
 .auth-brand small { display: block; margin-top: 2px; color: #8492a9; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }

@@ -39,13 +39,13 @@
         async import({ contextId, accountId, categoryId = null }) {
             if (!contextId || !accountId) throw new Error("Elegí el contexto y la cuenta de destino.");
             if (!this.source) this.readSource();
-            if (!this.preview?.canImport) throw new Error("No hay registros v0.9 para migrar.");
+            if (!this.preview?.canImport) throw new Error("No hay registros anteriores para migrar.");
             if (!this.repository.client || !this.repository.remoteReady) {
-                throw new Error("La base v0.10 debe estar instalada en el Supabase aislado antes de importar.");
+                throw new Error("La base financiera debe estar instalada en el servidor antes de importar.");
             }
 
             const checksum = await this.checksum();
-            this.repository.syncStatus("syncing", "Migrando datos v0.9…");
+            this.repository.syncStatus("syncing", "Migrando datos anteriores…");
             const { data, error } = await this.repository.client.rpc("finance_import_v09", {
                 target_workspace: this.repository.workspaceId,
                 target_context: contextId,
