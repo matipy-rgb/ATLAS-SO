@@ -1,4 +1,4 @@
-const CACHE_NAME = "atlas-so-v0.10-finance-complete";
+const CACHE_NAME = "atlas-so-shell-2026-08-20-4";
 const APP_SHELL = [
     "./",
     "./app.html",
@@ -12,6 +12,7 @@ const APP_SHELL = [
     "./health.html",
     "./projects.html",
     "./personal.html",
+    "./about.html",
     "./offline.html",
     "./offline.js",
     "./privacy.html",
@@ -23,6 +24,7 @@ const APP_SHELL = [
     "./study.css",
     "./projects.css",
     "./personal.css",
+    "./experience-v011.css",
     "./auth.css",
     "./rrhh.css",
     "./atlas-config.js",
@@ -50,23 +52,13 @@ const APP_SHELL = [
     "./rrhh-storage.js",
     "./rrhh-contracts.js",
     "./rrhh-ips.js",
-    "./vendor/xlsx.full.min.js",
-    "./vendor/tesseract.min.js",
-    "./vendor/tesseract-worker.min.js",
-    "./vendor/tesseract-core/tesseract-core.wasm.js",
-    "./vendor/tesseract-core/tesseract-core.wasm",
-    "./vendor/tesseract-core/tesseract-core-simd.wasm.js",
-    "./vendor/tesseract-core/tesseract-core-simd.wasm",
-    "./vendor/tesseract-core/tesseract-core-lstm.wasm.js",
-    "./vendor/tesseract-core/tesseract-core-lstm.wasm",
-    "./vendor/tesseract-core/tesseract-core-simd-lstm.wasm.js",
-    "./vendor/tesseract-core/tesseract-core-simd-lstm.wasm",
-    "./vendor/tessdata/spa.traineddata.gz",
     "./health.js",
     "./projects.js",
     "./personal.js",
+    "./about.js",
     "./vendor/supabase.js",
     "./manifest.webmanifest",
+    "./icons/atlas-logo.svg",
     "./icons/atlas-192.png",
     "./icons/atlas-512.png"
 ];
@@ -118,53 +110,16 @@ self.addEventListener("fetch", event => {
     const requestUrl = new URL(event.request.url);
     if (event.request.method !== "GET" || requestUrl.origin !== self.location.origin) return;
 
-    // La configuración y el acceso consultan primero la versión instalada más
-    // reciente. Si no hay conexión, conservan la última copia válida.
+    // Solo la configuración y el acceso consultan primero la red. Las
+    // pantallas y módulos abren desde la copia instalada y se actualizan en
+    // segundo plano, evitando esperas innecesarias.
     const networkFirstFiles = [
         "/atlas-config.js",
         "/auth-core.js",
         "/auth-page.js",
         "/login.html",
         "/index.html",
-        "/app.html",
-        "/landing.css",
-        "/styles.css",
-        "/dashboard.css",
-        "/dashboard.js",
-        "/module.css",
-        "/atlas.js",
-        "/app-bootstrap.js",
-        "/reset-password.html",
-        "/finance.html",
-        "/finance.js",
-        "/finance.css",
-        "/study.html",
-        "/study.js",
-        "/study.css",
-        "/work.html",
-        "/work.js",
-        "/health.html",
-        "/health.js",
-        "/projects.html",
-        "/projects.js",
-        "/projects.css",
-        "/personal.html",
-        "/personal.js",
-        "/personal.css",
-        "/privacy.html",
-        "/offline.html",
-        "/offline.js",
-        "/rrhh.html",
-        "/rrhh.js",
-        "/rrhh-super.js",
-        "/rrhh-context.js",
-        "/rrhh-import.js",
-        "/rrhh-calc.js",
-        "/rrhh-storage.js",
-        "/rrhh-contracts.js",
-        "/rrhh-ips.js",
-        "/rrhh.css",
-        "/auth.css"
+        "/reset-password.html"
     ];
     if (networkFirstFiles.some(file => requestUrl.pathname.endsWith(file))) {
         event.respondWith(
@@ -180,12 +135,13 @@ self.addEventListener("fetch", event => {
 
     if (event.request.mode === "navigate") {
         event.respondWith(
-            fetch(event.request)
-                .then(response => {
+            cachedResponse(event.request).then(cached => {
+                const network = fetch(event.request).then(response => {
                     updateCache(event.request, response, requestUrl).catch(() => {});
                     return response;
-                })
-                .catch(async () => (await cachedResponse(event.request)) || caches.match("./offline.html"))
+                }).catch(() => cached || caches.match("./offline.html"));
+                return cached || network;
+            })
         );
         return;
     }

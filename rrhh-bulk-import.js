@@ -6,7 +6,7 @@
     const Core = window.AtlasHRV09Core;
     const O = window.AtlasHROperation;
     const XLSX = window.XLSX;
-    if (!A || !C || !Core || !O || !XLSX) throw new Error("El centro de importaciones v0.9 no pudo iniciar.");
+    if (!A || !C || !Core || !O || !XLSX) throw new Error("El centro de importaciones no pudo iniciar.");
 
     const q = selector => document.querySelector(selector);
     const esc = A.escapeHTML;

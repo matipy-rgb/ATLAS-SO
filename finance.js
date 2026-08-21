@@ -3,7 +3,7 @@
     const Domain = window.AtlasFinanceDomain;
     const Repository = window.AtlasFinanceRepository?.FinanceRepository;
     const Migration = window.AtlasFinanceMigration?.FinanceMigration;
-    if (!Core || !Domain || !Repository || !Migration) throw new Error("Finanzas v0.10 no pudo cargar sus módulos.");
+    if (!Core || !Domain || !Repository || !Migration) throw new Error("Finanzas no pudo cargar sus módulos.");
 
     const $ = selector => document.querySelector(selector);
     const $$ = selector => [...document.querySelectorAll(selector)];
@@ -18,7 +18,7 @@
     const state = {
         repository: null, migration: null, data: {}, activeContext: "general", activeMonth: Core.currentMonth(),
         activeView: "home", planningTab: "budgets", search: "", movementType: "", movementLimit: 250,
-        movementDateFrom: "", movementDateTo: "", commitmentState: "", activeConflict: null, migrationPreview: null, closeMode: "close"
+        movementDateFrom: "", movementDateTo: "", commitmentState: "month", activeConflict: null, migrationPreview: null, closeMode: "close"
     };
 
     function escapeHTML(value) {
@@ -62,6 +62,11 @@
     function matchesCommitmentState(item, filter, today = localDate()) {
         if (!filter) return true;
         const status = Domain.obligationState(item, today);
+        if (filter === "month") {
+            const open = !["paid", "collected", "void"].includes(status);
+            const payable = item.direction !== "receivable";
+            return open && payable && Domain.monthOf(item.due_date) === state.activeMonth;
+        }
         if (filter === "attention") return ["overdue", "due_today", "due_soon"].includes(status);
         if (filter === "receivable") return item.direction === "receivable" && !["collected", "void"].includes(status);
         if (filter === "partial") return Number(item.paid_amount) > 0 && !["paid", "collected", "void"].includes(status);
@@ -70,6 +75,59 @@
     }
     function formatDate(value) { return value ? new Intl.DateTimeFormat("es-PY", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${String(value).slice(0, 10)}T12:00:00`)) : "Sin fecha"; }
     function emptyOr(html) { return html || EMPTY; }
+    function helpTip(label, message) {
+        return `<span class="finance-field-title">${escapeHTML(label)}<details class="finance-help"><summary aria-label="Ayuda sobre ${escapeHTML(label)}">!</summary><p>${escapeHTML(message)}</p></details></span>`;
+    }
+    function installFinanceHelp() {
+        [
+            ["#operationAccount", "Cuenta", "Elegí de dónde sale o dónde entra el dinero. Así ATLAS mantiene el saldo correcto."],
+            ["#purchaseAccount", "Cuenta o tarjeta", "Es el lugar cuyo saldo cambia con esta compra: efectivo, banco, billetera o tarjeta."],
+            ["#obligationAccount", "Cuenta o tarjeta relacionada", "Es opcional, salvo para tarjetas. Vinculá la deuda con su tarjeta o préstamo para verla en el saldo correcto."],
+            ["#paymentAccount", "Cuenta usada para pagar", "Elegí la cuenta de donde salió el dinero. Si pagás una tarjeta, no elijas la misma tarjeta como origen."]
+        ].forEach(([selector, label, message]) => {
+            const control = $(selector);
+            const title = control?.closest("label")?.querySelector(":scope > span");
+            if (title) title.outerHTML = helpTip(label, message);
+        });
+    }
+    function recoverableList(records, emptyTitle, emptyCopy, renderCard) {
+        const active = records.filter(item => item.status !== "archived");
+        const removed = records.filter(item => item.status === "archived");
+        const current = active.length
+            ? active.map(item => renderCard(item, false)).join("")
+            : `<div class="finance-empty finance-empty-config"><span>＋</span><strong>${escapeHTML(emptyTitle)}</strong><small>${escapeHTML(emptyCopy)}</small></div>`;
+        const history = removed.length
+            ? `<details class="finance-removed-list"><summary>Eliminados (${removed.length})</summary><div>${removed.map(item => renderCard(item, true)).join("")}</div></details>`
+            : "";
+        return current + history;
+    }
+    function monthBounds(month = state.activeMonth) {
+        const days = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+        return { start: `${month}-01`, end: `${month}-${String(days).padStart(2, "0")}` };
+    }
+    function dateInActiveMonth() {
+        const today = localDate();
+        const { start, end } = monthBounds();
+        return today < start ? start : today > end ? end : today;
+    }
+    function dueDateAtOffset(firstDue, offset) {
+        const dueMonth = Domain.addMonths(Domain.monthOf(firstDue), offset);
+        const sourceDay = Number(String(firstDue).slice(8, 10));
+        const lastDay = new Date(Number(dueMonth.slice(0, 4)), Number(dueMonth.slice(5, 7)), 0).getDate();
+        return `${dueMonth}-${String(Math.min(sourceDay, lastDay)).padStart(2, "0")}`;
+    }
+    function obligationStatusLabel(status) {
+        return ({ overdue: "Atrasado", due_today: "Vence hoy", due_soon: "Próximo", pending: "Pendiente", partial: "Pago parcial", paid: "Pagado", collected: "Cobrado", void: "Eliminado" })[status] || "Pendiente";
+    }
+    function installmentBaseName(name) { return String(name || "").replace(/\s*·\s*cuota\s+\d+\/\d+\s*$/i, "").trim(); }
+    function installmentSeries(item) {
+        if (item.obligation_type !== "installment") return [];
+        const base = Core.searchText(installmentBaseName(item.name));
+        return scoped(state.data.obligations).filter(candidate => candidate.obligation_type === "installment"
+            && candidate.installment_total === item.installment_total
+            && Core.searchText(installmentBaseName(candidate.name)) === base
+            && Core.searchText(candidate.counterparty) === Core.searchText(item.counterparty));
+    }
 
     function options(items, selected, { empty = "", label = item => item.name } = {}) {
         return `${empty !== null ? `<option value="">${escapeHTML(empty)}</option>` : ""}${items.map(item => `<option value="${escapeHTML(item.id)}"${item.id === selected ? " selected" : ""}>${escapeHTML(label(item))}</option>`).join("")}`;
@@ -96,15 +154,19 @@
         const search = Core.searchText(state.search);
         return scoped(state.data.transactions).filter(item => {
             const date = String(item.occurred_at || "").slice(0, 10);
+            if (Domain.monthOf(item.occurred_at) !== state.activeMonth) return false;
             if (state.movementDateFrom && date < state.movementDateFrom) return false;
             if (state.movementDateTo && date > state.movementDateTo) return false;
-            return state.movementDateFrom || state.movementDateTo || Domain.monthOf(item.occurred_at) === state.activeMonth;
+            return true;
         })
             .filter(item => !state.movementType || item.operation_kind === state.movementType || item.reporting_effect === state.movementType)
             .filter(item => !$("#movementAccountFilter")?.value || item.account_id === $("#movementAccountFilter").value)
             .filter(item => !$("#movementCategoryFilter")?.value || item.category_id === $("#movementCategoryFilter").value)
             .filter(item => !$("#movementMethodFilter")?.value || item.payment_method_id === $("#movementMethodFilter").value)
-            .filter(item => !$("#movementStatusFilter")?.value || item.status === $("#movementStatusFilter").value)
+            .filter(item => {
+                const status = $("#movementStatusFilter")?.value;
+                return !status || (status === "active" ? item.status !== "void" : item.status === status);
+            })
             .filter(item => !search || Core.searchText(`${item.description} ${item.counterparty} ${(item.tags || []).join(" ")} ${item.amount} ${accountName(item.account_id)} ${categoryName(item.category_id)}`).includes(search))
             .sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at)) || b.id.localeCompare(a.id));
     }
@@ -126,10 +188,25 @@
         $("#summaryExpense").textContent = Core.formatMoney(summary.expense);
         $("#summaryResult").textContent = Core.formatMoney(summary.result);
         const today = localDate();
-        const open = scoped(state.data.obligations).filter(item => matchesCommitmentState(item, "attention", today));
+        const payable = scoped(state.data.obligations)
+            .filter(item => item.direction !== "receivable" && !["paid", "collected", "void"].includes(Domain.obligationState(item, today)));
+        const totalDebt = payable.reduce((sum, item) => sum + Domain.obligationTotal(item) - Number(item.paid_amount), 0);
+        $("#summaryDebtTotal").textContent = Core.formatMoney(totalDebt);
+        $("#summaryDebtCopy").textContent = payable.length
+            ? `${payable.length} pago${payable.length === 1 ? "" : "s"} pendiente${payable.length === 1 ? "" : "s"}`
+            : "Sin deudas abiertas";
+        const open = payable.filter(item => Domain.monthOf(item.due_date) === state.activeMonth);
         const due = open.reduce((sum, item) => sum + Domain.obligationTotal(item) - Number(item.paid_amount), 0);
         $("#summaryDue").textContent = Core.formatMoney(due);
-        $("#summaryDueCopy").textContent = `${open.length} compromiso${open.length === 1 ? "" : "s"} abierto${open.length === 1 ? "" : "s"}`;
+        $("#summaryDueCopy").textContent = open.length
+            ? `${open.length} pago${open.length === 1 ? "" : "s"} pendiente${open.length === 1 ? "" : "s"}`
+            : "Sin pagos pendientes";
+        const nextPayment = [...payable].sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))[0];
+        $("#nextPaymentName").textContent = nextPayment?.name || "Nada pendiente";
+        $("#nextPaymentDate").textContent = nextPayment ? formatDate(nextPayment.due_date) : "Tu mes está al día";
+        $("#nextPaymentAmount").textContent = nextPayment
+            ? Core.formatMoney(Domain.obligationTotal(nextPayment) - Number(nextPayment.paid_amount))
+            : Core.formatMoney(0);
         const receivables = scoped(state.data.obligations).filter(item => matchesCommitmentState(item, "receivable", today));
         $("#summaryReceivable").textContent = Core.formatMoney(receivables.reduce((sum, item) => sum + Domain.obligationTotal(item) - Number(item.paid_amount), 0));
         $("#summaryReceivableCopy").textContent = receivables.length ? `${receivables.length} cobro${receivables.length === 1 ? "" : "s"} pendiente${receivables.length === 1 ? "" : "s"}` : "Sin cuentas por cobrar";
@@ -156,8 +233,8 @@
             return `<button class="finance-list-card finance-list-button" type="button" data-open-view="accounts"><span class="finance-list-icon">${debt ? "−" : "₲"}</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(contextName(item.context_id))}</small></span><span class="finance-list-amount">${balanceLabel(item, balance)}</span></button>`;
         }).join(""));
         const today = localDate();
-        const horizon = new Date(`${today}T00:00:00`); horizon.setDate(horizon.getDate() + 7);
-        const due = scoped(state.data.obligations).filter(item => !["paid", "void"].includes(item.status) && item.due_date <= localDate(horizon)).sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 6);
+        const { start: monthStart, end: monthEnd } = monthBounds();
+        const due = scoped(state.data.obligations).filter(item => item.direction !== "receivable" && !["paid", "collected", "void"].includes(Domain.obligationState(item, today)) && item.due_date >= monthStart && item.due_date <= monthEnd).sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 6);
         $("#homeCommitments").innerHTML = emptyOr(due.map(item => `<button class="finance-list-card finance-list-button" type="button" data-open-view="commitments" data-commitment-state="attention"><span class="finance-list-icon">${Domain.obligationState(item) === "overdue" ? "!" : "◷"}</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${formatDate(item.due_date)} · ${escapeHTML(item.counterparty || categoryName(item.category_id))}</small></span><span class="finance-list-amount">${Core.formatMoney(Domain.obligationTotal(item) - Number(item.paid_amount))}</span></button>`).join(""));
         const worth = Domain.netWorth({ ...state.data, contextId: state.activeContext, month: state.activeMonth });
         $("#homeNetWorth").innerHTML = `<strong>${Core.formatMoney(worth.net)}</strong><span>Activos ${Core.formatMoney(worth.assets)} · Pasivos ${Core.formatMoney(worth.liabilities)}</span>`;
@@ -170,6 +247,9 @@
 
     function renderMovementFilters() {
         const contextId = currentContextId();
+        const { start, end } = monthBounds();
+        if (state.movementDateFrom && (state.movementDateFrom < start || state.movementDateFrom > end)) state.movementDateFrom = "";
+        if (state.movementDateTo && (state.movementDateTo < start || state.movementDateTo > end)) state.movementDateTo = "";
         const accounts = (state.data.accounts || []).filter(item => (!contextId || item.context_id === contextId) && item.status === "active");
         const categories = (state.data.categories || []).filter(item => (!contextId || item.context_id === contextId) && item.status === "active");
         const methods = (state.data.paymentMethods || []).filter(item => (!contextId || item.context_id === contextId) && item.status === "active");
@@ -183,6 +263,7 @@
         $("#movementCategoryFilter").innerHTML = options(categories, current.category, { empty: "Todas las categorías", label: item => `${item.name} · ${contextName(item.context_id)}` });
         $("#movementMethodFilter").innerHTML = options(methods, current.method, { empty: "Todos los medios", label: item => `${item.name} · ${contextName(item.context_id)}` });
         $("#movementStatusFilter").value = current.status;
+        [$("#movementDateFrom"), $("#movementDateTo")].forEach(input => { input.min = start; input.max = end; });
         $("#movementDateFrom").value = state.movementDateFrom;
         $("#movementDateTo").value = state.movementDateTo;
     }
@@ -196,7 +277,7 @@
         $("#movementsList").innerHTML = emptyOr(groups.slice(0, state.movementLimit).map(({ id, items, record }) => {
             const transfer = record.operation_kind === "transfer";
             const label = Core.OPERATION_TYPES.find(item => item.value === record.operation_kind)?.label || record.operation_kind;
-            const status = record.status === "void" ? "Anulado" : record.status === "pending" ? "Pendiente" : "Confirmado";
+            const status = record.status === "void" ? "Eliminado" : record.status === "pending" ? "Pendiente" : "Confirmado";
             const amountClass = record.reporting_effect === "income" ? "income" : record.reporting_effect === "expense" ? "expense" : "neutral";
             const compound = items.length > 1;
             const orderedItems = compound ? [...items].sort((a, b) => (a.operation_leg === "source" ? -1 : 1) - (b.operation_leg === "source" ? -1 : 1)) : items;
@@ -205,8 +286,8 @@
             const attachments = state.data.attachments.filter(item => ((item.transaction_id && items.some(tx => tx.id === item.transaction_id)) || (paymentId && item.payment_id === paymentId)) && item.sync_state !== "removed");
             const editable = record.status !== "void" && state.activeContext !== "general";
             const actions = paymentId
-                ? `<button type="button" data-payment-edit="${paymentId}"${editable ? "" : " disabled"}>Editar pago</button><button type="button" data-payment-void="${paymentId}"${editable ? "" : " disabled"}>Anular pago</button>`
-                : `<button type="button" data-operation-edit="${id}"${editable ? "" : " disabled"}>Editar</button>${record.status === "pending" ? `<button type="button" data-operation-delete="${id}"${editable ? "" : " disabled"}>Eliminar borrador</button>` : `<button type="button" data-operation-void="${id}"${editable ? "" : " disabled"}>Anular</button>`}`;
+                ? `<button type="button" data-payment-edit="${paymentId}"${editable ? "" : " disabled"}>Editar pago</button><button type="button" data-payment-void="${paymentId}"${editable ? "" : " disabled"}>Eliminar pago</button>`
+                : `<button type="button" data-operation-edit="${id}"${editable ? "" : " disabled"}>Editar</button>${record.status === "pending" ? `<button type="button" data-operation-delete="${id}"${editable ? "" : " disabled"}>Eliminar borrador</button>` : `<button type="button" data-operation-void="${id}"${editable ? "" : " disabled"}>Eliminar</button>`}`;
             return `<article class="finance-movement-item ${record.status === "void" ? "void" : ""}"><span class="movement-kind ${amountClass}">${record.reporting_effect === "income" ? "↑" : record.reporting_effect === "expense" ? "↓" : "↔"}</span><span class="finance-list-copy"><strong>${escapeHTML(record.description)}</strong><small>${escapeHTML(label)} · ${escapeHTML(accounts)} · ${formatDate(record.occurred_at)} · ${escapeHTML(status)}</small><small>${escapeHTML(record.counterparty || categoryName(record.category_id))}${record.tags?.length ? ` · #${record.tags.map(escapeHTML).join(" #")}` : ""}</small></span><span class="movement-side"><strong class="movement-amount ${amountClass}">${Core.formatMoney(record.amount)}</strong><span class="list-actions">${actions}${attachments.map(file => `<button type="button" data-attachment-open="${file.id}">Comprobante</button><button type="button" data-attachment-remove="${file.id}"${editable ? "" : " disabled"}>Quitar comprobante</button>`).join("")}</span></span></article>`;
         }).join(""));
         const filters = scoped(state.data.savedFilters);
@@ -219,7 +300,7 @@
         $("#accountsList").innerHTML = emptyOr(rows.map(item => {
             const balance = Core.accountBalance(item, state.data.transactions);
             const type = Core.ACCOUNT_TYPES.find(typeItem => typeItem.value === item.account_type)?.label || item.account_type;
-            return `<article class="finance-account-card ${item.status}"><div class="account-card-top"><span class="account-type-badge">${escapeHTML(type)}</span><span class="status-badge">${item.status === "active" ? "Activa" : "Archivada"}</span></div><h3>${escapeHTML(item.name)}</h3><small>${escapeHTML(contextName(item.context_id))}</small><div class="account-balance">${balanceLabel(item, balance)}</div><div class="account-card-actions"><button type="button" data-simple-edit="account" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>Editar</button><button type="button" data-entity="accounts" data-action="${item.status === "active" ? "archive" : "restore"}" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>${item.status === "active" ? "Archivar" : "Reactivar"}</button></div></article>`;
+            return `<article class="finance-account-card ${item.status}"><div class="account-card-top"><span class="account-type-badge">${escapeHTML(type)}</span><span class="status-badge">${item.status === "active" ? "Activa" : "Eliminada"}</span></div><h3>${escapeHTML(item.name)}</h3><small>${escapeHTML(contextName(item.context_id))}</small><div class="account-balance">${balanceLabel(item, balance)}</div><div class="account-card-actions"><button type="button" data-simple-edit="account" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>Editar</button><button type="button" data-entity="accounts" data-action="${item.status === "active" ? "archive" : "restore"}" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>${item.status === "active" ? "Eliminar" : "Restaurar"}</button></div></article>`;
         }).join(""));
     }
 
@@ -234,7 +315,14 @@
             const remaining = total - Number(item.paid_amount);
             const status = Domain.obligationState(item, today);
             const charges = Number(item.interest_amount || 0) + Number(item.surcharge_amount || 0);
-            return `<article class="finance-list-card commitment-card ${status}"><span class="finance-list-icon">${item.direction === "receivable" ? "↑" : "↓"}</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.counterparty || categoryName(item.category_id))} · vence ${formatDate(item.due_date)} · ${escapeHTML(status.replaceAll("_", " "))}</small><small>Pagado ${Core.formatMoney(item.paid_amount)} de ${Core.formatMoney(total)}${charges ? ` · interés/recargo ${Core.formatMoney(charges)}` : ""}</small><progress max="${total}" value="${item.paid_amount}"></progress></span><span class="movement-side"><strong>${Core.formatMoney(remaining)}</strong><span class="list-actions"><button type="button" data-obligation-pay="${item.id}"${["paid", "void"].includes(item.status) || state.activeContext === "general" ? " disabled" : ""}>${item.direction === "receivable" ? "Cobrar" : "Pagar"}</button><button type="button" data-obligation-edit="${item.id}"${["paid", "void"].includes(item.status) || state.activeContext === "general" ? " disabled" : ""}>Editar</button><button type="button" data-obligation-void="${item.id}"${["paid", "void"].includes(item.status) || state.activeContext === "general" ? " disabled" : ""}>Anular</button></span></span></article>`;
+            const series = installmentSeries(item);
+            const paidInstallments = series.filter(candidate => Domain.obligationState(candidate, today) === "paid").length;
+            const nextInstallment = series.filter(candidate => !["paid", "void"].includes(Domain.obligationState(candidate, today))).sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+            const installmentCopy = item.obligation_type === "installment"
+                ? `<small>Cuota ${item.installment_number}/${item.installment_total} · ${paidInstallments}/${item.installment_total} pagadas${nextInstallment ? ` · próxima ${formatDate(nextInstallment.due_date)}` : " · deuda terminada"}</small>`
+                : "";
+            const locked = item.status === "void" || state.activeContext === "general";
+            return `<article class="finance-list-card commitment-card ${status}"><span class="finance-list-icon">${item.direction === "receivable" ? "↑" : "↓"}</span><span class="finance-list-copy"><span class="status-badge" data-state="${status}">${escapeHTML(obligationStatusLabel(status))}</span><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.counterparty || categoryName(item.category_id))} · vence ${formatDate(item.due_date)}</small>${installmentCopy}<small>Pagado ${Core.formatMoney(item.paid_amount)} de ${Core.formatMoney(total)}${charges ? ` · interés/recargo ${Core.formatMoney(charges)}` : ""}</small><progress max="${total}" value="${item.paid_amount}"></progress></span><span class="movement-side"><strong>${Core.formatMoney(remaining)}</strong><span class="list-actions"><button type="button" data-obligation-pay="${item.id}"${["paid", "collected", "void"].includes(status) || state.activeContext === "general" ? " disabled" : ""}>${item.direction === "receivable" ? "Cobrar" : "Pagar"}</button><button type="button" data-obligation-edit="${item.id}"${locked ? " disabled" : ""}>Editar</button><button type="button" data-obligation-void="${item.id}"${locked ? " disabled" : ""}>Eliminar</button></span></span></article>`;
         }).join(""));
         const recurrences = scoped(state.data.recurrences);
         $("#recurrencesList").innerHTML = emptyOr(recurrences.map(item => `<div class="finance-list-card"><span class="finance-list-icon">↻</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.frequency)} · próxima ${formatDate(item.next_on)}</small></span><span class="list-actions"><button type="button" data-simple-edit="recurrence" data-id="${item.id}">Editar</button><button type="button" data-entity="recurrences" data-action="${item.status === "active" ? "archive" : "restore"}" data-id="${item.id}">${item.status === "active" ? "Archivar" : "Reactivar"}</button></span></div>`).join(""));
@@ -247,14 +335,14 @@
         const planned = budgets.reduce((sum, item) => sum + Number(item.planned_amount), 0);
         const used = budgets.reduce((sum, item) => sum + item.spent + item.committed, 0);
         $("#budgetTotals").textContent = budgets.length ? `${Core.formatMoney(used)} usado o comprometido de ${Core.formatMoney(planned)}` : "Sin presupuesto para este mes";
-        const budgetCards = budgets.map(item => `<article class="finance-list-card ${item.alert ? "budget-alert" : ""}"><span class="category-dot" style="background:${escapeHTML(state.data.categories.find(category => category.id === item.category_id)?.color || "#2563eb")}">${escapeHTML(state.data.categories.find(category => category.id === item.category_id)?.icon || "●")}</span><span class="finance-list-copy"><strong>${escapeHTML(categoryName(item.category_id))}</strong><small>Gastado ${Core.formatMoney(item.spent)} · comprometido ${Core.formatMoney(item.committed)} · proyección ${Core.formatMoney(item.projection)}</small><progress max="100" value="${Math.min(item.percent, 100)}"></progress></span><span class="movement-side"><strong>${Core.formatMoney(item.available)}</strong><small>${item.percent}%</small><span class="list-actions"><button type="button" data-simple-edit="budget" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>Editar</button><button type="button" data-entity="budgets" data-action="archive" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>Archivar</button></span></span></article>`);
-        const archivedBudgetCards = scoped(state.data.budgets).filter(item => item.month === state.activeMonth && item.status === "archived").map(item => `<article class="finance-list-card archived"><span class="finance-list-copy"><strong>${escapeHTML(categoryName(item.category_id))}</strong><small>Presupuesto archivado · ${Core.formatMoney(item.planned_amount)}</small></span><span class="list-actions"><button type="button" data-entity="budgets" data-action="restore" data-id="${item.id}">Reactivar</button></span></article>`);
+        const budgetCards = budgets.map(item => `<article class="finance-list-card ${item.alert ? "budget-alert" : ""}"><span class="category-dot" style="background:${escapeHTML(state.data.categories.find(category => category.id === item.category_id)?.color || "#2563eb")}">${escapeHTML(state.data.categories.find(category => category.id === item.category_id)?.icon || "●")}</span><span class="finance-list-copy"><strong>${escapeHTML(categoryName(item.category_id))}</strong><small>Gastado ${Core.formatMoney(item.spent)} · comprometido ${Core.formatMoney(item.committed)} · proyección ${Core.formatMoney(item.projection)}</small><progress max="100" value="${Math.min(item.percent, 100)}"></progress></span><span class="movement-side"><strong>${Core.formatMoney(item.available)}</strong><small>${item.percent}%</small><span class="list-actions"><button type="button" data-simple-edit="budget" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>Editar</button><button type="button" data-entity="budgets" data-action="archive" data-id="${item.id}"${state.activeContext === "general" ? " disabled" : ""}>Eliminar</button></span></span></article>`);
+        const archivedBudgetCards = scoped(state.data.budgets).filter(item => item.month === state.activeMonth && item.status === "archived").map(item => `<article class="finance-list-card archived"><span class="finance-list-copy"><strong>${escapeHTML(categoryName(item.category_id))}</strong><small>Presupuesto eliminado · ${Core.formatMoney(item.planned_amount)}</small></span><span class="list-actions"><button type="button" data-entity="budgets" data-action="restore" data-id="${item.id}">Restaurar</button></span></article>`);
         $("#budgetsList").innerHTML = emptyOr([...budgetCards, ...archivedBudgetCards].join(""));
         const goals = scoped(state.data.goals);
         $("#goalsList").innerHTML = emptyOr(goals.map(item => {
             const progress = Domain.goalProgress(item, state.data.goalEntries, `${state.activeMonth}-31`);
-            const entries = state.data.goalEntries.filter(entry => entry.goal_id === item.id).sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
-            return `<article class="finance-account-card ${item.status}"><span class="status-badge">${item.status === "archived" ? "Archivada" : `${progress.percent}%`}</span><h3>${escapeHTML(item.name)}</h3><small>${item.target_date ? `Meta ${formatDate(item.target_date)}` : "Sin fecha límite"}</small><div class="account-balance">${Core.formatMoney(progress.saved)}</div><progress max="100" value="${progress.percent}"></progress><small>Faltan ${Core.formatMoney(progress.remaining)} de ${Core.formatMoney(item.target_amount)}</small><div class="mini-history">${entries.slice(0, 5).map(entry => `<button type="button" data-simple-edit="goalEntry" data-id="${entry.id}">${formatDate(entry.occurred_on)} · ${entry.entry_type === "withdrawal" ? "Retiro" : "Aporte"} ${Core.formatMoney(entry.amount)}</button>`).join("")}</div><div class="account-card-actions"><button type="button" data-goal-entry="${item.id}" data-entry-type="contribution"${item.status === "archived" ? " disabled" : ""}>Aportar</button><button type="button" data-goal-entry="${item.id}" data-entry-type="withdrawal"${item.status === "archived" ? " disabled" : ""}>Retirar</button><button type="button" data-simple-edit="goal" data-id="${item.id}">Editar</button><button type="button" data-entity="goals" data-action="${item.status === "archived" ? "restore" : "archive"}" data-id="${item.id}">${item.status === "archived" ? "Reactivar" : "Archivar"}</button></div></article>`;
+            const entries = state.data.goalEntries.filter(entry => entry.goal_id === item.id && Domain.monthOf(entry.occurred_on) === state.activeMonth).sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
+            return `<article class="finance-account-card ${item.status}"><span class="status-badge">${item.status === "archived" ? "Eliminada" : `${progress.percent}%`}</span><h3>${escapeHTML(item.name)}</h3><small>${item.target_date ? `Meta ${formatDate(item.target_date)}` : "Sin fecha límite"}</small><div class="account-balance">${Core.formatMoney(progress.saved)}</div><progress max="100" value="${progress.percent}"></progress><small>Faltan ${Core.formatMoney(progress.remaining)} de ${Core.formatMoney(item.target_amount)}</small><div class="mini-history">${entries.slice(0, 5).map(entry => `<button type="button" data-simple-edit="goalEntry" data-id="${entry.id}">${formatDate(entry.occurred_on)} · ${entry.entry_type === "withdrawal" ? "Retiro" : "Aporte"} ${Core.formatMoney(entry.amount)}</button>`).join("")}</div><div class="account-card-actions"><button type="button" data-goal-entry="${item.id}" data-entry-type="contribution"${item.status === "archived" ? " disabled" : ""}>Aportar</button><button type="button" data-goal-entry="${item.id}" data-entry-type="withdrawal"${item.status === "archived" ? " disabled" : ""}>Retirar</button><button type="button" data-simple-edit="goal" data-id="${item.id}">Editar</button><button type="button" data-entity="goals" data-action="${item.status === "archived" ? "restore" : "archive"}" data-id="${item.id}">${item.status === "archived" ? "Restaurar" : "Eliminar"}</button></div></article>`;
         }).join(""));
         const worth = Domain.netWorth({ ...state.data, contextId: state.activeContext, month: state.activeMonth });
         $("#netWorthSummary").innerHTML = `<div><span>Activos</span><strong>${Core.formatMoney(worth.assets)}</strong></div><div><span>Pasivos</span><strong>${Core.formatMoney(worth.liabilities)}</strong></div><div><span>Patrimonio neto</span><strong>${Core.formatMoney(worth.net)}</strong></div>`;
@@ -262,7 +350,12 @@
         $("#assetsList").innerHTML = emptyOr(assets.map(item => {
             const history = state.data.valuations.filter(value => value.asset_id === item.id).sort((a, b) => b.valued_on.localeCompare(a.valued_on));
             const latest = history.find(value => value.valued_on <= `${state.activeMonth}-31`);
-            return `<article class="finance-account-card ${item.status}"><span class="account-type-badge">${item.asset_class === "asset" ? "Activo" : "Pasivo"}${item.status === "archived" ? " · archivado" : ""}</span><h3>${escapeHTML(item.name)}</h3><small>Valuación ${formatDate(latest?.valued_on || item.valued_on)} · manual</small><div class="account-balance">${Core.formatMoney(latest?.value ?? item.opening_value)}</div><div class="mini-history">${history.slice(0, 5).map(value => `<button type="button" data-simple-edit="valuation" data-id="${value.id}">${formatDate(value.valued_on)} · ${Core.formatMoney(value.value)}</button>`).join("")}</div><div class="account-card-actions"><button type="button" data-simple-edit="asset" data-id="${item.id}">Editar</button><button type="button" data-asset-valuation="${item.id}"${item.status === "archived" ? " disabled" : ""}>Valuar</button><button type="button" data-entity="assets" data-action="${item.status === "archived" ? "restore" : "archive"}" data-id="${item.id}">${item.status === "archived" ? "Reactivar" : "Archivar"}</button></div></article>`;
+            const monthHistory = history.filter(value => Domain.monthOf(value.valued_on) === state.activeMonth);
+            const currentValue = Number(latest?.value ?? item.opening_value);
+            const performance = currentValue - Number(item.opening_value);
+            const performancePercent = item.opening_value ? Math.round(performance / Number(item.opening_value) * 1000) / 10 : 0;
+            const investmentCopy = item.asset_type === "investment" ? `<small class="investment-performance ${performance < 0 ? "negative" : "positive"}">Rendimiento ${performance >= 0 ? "+" : "−"}${Core.formatMoney(Math.abs(performance))} · ${performancePercent}%</small>` : "";
+            return `<article class="finance-account-card ${item.status}"><span class="account-type-badge">${item.asset_type === "investment" ? "Inversión" : item.asset_class === "asset" ? "Activo" : "Pasivo"}${item.status === "archived" ? " · eliminado" : ""}</span><h3>${escapeHTML(item.name)}</h3><small>Valuación ${formatDate(latest?.valued_on || item.valued_on)} · manual</small><div class="account-balance">${Core.formatMoney(currentValue)}</div>${investmentCopy}<div class="mini-history">${monthHistory.slice(0, 5).map(value => `<button type="button" data-simple-edit="valuation" data-id="${value.id}">${formatDate(value.valued_on)} · ${Core.formatMoney(value.value)}</button>`).join("")}</div><div class="account-card-actions"><button type="button" data-simple-edit="asset" data-id="${item.id}">Editar</button><button type="button" data-asset-valuation="${item.id}"${item.status === "archived" ? " disabled" : ""}>Actualizar valor</button><button type="button" data-entity="assets" data-action="${item.status === "archived" ? "restore" : "archive"}" data-id="${item.id}">${item.status === "archived" ? "Restaurar" : "Eliminar"}</button></div></article>`;
         }).join(""));
     }
 
@@ -271,9 +364,9 @@
         $("#contextsList").innerHTML = emptyOr(contexts.map(item => `<div class="finance-list-card"><span class="finance-list-icon">${item.kind === "personal" ? "●" : "◆"}</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${item.kind === "personal" ? "Personal obligatorio" : escapeHTML(item.description || "Emprendimiento")}</small></span><span class="list-actions"><button type="button" data-simple-edit="context" data-id="${item.id}">Editar</button>${item.kind !== "personal" ? `<button type="button" data-entity="contexts" data-action="${item.status === "active" ? "archive" : "restore"}" data-id="${item.id}">${item.status === "active" ? "Archivar" : "Reactivar"}</button>` : ""}</span></div>`).join(""));
         const search = Core.searchText(state.search);
         const categories = scoped(state.data.categories).filter(item => !search || Core.searchText(item.name).includes(search));
-        $("#categoriesList").innerHTML = emptyOr(categories.map(item => `<div class="finance-list-card"><span class="category-dot" style="background:${escapeHTML(item.color)}">${escapeHTML(item.icon)}</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.flow_type)} · ${escapeHTML(contextName(item.context_id))}</small></span><span class="list-actions"><button type="button" data-simple-edit="category" data-id="${item.id}">Editar</button><button type="button" data-entity="categories" data-action="${item.status === "active" ? "archive" : "restore"}" data-id="${item.id}">${item.status === "active" ? "Archivar" : "Reactivar"}</button></span></div>`).join(""));
-        const methods = scoped(state.data.paymentMethods);
-        $("#paymentMethodsList").innerHTML = emptyOr(methods.map(item => `<div class="finance-list-card"><span class="finance-list-icon">₲</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(Core.PAYMENT_METHOD_TYPES.find(type => type.value === item.method_type)?.label || item.method_type)}${item.account_id ? ` · ${escapeHTML(accountName(item.account_id))}` : ""}</small></span><span class="list-actions"><button type="button" data-simple-edit="paymentMethod" data-id="${item.id}">Editar</button><button type="button" data-entity="paymentMethods" data-action="${item.status === "active" ? "archive" : "restore"}" data-id="${item.id}">${item.status === "active" ? "Archivar" : "Reactivar"}</button></span></div>`).join(""));
+        $("#categoriesList").innerHTML = recoverableList(categories, "Sin categorías impuestas", "Agregá solamente las categorías que realmente usás.", (item, removed) => `<div class="finance-list-card${removed ? " is-removed" : ""}"><span class="category-dot" style="background:${escapeHTML(item.color)}">${escapeHTML(item.icon)}</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(Core.FLOW_TYPES.find(type => type.value === item.flow_type)?.label || item.flow_type)} · ${escapeHTML(contextName(item.context_id))}</small></span><span class="list-actions">${removed ? "" : `<button type="button" data-simple-edit="category" data-id="${item.id}">Editar</button>`}<button type="button" data-entity="categories" data-action="${removed ? "restore" : "archive"}" data-id="${item.id}">${removed ? "Restaurar" : "Eliminar"}</button></span></div>`);
+        const methods = scoped(state.data.paymentMethods).filter(item => !search || Core.searchText(item.name).includes(search));
+        $("#paymentMethodsList").innerHTML = recoverableList(methods, "Sin medios predeterminados", "Creá solo Efectivo, QR, transferencia o los medios que vos quieras.", (item, removed) => `<div class="finance-list-card${removed ? " is-removed" : ""}"><span class="finance-list-icon">₲</span><span class="finance-list-copy"><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(Core.PAYMENT_METHOD_TYPES.find(type => type.value === item.method_type)?.label || item.method_type)}${item.account_id ? ` · usa ${escapeHTML(accountName(item.account_id))}` : ""}</small></span><span class="list-actions">${removed ? "" : `<button type="button" data-simple-edit="paymentMethod" data-id="${item.id}">Editar</button>`}<button type="button" data-entity="paymentMethods" data-action="${removed ? "restore" : "archive"}" data-id="${item.id}">${removed ? "Restaurar" : "Eliminar"}</button></span></div>`);
         const audit = scoped(state.data.auditLog).sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at))).slice(0, 100);
         $("#auditLogList").innerHTML = emptyOr(audit.map(item => {
             const beforeVersion = item.before_value?.version;
@@ -354,7 +447,7 @@
         };
     }
 
-    function openOperation(groupId = null) {
+    function openOperation(groupId = null, preferredKind = "expense") {
         if (!assertConcreteContext()) return;
         const group = groupId ? state.data.transactions.filter(item => item.operation_group_id === groupId || item.id === groupId) : [];
         const record = group.find(item => item.operation_leg === "source") || group.find(item => Number(item.balance_delta) < 0) || group[0];
@@ -364,7 +457,7 @@
         $("#operationId").value = record?.id || "";
         $("#operationGroupId").value = record?.operation_group_id || "";
         $("#operationKind").innerHTML = Core.OPERATION_TYPES.map(item => `<option value="${item.value}">${item.label}</option>`).join("");
-        $("#operationKind").value = record?.operation_kind || "expense";
+        $("#operationKind").value = record?.operation_kind || preferredKind;
         $("#operationStatus").value = record?.status === "pending" ? "pending" : "confirmed";
         $("#operationDirection").value = Number(record?.balance_delta || 0) > 0 ? "income" : "expense";
         $("#operationAccount").innerHTML = options(sets.accounts, record?.account_id, { empty: null });
@@ -372,12 +465,17 @@
         $("#operationCategory").innerHTML = options(sets.categories, record?.category_id, { empty: "Sin categoría" });
         $("#operationMethod").innerHTML = options(sets.methods, record?.payment_method_id, { empty: "Sin medio" });
         $("#operationAmount").value = record?.amount || "";
-        $("#operationDate").value = record?.occurred_at ? String(record.occurred_at).slice(0, 16) : localDateTime();
+        const { start, end } = monthBounds();
+        $("#operationDate").min = `${start}T00:00`;
+        $("#operationDate").max = `${end}T23:59`;
+        $("#operationDate").value = record?.occurred_at ? String(record.occurred_at).slice(0, 16) : `${dateInActiveMonth()}T12:00`;
         $("#operationCounterparty").value = record?.counterparty || "";
         $("#operationDescription").value = record?.description || "";
         $("#operationTags").value = record?.tags?.join(", ") || "";
         $("#operationNote").value = record?.note || "";
-        $("#operationDialogTitle").textContent = record ? "Editar operación completa" : "Nueva operación";
+        const kindLabel = { expense: "gasto", income: "ingreso", transfer: "transferencia", adjustment: "ajuste", contribution: "aporte", withdrawal: "retiro" }[$("#operationKind").value] || "movimiento";
+        $("#operationDialogTitle").textContent = record ? "Editar movimiento" : `Registrar ${kindLabel}`;
+        $("#operationAdvanced").open = Boolean(record);
         toggleOperationFields();
         openDialog($("#operationDialog"));
     }
@@ -389,6 +487,10 @@
         $("#operationDirectionField").hidden = !adjustment;
         $("#operationDestination").required = transfer;
         $("#operationCategory").disabled = transfer;
+        if ($("#operationDialogTitle") && !$("#operationId").value) {
+            const kindLabel = { expense: "gasto", income: "ingreso", transfer: "transferencia", adjustment: "ajuste", contribution: "aporte", withdrawal: "retiro" }[$("#operationKind").value] || "movimiento";
+            $("#operationDialogTitle").textContent = `Registrar ${kindLabel}`;
+        }
     }
 
     async function saveOperation(event) {
@@ -415,6 +517,80 @@
         finally { button.disabled = false; }
     }
 
+    function openPurchase() {
+        if (!assertConcreteContext()) return;
+        const sets = activeOptions();
+        const expenseCategories = sets.categories.filter(item => ["expense", "both"].includes(item.flow_type));
+        const purchases = expenseCategories.find(item => Core.searchText(item.name) === "compras") || expenseCategories[0];
+        const purchasedOn = dateInActiveMonth();
+        $("#purchaseForm").reset();
+        $("#purchaseDate").min = monthBounds().start;
+        $("#purchaseDate").max = monthBounds().end;
+        $("#purchaseDate").value = purchasedOn;
+        $("#purchaseCategory").innerHTML = options(expenseCategories, purchases?.id, { empty: null });
+        $("#purchaseMethod").innerHTML = options(sets.methods, "", { empty: "Sin medio" });
+        $("#purchaseAccount").innerHTML = options(sets.accounts, sets.accounts[0]?.id, { empty: null });
+        $("#purchaseFirstDue").value = dueDateAtOffset(purchasedOn, 1);
+        togglePurchaseMode();
+        openDialog($("#purchaseDialog"));
+    }
+
+    function togglePurchaseMode() {
+        const financed = $("#purchaseMode").value === "financed";
+        $("#purchaseFinancingFields").hidden = !financed;
+        [$("#purchaseCounterparty"), $("#purchaseInstallments"), $("#purchaseFirstDue")].forEach(input => { input.required = financed; });
+        const accountSelect = $("#purchaseAccount");
+        const selected = accountSelect.value;
+        const accounts = activeOptions().accounts.filter(item => !financed || !["credit_card", "liability"].includes(item.account_type));
+        accountSelect.innerHTML = options(accounts, accounts.some(item => item.id === selected) ? selected : accounts[0]?.id, { empty: null });
+        accountSelect.closest(".field").querySelector("span").textContent = financed ? "Cuenta desde la que pagarás" : "Cuenta o tarjeta";
+    }
+
+    async function savePurchase(event) {
+        event.preventDefault();
+        const button = event.currentTarget.querySelector('button[type="submit"]');
+        button.disabled = true;
+        try {
+            const financed = $("#purchaseMode").value === "financed";
+            const amount = Core.positiveMoney($("#purchaseAmount").value);
+            if (!amount) throw new Error("Ingresá un monto total válido.");
+            const description = $("#purchaseDescription").value;
+            const purchasedOn = $("#purchaseDate").value;
+            if (!financed) {
+                await state.repository.postOperation({
+                    context_id: currentContextId(), operation_kind: "expense", direction: "expense", amount,
+                    account_id: $("#purchaseAccount").value, occurred_at: purchasedOn,
+                    category_id: $("#purchaseCategory").value, payment_method_id: $("#purchaseMethod").value || null,
+                    description, tags: ["compra"], status: "confirmed"
+                });
+                closeDialog($("#purchaseDialog"));
+                await refresh();
+                notify("Compra al contado guardada como gasto del mes.");
+                return;
+            }
+            const installments = Core.safeInteger($("#purchaseInstallments").value);
+            if (!installments || installments < 2 || installments > 600) throw new Error("La cantidad de cuotas debe estar entre 2 y 600.");
+            const parts = Core.splitMoney(amount, installments);
+            const baseName = Core.cleanText(description, 88);
+            const method = methodName($("#purchaseMethod").value);
+            const note = [`Compra realizada el ${purchasedOn}.`, `Medio: ${method}.`, Core.cleanText($("#purchaseNote").value, 700)].filter(Boolean).join(" ");
+            for (let index = 0; index < installments; index += 1) {
+                await state.repository.save("obligations", {
+                    context_id: currentContextId(), obligation_type: "installment",
+                    name: `${baseName} · cuota ${index + 1}/${installments}`,
+                    counterparty: $("#purchaseCounterparty").value, principal_amount: parts[index], interest_amount: 0, surcharge_amount: 0,
+                    paid_amount: 0, due_date: dueDateAtOffset($("#purchaseFirstDue").value, index),
+                    category_id: $("#purchaseCategory").value, account_id: $("#purchaseAccount").value || null,
+                    installment_number: index + 1, installment_total: installments, reminder_days: 3, note, status: "pending"
+                });
+            }
+            closeDialog($("#purchaseDialog"));
+            await refresh();
+            notify(`Compra financiada guardada en ${installments} cuotas. Total exacto: ${Core.formatMoney(amount)}.`);
+        } catch (error) { notify(error.message, "warning"); }
+        finally { button.disabled = false; }
+    }
+
     function openObligation(id = null) {
         if (!assertConcreteContext()) return;
         const record = state.data.obligations.find(item => item.id === id);
@@ -424,7 +600,7 @@
         $("#obligationType").innerHTML = Domain.OBLIGATION_TYPES.map(item => `<option value="${item.value}">${item.label}</option>`).join("");
         $("#obligationType").value = record?.obligation_type || "payable";
         $("#obligationName").value = record?.name || ""; $("#obligationCounterparty").value = record?.counterparty || "";
-        $("#obligationAmount").value = record?.principal_amount || ""; $("#obligationInterest").value = record?.interest_amount || 0; $("#obligationSurcharge").value = record?.surcharge_amount || 0; $("#obligationDueDate").value = record?.due_date || localDate();
+        $("#obligationAmount").value = record?.principal_amount || ""; $("#obligationInterest").value = record?.interest_amount || 0; $("#obligationSurcharge").value = record?.surcharge_amount || 0; $("#obligationDueDate").value = record?.due_date || dateInActiveMonth();
         $("#obligationCategory").innerHTML = options(sets.categories, record?.category_id, { empty: "Sin categoría" });
         $("#obligationAccount").innerHTML = options(sets.accounts, record?.account_id, { empty: "Sin cuenta asociada" });
         $("#installmentNumber").value = record?.installment_number || ""; $("#installmentTotal").value = record?.installment_total || "";
@@ -436,10 +612,13 @@
     function toggleInstallments() {
         const type = $("#obligationType").value;
         const visible = type === "installment";
+        const editing = Boolean($("#obligationId").value);
         $("#installmentFields").hidden = !visible;
         $("#installmentNumber").required = visible;
         $("#installmentTotal").required = visible;
         if (visible && !$("#installmentNumber").value) $("#installmentNumber").value = 1;
+        $("#obligationAmountLabel").textContent = visible && !editing ? "Monto total de la compra o deuda PYG" : visible ? "Monto de esta cuota PYG" : "Monto PYG";
+        $("#obligationAmountHelp").textContent = visible && !editing ? "ATLAS dividirá este total entre las cuotas sin multiplicarlo." : "";
         const accountSelect = $("#obligationAccount");
         const selected = accountSelect.value;
         const restricted = ["loan", "card"].includes(type);
@@ -467,11 +646,16 @@
             if (!existing && input.obligation_type === "installment") {
                 const first = Number(input.installment_number);
                 const total = Number(input.installment_total);
+                const count = total - first + 1;
+                if (!Number.isInteger(first) || !Number.isInteger(total) || first < 1 || total < first || total > 600) throw new Error("La primera cuota y el total de cuotas no son válidos.");
+                const principalParts = Core.splitMoney(input.principal_amount, count);
+                const interestParts = Core.splitMoney(input.interest_amount || 0, count, { allowZero: true });
+                const surchargeParts = Core.splitMoney(input.surcharge_amount || 0, count, { allowZero: true });
+                const baseName = Core.cleanText(installmentBaseName(input.name), 88);
                 created = 0;
                 for (let number = first; number <= total; number += 1) {
-                    const dueMonth = Domain.addMonths(Domain.monthOf(input.due_date), number - first);
-                    const dueDay = String(Math.min(Number(input.due_date.slice(8, 10)), new Date(Number(dueMonth.slice(0, 4)), Number(dueMonth.slice(5, 7)), 0).getDate())).padStart(2, "0");
-                    await state.repository.save("obligations", { ...input, id: undefined, name: `${input.name} · cuota ${number}/${total}`, installment_number: number, due_date: `${dueMonth}-${dueDay}` });
+                    const index = number - first;
+                    await state.repository.save("obligations", { ...input, id: undefined, name: `${baseName} · cuota ${number}/${total}`, principal_amount: principalParts[index], interest_amount: interestParts[index], surcharge_amount: surchargeParts[index], installment_number: number, due_date: dueDateAtOffset(input.due_date, index) });
                     created += 1;
                 }
             } else {
@@ -490,7 +674,9 @@
         $("#paymentForm").reset(); $("#paymentId").value = payment?.id || ""; $("#paymentObligationId").value = id;
         $("#paymentDialogTitle").textContent = payment ? `Corregir ${obligation.direction === "receivable" ? "cobro" : "pago"}` : obligation.direction === "receivable" ? `Cobrar ${obligation.name}` : `Pagar ${obligation.name}`;
         $("#paymentBalanceCopy").textContent = `${payment ? "Máximo corregido" : "Saldo pendiente"}: ${Core.formatMoney(remaining)}.`;
-        $("#paymentAmount").value = payment?.amount || remaining; $("#paymentAmount").max = remaining; $("#paymentDate").value = payment?.paid_on || localDate();
+        const { start, end } = monthBounds();
+        $("#paymentAmount").value = payment?.amount || remaining; $("#paymentAmount").max = remaining;
+        $("#paymentDate").min = start; $("#paymentDate").max = end; $("#paymentDate").value = payment?.paid_on || dateInActiveMonth();
         const debtPayment = ["loan", "card"].includes(obligation.obligation_type);
         const suggestedAccount = payment?.account_id || (debtPayment
             ? sets.accounts.find(item => !["credit_card", "liability"].includes(item.account_type) && item.id !== obligation.account_id)?.id
@@ -513,14 +699,14 @@
     }
 
     const simpleConfigs = {
-        context: { entity: "contexts", title: "Contexto financiero", kicker: "CONTEXTO", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="80" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Descripción</span><textarea name="description" maxlength="500">${escapeHTML(record?.description || "")}</textarea></label>` },
-        account: { entity: "accounts", title: "Cuenta", kicker: "CUENTA", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="80" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Tipo</span><select name="account_type">${Core.ACCOUNT_TYPES.map(item => `<option value="${item.value}"${record?.account_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field"><span>Saldo inicial PYG</span><input name="opening_balance" type="number" step="1" required value="${record?.opening_balance ?? 0}"></label><label class="field"><span>Fecha de apertura</span><input name="opened_on" type="date" required value="${record?.opened_on || localDate()}"></label><label class="field"><span>Notas</span><textarea name="notes" maxlength="500">${escapeHTML(record?.notes || "")}</textarea></label>` },
-        category: { entity: "categories", title: "Categoría", kicker: "CATEGORÍA", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="80" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Uso</span><select name="flow_type">${Core.FLOW_TYPES.map(item => `<option value="${item.value}"${record?.flow_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field"><span>Categoría superior</span><select name="parent_id">${options(activeOptions().categories.filter(item => !item.parent_id && item.id !== record?.id), record?.parent_id, { empty: "Ninguna" })}</select></label><div class="category-appearance"><label class="field"><span>Color</span><input name="color" type="color" value="${record?.color || "#2563eb"}"></label><label class="field"><span>Icono</span><input name="icon" maxlength="12" value="${escapeHTML(record?.icon || "●")}"></label></div>` },
-        paymentMethod: { entity: "paymentMethods", title: "Medio de pago", kicker: "MEDIO", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="80" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Tipo</span><select name="method_type">${Core.PAYMENT_METHOD_TYPES.map(item => `<option value="${item.value}"${record?.method_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field"><span>Cuenta vinculada</span><select name="account_id">${options(activeOptions().accounts, record?.account_id, { empty: "Ninguna" })}</select></label><label class="field"><span>Notas</span><textarea name="notes">${escapeHTML(record?.notes || "")}</textarea></label>` },
+        context: { entity: "contexts", title: "Emprendimiento", kicker: "NUEVO ESPACIO", fields: record => `<label class="field"><span>Nombre del emprendimiento</span><input name="name" maxlength="80" placeholder="Ej: Mi negocio" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Descripción</span><textarea name="description" maxlength="500" placeholder="Opcional">${escapeHTML(record?.description || "")}</textarea></label>` },
+        account: { entity: "accounts", title: "Cuenta", kicker: "CUENTA", fields: record => `<div class="finance-dialog-explainer"><strong>¿Para qué sirve?</strong><p>Representa un lugar donde tenés dinero o deuda. Cada movimiento cambia su saldo automáticamente.</p></div><label class="field"><span>Nombre</span><input name="name" maxlength="80" required value="${escapeHTML(record?.name || "")}"></label><label class="field">${helpTip("Tipo", "Elegí dónde está el dinero: efectivo, banco, billetera, tarjeta o préstamo.")}<select name="account_type">${Core.ACCOUNT_TYPES.map(item => `<option value="${item.value}"${record?.account_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field">${helpTip("Saldo inicial PYG", "Es lo que ya tenías en esta cuenta antes de empezar a usar ATLAS. Los nuevos movimientos se suman o restan desde ahí.")}<input name="opening_balance" type="number" step="1" required value="${record?.opening_balance ?? 0}"></label><label class="field"><span>Fecha de apertura</span><input name="opened_on" type="date" required value="${record?.opened_on || localDate()}"></label><label class="field"><span>Notas</span><textarea name="notes" maxlength="500">${escapeHTML(record?.notes || "")}</textarea></label>` },
+        category: { entity: "categories", title: "Categoría", kicker: "CATEGORÍA", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="80" required value="${escapeHTML(record?.name || "")}"></label><label class="field">${helpTip("Uso", "Indica si esta categoría aparece al cargar gastos, ingresos o en ambos.")}<select name="flow_type">${Core.FLOW_TYPES.map(item => `<option value="${item.value}"${record?.flow_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field">${helpTip("Categoría superior", "Es opcional. Sirve para agrupar, por ejemplo: Comida como categoría y Supermercado como subcategoría.")}<select name="parent_id">${options(activeOptions().categories.filter(item => !item.parent_id && item.id !== record?.id), record?.parent_id, { empty: "Ninguna" })}</select></label><div class="category-appearance"><label class="field"><span>Color</span><input name="color" type="color" value="${record?.color || "#2563eb"}"></label><label class="field"><span>Icono</span><input name="icon" maxlength="12" value="${escapeHTML(record?.icon || "●")}"></label></div>` },
+        paymentMethod: { entity: "paymentMethods", title: "Medio de pago", kicker: "MEDIO", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="80" placeholder="Ej: QR de mi banco" required value="${escapeHTML(record?.name || "")}"></label><label class="field">${helpTip("Tipo", "Es la forma de pago general. El nombre lo elegís vos para reconocerla rápido.")}<select name="method_type">${Core.PAYMENT_METHOD_TYPES.map(item => `<option value="${item.value}"${record?.method_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field">${helpTip("Cuenta que usa (opcional)", "Vinculala si este medio siempre usa una cuenta concreta. Ejemplo: QR Banco A usa la cuenta Banco A. No mueve dinero por sí solo.")}<select name="account_id">${options(activeOptions().accounts, record?.account_id, { empty: "Ninguna" })}</select></label><label class="field"><span>Notas</span><textarea name="notes">${escapeHTML(record?.notes || "")}</textarea></label>` },
         recurrence: { entity: "recurrences", title: "Recurrencia", kicker: "RECURRENCIA", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="120" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Frecuencia</span><select name="frequency">${Domain.FREQUENCIES.filter(item => item.value !== "once").map(item => `<option value="${item.value}"${record?.frequency === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field"><span>Primera fecha</span><input name="starts_on" type="date" required value="${record?.starts_on || localDate()}"></label><label class="field"><span>Fecha final opcional</span><input name="ends_on" type="date" value="${record?.ends_on || ""}"></label><label class="field"><span>Importe PYG</span><input name="template_amount" type="number" min="1" required value="${record?.template?.principal_amount || ""}"></label><label class="field"><span>Tipo de compromiso</span><select name="template_obligation_type">${Domain.OBLIGATION_TYPES.map(item => `<option value="${item.value}"${record?.template?.obligation_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field"><span>Contraparte</span><input name="template_counterparty" maxlength="120" value="${escapeHTML(record?.template?.counterparty || "")}"></label>` },
         budget: { entity: "budgets", title: "Presupuesto mensual", kicker: "PRESUPUESTO", fields: record => `<label class="field"><span>Mes</span><input name="month" type="month" required value="${record?.month || state.activeMonth}"></label><label class="field"><span>Categoría</span><select name="category_id" required>${options(activeOptions().categories.filter(item => ["expense", "both"].includes(item.flow_type)), record?.category_id, { empty: null })}</select></label><label class="field"><span>Importe planificado PYG</span><input name="planned_amount" type="number" min="1" required value="${record?.planned_amount || ""}"></label><label class="field"><span>Alertar al porcentaje</span><input name="alert_percent" type="number" min="1" max="100" value="${record?.alert_percent || 80}"></label><label class="field"><span>Notas</span><textarea name="notes">${escapeHTML(record?.notes || "")}</textarea></label>` },
-        goal: { entity: "goals", title: "Meta de ahorro", kicker: "META", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="120" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Objetivo PYG</span><input name="target_amount" type="number" min="1" required value="${record?.target_amount || ""}"></label><label class="field"><span>Fecha objetivo</span><input name="target_date" type="date" value="${record?.target_date || ""}"></label><label class="field"><span>Cuenta asociada</span><select name="account_id">${options(activeOptions().accounts, record?.account_id, { empty: "Ninguna" })}</select></label><label class="field"><span>Notas</span><textarea name="notes">${escapeHTML(record?.notes || "")}</textarea></label>` },
-        goalEntry: { entity: "goalEntries", title: "Movimiento de meta", kicker: "AHORRO", fields: record => `<input name="goal_id" type="hidden" value="${escapeHTML(record.goal_id)}"><input name="entry_type" type="hidden" value="${escapeHTML(record.entry_type)}"><p>${record.entry_type === "withdrawal" ? "Retiro" : "Aporte"} en ${escapeHTML(state.data.goals.find(item => item.id === record.goal_id)?.name || "meta")}</p><label class="field"><span>Importe PYG</span><input name="amount" type="number" min="1" required value="${record.amount || ""}"></label><label class="field"><span>Fecha</span><input name="occurred_on" type="date" required value="${record.occurred_on || localDate()}"></label><label class="field"><span>Nota</span><textarea name="note">${escapeHTML(record.note || "")}</textarea></label>` },
+        goal: { entity: "goals", title: "Meta de ahorro", kicker: "META", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="120" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Objetivo PYG</span><input name="target_amount" type="number" min="1" required value="${record?.target_amount || ""}"></label><label class="field"><span>Fecha objetivo</span><input name="target_date" type="date" value="${record?.target_date || ""}"></label><label class="field"><span>Estado</span><select name="status"><option value="active"${!["completed", "archived"].includes(record?.status) ? " selected" : ""}>En progreso</option><option value="completed"${record?.status === "completed" ? " selected" : ""}>Completada</option>${record?.status === "archived" ? '<option value="archived" selected>Eliminada</option>' : ""}</select></label><label class="field">${helpTip("Dónde guardás este ahorro (opcional)", "Elegí una cuenta solo si querés recordar dónde está el dinero de esta meta. La meta y el saldo de la cuenta se controlan por separado.")}<select name="account_id">${options(activeOptions().accounts, record?.account_id, { empty: "Ninguna" })}</select></label><label class="field"><span>Notas</span><textarea name="notes">${escapeHTML(record?.notes || "")}</textarea></label>` },
+        goalEntry: { entity: "goalEntries", title: "Movimiento de meta", kicker: "AHORRO", fields: record => `<input name="goal_id" type="hidden" value="${escapeHTML(record.goal_id)}"><input name="entry_type" type="hidden" value="${escapeHTML(record.entry_type)}"><p>${record.entry_type === "withdrawal" ? "Retiro" : "Aporte"} en ${escapeHTML(state.data.goals.find(item => item.id === record.goal_id)?.name || "meta")}</p><label class="field"><span>Importe PYG</span><input name="amount" type="number" min="1" required value="${record.amount || ""}"></label><label class="field"><span>Fecha</span><input name="occurred_on" type="date" min="${monthBounds().start}" max="${monthBounds().end}" required value="${record.occurred_on || dateInActiveMonth()}"></label><label class="field"><span>Nota</span><textarea name="note">${escapeHTML(record.note || "")}</textarea></label>` },
         asset: { entity: "assets", title: "Activo o pasivo", kicker: "PATRIMONIO", fields: record => `<label class="field"><span>Clase</span><select name="asset_class"><option value="asset"${record?.asset_class !== "liability" ? " selected" : ""}>Activo</option><option value="liability"${record?.asset_class === "liability" ? " selected" : ""}>Pasivo</option></select></label><label class="field"><span>Tipo</span><select name="asset_type">${Domain.ASSET_TYPES.map(item => `<option value="${item.value}"${record?.asset_type === item.value ? " selected" : ""}>${item.label}</option>`).join("")}</select></label><label class="field"><span>Nombre</span><input name="name" maxlength="120" required value="${escapeHTML(record?.name || "")}"></label><label class="field"><span>Valor inicial PYG</span><input name="opening_value" type="number" min="1" required value="${record?.opening_value || ""}"></label><label class="field"><span>Fecha de valuación</span><input name="valued_on" type="date" required value="${record?.valued_on || localDate()}"></label><label class="field"><span>Notas</span><textarea name="notes">${escapeHTML(record?.notes || "")}</textarea></label>` },
         valuation: { entity: "valuations", title: "Valuación", kicker: "VALUACIÓN MANUAL", fields: record => `<input name="asset_id" type="hidden" value="${escapeHTML(record.asset_id)}"><label class="field"><span>Valor PYG</span><input name="value" type="number" min="0" required value="${record.value ?? ""}"></label><label class="field"><span>Fecha</span><input name="valued_on" type="date" required value="${record.valued_on || localDate()}"></label><label class="field"><span>Fuente</span><input name="source" maxlength="120" value="${escapeHTML(record.source || "Manual")}"></label><label class="field"><span>Nota</span><textarea name="note">${escapeHTML(record.note || "")}</textarea></label>` },
         savedFilter: { entity: "savedFilters", title: "Guardar filtro", kicker: "FILTRO", fields: record => `<label class="field"><span>Nombre</span><input name="name" maxlength="80" required value="${escapeHTML(record.name || "")}"></label>` }
@@ -530,7 +716,10 @@
         if (type !== "context" && !assertConcreteContext()) return;
         const config = simpleConfigs[type]; if (!config) return;
         $("#simpleForm").reset(); $("#simpleEntity").value = type; $("#simpleId").value = record?.id || "";
-        $("#simpleTitle").textContent = `${record?.id ? "Editar" : "Nuevo"} ${config.title.toLowerCase()}`; $("#simpleKicker").textContent = config.kicker;
+        const title = type === "asset" && record?.asset_type === "investment" ? "inversión" : config.title.toLowerCase();
+        const feminine = new Set(["account", "category", "recurrence", "goal", "valuation"]);
+        const verb = record?.id ? "Editar" : type === "asset" && record?.asset_type === "investment" || feminine.has(type) ? "Nueva" : "Nuevo";
+        $("#simpleTitle").textContent = `${verb} ${title}`; $("#simpleKicker").textContent = type === "asset" && record?.asset_type === "investment" ? "INVERSIÓN" : config.kicker;
         $("#simpleFields").innerHTML = config.fields(record || {}); openDialog($("#simpleDialog"));
     }
 
@@ -546,9 +735,6 @@
             let saved;
             if (type === "goalEntry") saved = await state.repository.addGoalEntry(input); else if (type === "savedFilter") input.filters = existing?.filters || currentMovementFilter();
             if (type !== "goalEntry") saved = await state.repository.save(config.entity, input);
-            if (type === "context" && !existing) {
-                for (const category of Core.defaultCategories(saved.id, state.repository.options())) await state.repository.save("categories", category);
-            }
             closeDialog($("#simpleDialog")); await refresh({ render: false });
             if (type === "context" && !existing) await selectContext(saved.id); else renderAll();
             notify("Registro guardado.");
@@ -560,23 +746,65 @@
 
     async function archiveEntity(entity, id, restore) {
         if (entity !== "contexts" && !assertConcreteContext()) return;
-        try { if (!restore && !confirm("¿Archivar este registro? Seguirá en el historial.")) return; await state.repository.archive(entity, id, !restore); await refresh(); notify(restore ? "Registro reactivado." : "Registro archivado."); } catch (error) { notify(error.message, "warning"); }
+        try {
+            const children = entity === "categories" && !restore
+                ? state.data.categories.filter(item => item.parent_id === id && item.status === "active")
+                : [];
+            const extra = children.length ? ` También se eliminarán ${children.length} subcategoría(s).` : "";
+            if (!restore && !confirm(`¿Eliminar este registro? Dejará de aparecer en nuevas cargas, pero los movimientos anteriores conservarán su información.${extra}`)) return;
+            for (const child of children) await state.repository.archive("categories", child.id, true);
+            await state.repository.archive(entity, id, !restore);
+            await refresh();
+            notify(restore ? "Registro restaurado." : "Registro eliminado. Podés restaurarlo desde Eliminados.");
+        } catch (error) { notify(error.message, "warning"); }
     }
 
-    async function voidOperation(id) { const reason = prompt("Motivo obligatorio de anulación:"); if (!reason) return; try { await state.repository.voidOperation(id, reason); await refresh(); notify("Movimiento anulado y auditado."); } catch (error) { notify(error.message, "warning"); } }
+    async function clearFinanceList(entity) {
+        const records = scoped(state.data[entity]).filter(item => item.status === "active");
+        if (!records.length) return notify("La lista ya está vacía.");
+        const label = entity === "categories" ? "categorías" : "medios de pago";
+        const scopeCopy = state.activeContext === "general" ? " de todos tus espacios" : ` de ${contextName(state.activeContext)}`;
+        if (!confirm(`¿Eliminar los ${records.length} ${label}${scopeCopy}? Dejarán de aparecer en nuevas cargas; los movimientos anteriores conservarán su información.`)) return;
+        try {
+            const ordered = entity === "categories" ? [...records].sort((a, b) => Number(Boolean(b.parent_id)) - Number(Boolean(a.parent_id))) : records;
+            await state.repository.archiveMany(entity, ordered.map(record => record.id), true);
+            await refresh();
+            notify(`${records.length} ${label} eliminados. Podés restaurarlos desde Eliminados.`);
+        } catch (error) { notify(error.message, "warning"); }
+    }
+
+    async function voidOperation(id) { const reason = prompt("Motivo de eliminación (se conservará solo en auditoría):"); if (!reason) return; try { await state.repository.voidOperation(id, reason); await refresh(); notify("Movimiento eliminado de la vista y conservado en auditoría."); } catch (error) { notify(error.message, "warning"); } }
     async function deletePendingOperation(id) { if (!confirm("¿Eliminar este borrador pendiente? Esta acción quita el registro sin afectar saldos.")) return; try { await state.repository.deletePendingOperation(id); await refresh(); notify("Borrador eliminado."); } catch (error) { notify(error.message, "warning"); } }
     async function voidPayment(id) {
         const payment = state.data.payments.find(item => item.id === id);
-        const reason = prompt("Motivo obligatorio de anulación del pago o cobro:");
+        const reason = prompt("Motivo de eliminación del pago o cobro:");
         if (!payment || !reason) return;
         try {
             await state.repository.updatePayment({ ...payment, status: "void", void_reason: reason });
             await refresh();
-            notify("Pago anulado; el saldo del compromiso fue recalculado.");
+            notify("Pago eliminado y saldo recalculado.");
         } catch (error) { notify(error.message, "warning"); }
     }
     async function removeAttachment(id) { if (!confirm("¿Quitar este comprobante privado?")) return; try { await state.repository.removeAttachment(id); await refresh(); notify("Comprobante quitado."); } catch (error) { notify(error.message, "warning"); } }
-    async function voidObligation(id) { const record = state.data.obligations.find(item => item.id === id); const reason = prompt("Motivo obligatorio de anulación:"); if (!record || !reason) return; try { await state.repository.save("obligations", { ...record, status: "void", void_reason: reason }); await refresh(); notify("Compromiso anulado."); } catch (error) { notify(error.message, "warning"); } }
+    async function voidObligation(id) {
+        const record = state.data.obligations.find(item => item.id === id);
+        if (!record) return;
+        const series = record.obligation_type === "installment" ? installmentSeries(record).filter(item => item.status !== "void") : [record];
+        if (series.length > 1 && !confirm(`Esta compra tiene ${series.length} cuotas. ¿Eliminar toda la compra y sus cuotas?`)) return;
+        const reason = prompt(`Motivo de eliminación${series.length > 1 ? " de la compra completa" : ""} (los pagos vinculados también se revertirán):`);
+        if (!reason) return;
+        try {
+            for (const target of series) {
+                const linkedPayments = state.data.payments.filter(item => item.obligation_id === target.id && item.status !== "void");
+                for (const payment of linkedPayments) await state.repository.updatePayment({ ...payment, status: "void", void_reason: reason });
+                const refreshed = await state.repository.list("obligations");
+                const current = refreshed.find(item => item.id === target.id) || target;
+                await state.repository.save("obligations", { ...current, status: "void", void_reason: reason });
+            }
+            await refresh();
+            notify(series.length > 1 ? "Compra y cuotas eliminadas; el historial queda auditado." : "Compromiso eliminado de la vista; el historial queda auditado.");
+        } catch (error) { notify(error.message, "warning"); }
+    }
 
     async function copyBudgets() {
         if (!assertConcreteContext()) return;
@@ -657,7 +885,7 @@
         } catch (error) { notify(error.message, "warning"); }
     }
 
-    function detectMigration() { const { preview } = state.migration.readSource(); state.migrationPreview = preview; renderMigration(); notify(preview.canImport ? "Análisis terminado." : "No encontramos datos v0.9.", preview.canImport ? "success" : "warning"); }
+    function detectMigration() { const { preview } = state.migration.readSource(); state.migrationPreview = preview; renderMigration(); notify(preview.canImport ? "Análisis terminado." : "No encontramos datos anteriores.", preview.canImport ? "success" : "warning"); }
     function updateMigrationTargets() { const contextId = $("#migrationContext").value; $("#migrationAccount").innerHTML = options(state.data.accounts.filter(item => item.context_id === contextId && item.status === "active"), "", { empty: null }); $("#migrationCategory").innerHTML = options(state.data.categories.filter(item => item.context_id === contextId && item.status === "active"), "", { empty: "Sin categoría" }); }
     function showMigrationDialog() { if (!state.migrationPreview?.canImport) return; $("#migrationForm").reset(); $("#migrationContext").innerHTML = options(concreteContexts(), currentContextId() || concreteContexts()[0]?.id, { empty: null }); updateMigrationTargets(); openDialog($("#migrationDialog")); }
     async function importMigration(event) { event.preventDefault(); try { const result = await state.migration.import({ contextId: $("#migrationContext").value, accountId: $("#migrationAccount").value, categoryId: $("#migrationCategory").value || null }); closeDialog($("#migrationDialog")); await refresh(); notify(result.repeated ? "Importación repetida sin duplicados." : "Migración completada; el origen se conservó."); } catch (error) { notify(error.message, "warning"); } }
@@ -670,6 +898,8 @@
     async function loadMovementRange() {
         if (!state.movementDateFrom || !state.movementDateTo) return renderMovements();
         if (state.movementDateFrom > state.movementDateTo) return notify("La fecha Desde no puede ser posterior a Hasta.", "warning");
+        const { start, end } = monthBounds();
+        if (state.movementDateFrom < start || state.movementDateTo > end) return notify(`Las fechas deben pertenecer a ${Core.formatMonth(state.activeMonth)}.`, "warning");
         try { await state.repository.pullRange(state.movementDateFrom, state.movementDateTo); await refresh(); }
         catch (error) { notify(error.message, "warning"); }
     }
@@ -697,8 +927,9 @@
                 return;
             }
             const selected = event.target.closest("[data-select-context]"); if (selected) return selectContext(selected.dataset.selectContext);
-            const quick = event.target.closest("[data-quick-action]"); if (quick) { closeDialog(quick.closest("dialog")); const action = quick.dataset.quickAction; if (action === "operation") return openOperation(); if (action === "obligation") return openObligation(); return openSimple(action); }
+            const quick = event.target.closest("[data-quick-action]"); if (quick) { closeDialog(quick.closest("dialog")); const action = quick.dataset.quickAction; if (action === "operation") return openOperation(null, quick.dataset.operationKind || "expense"); if (action === "purchase") return openPurchase(); if (action === "obligation") return openObligation(); if (action === "investment") return openSimple("asset", { asset_class: "asset", asset_type: "investment" }); return openSimple(action); }
             const simple = event.target.closest("[data-simple-edit]"); if (simple) { const type = simple.dataset.simpleEdit; const config = simpleConfigs[type]; return openSimple(type, state.data[config.entity].find(item => item.id === simple.dataset.id)); }
+            const clearFinance = event.target.closest("[data-clear-finance]"); if (clearFinance) return clearFinanceList(clearFinance.dataset.clearFinance);
             const entity = event.target.closest("[data-entity][data-action]"); if (entity) return archiveEntity(entity.dataset.entity, entity.dataset.id, entity.dataset.action === "restore");
             const operationEdit = event.target.closest("[data-operation-edit]"); if (operationEdit) return openOperation(operationEdit.dataset.operationEdit);
             const operationDelete = event.target.closest("[data-operation-delete]"); if (operationDelete) return deletePendingOperation(operationDelete.dataset.operationDelete);
@@ -719,13 +950,16 @@
         });
         $("#financeContext").addEventListener("change", event => selectContext(event.target.value));
         $("#financeMonth").addEventListener("change", async event => { if (!/^\d{4}-\d{2}$/.test(event.target.value)) return; state.activeMonth = event.target.value; state.movementLimit = 250; state.movementDateFrom = ""; state.movementDateTo = ""; await state.repository.storage.setMeta(state.repository.workspaceId, "activeMonth", state.activeMonth); if (currentContextId()) state.repository.generateRecurrences(state.activeMonth, currentContextId()).catch(error => console.warn(error.message)); state.repository.pullMonth(state.activeMonth).then(() => refresh()).catch(error => console.warn(error.message)); renderAll(); });
+        $("#financePreviousMonth").addEventListener("click", () => { $("#financeMonth").value = Domain.addMonths(state.activeMonth, -1); $("#financeMonth").dispatchEvent(new Event("change", { bubbles: true })); });
+        $("#financeNextMonth").addEventListener("click", () => { $("#financeMonth").value = Domain.addMonths(state.activeMonth, 1); $("#financeMonth").dispatchEvent(new Event("change", { bubbles: true })); });
         $("#financeSearch").addEventListener("input", event => { state.search = event.target.value; renderMovements(); renderAccounts(); renderCommitments(); renderEntityLists(); });
         ["movementTypeFilter", "movementAccountFilter", "movementCategoryFilter", "movementMethodFilter", "movementStatusFilter"].forEach(id => $("#" + id).addEventListener("change", event => { if (id === "movementTypeFilter") state.movementType = event.target.value; renderMovements(); }));
         $("#movementDateFrom").addEventListener("change", event => { state.movementDateFrom = event.target.value; loadMovementRange(); });
         $("#movementDateTo").addEventListener("change", event => { state.movementDateTo = event.target.value; loadMovementRange(); });
         $("#commitmentStateFilter").addEventListener("change", event => { state.commitmentState = event.target.value; renderCommitments(); });
-        $("#operationKind").addEventListener("change", toggleOperationFields); $("#obligationType").addEventListener("change", toggleInstallments);
-        $("#operationForm").addEventListener("submit", saveOperation); $("#obligationForm").addEventListener("submit", saveObligation); $("#paymentForm").addEventListener("submit", savePayment); $("#simpleForm").addEventListener("submit", saveSimple);
+        $("#operationKind").addEventListener("change", toggleOperationFields); $("#obligationType").addEventListener("change", toggleInstallments); $("#purchaseMode").addEventListener("change", togglePurchaseMode);
+        $("#purchaseDate").addEventListener("change", event => { if (event.target.value) $("#purchaseFirstDue").value = dueDateAtOffset(event.target.value, 1); });
+        $("#operationForm").addEventListener("submit", saveOperation); $("#purchaseForm").addEventListener("submit", savePurchase); $("#obligationForm").addEventListener("submit", saveObligation); $("#paymentForm").addEventListener("submit", savePayment); $("#simpleForm").addEventListener("submit", saveSimple);
         $("#saveMovementFilter").addEventListener("click", () => openSimple("savedFilter")); $("#copyBudgets").addEventListener("click", copyBudgets);
         $("#exportMovementsCsv").addEventListener("click", exportCsv); $("#exportMovementsXlsx").addEventListener("click", () => exportXlsx());
         $("#printMonthlyReport").addEventListener("click", printReport); $("#exportMonthlyReport").addEventListener("click", () => exportXlsx(monthlyReportRows(), `atlas-informe-${state.activeMonth}.xlsx`));
@@ -747,9 +981,10 @@
     }
 
     async function boot() {
+        installFinanceHelp();
         const role = window.AtlasStore?.workspaceRole || "";
         if (role !== "owner") {
-            $("#financeAccessNotice").hidden = false; $("#financeAccessNotice").textContent = "Finanzas v0.10 es privada para el propietario. Esta cuenta no puede consultar ni guardar datos financieros.";
+            $("#financeAccessNotice").hidden = false; $("#financeAccessNotice").textContent = "Finanzas es privada para el propietario. Esta cuenta no puede consultar ni guardar datos financieros.";
             $$("button, input, select, textarea").forEach(control => control.disabled = true); return;
         }
         state.repository = new Repository({ workspaceId: window.AtlasStore?.workspaceId || "local-workspace", userId: window.AtlasStore?.userId || window.AtlasAuth?.user?.id || "local-user", workspaceRole: role, client: window.AtlasAuth?.client || null });
@@ -766,7 +1001,7 @@
         wireEvents(); renderAll();
         const preview = state.migration.readSource().preview; if (preview.canImport) { state.migrationPreview = preview; renderMigration(); }
         if (state.repository.remoteReady) state.repository.pullMonth(state.activeMonth).then(() => refresh()).catch(error => console.warn(error.message));
-        else { $("#financeAccessNotice").hidden = false; $("#financeAccessNotice").textContent = "Modo local verificable: la base SQL v0.10 todavía no fue aplicada. Los cambios quedan en la cola durable y no se marcan como sincronizados."; }
+        else { $("#financeAccessNotice").hidden = false; $("#financeAccessNotice").textContent = "Modo local: la base financiera del servidor todavía no está instalada. Los cambios quedan guardados en este dispositivo."; }
     }
 
     boot().catch(error => { console.error(error); $("#financeAccessNotice").hidden = false; $("#financeAccessNotice").textContent = `No se pudo abrir Finanzas: ${error.message}`; });

@@ -6,6 +6,7 @@
     <title>ATLAS SO · Dashboard fixture</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="../dashboard.css">
+    <link rel="stylesheet" href="../experience-v011.css">
 </head>
 <body>
     <script>
@@ -45,7 +46,8 @@
                 write: (key, value) => data.set(key, value),
                 has: key => data.has(key),
                 workspaceId: "fixture",
-                userId: "fixture-user"
+                userId: "fixture-user",
+                workspaceRole: "owner"
             };
             window.AtlasAuth = {
                 user: { id: "fixture-user", email: "alex@example.com", user_metadata: { full_name: "Alex" } },

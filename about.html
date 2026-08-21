@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self'; media-src 'self' blob:; manifest-src 'self'">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f1d35">
+    <title>Acerca de | ATLAS SO</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/atlas-logo.svg">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="module.css">
+    <link rel="stylesheet" href="experience-v011.css">
+    <script src="vendor/supabase.js"></script>
+    <script src="atlas-config.js"></script>
+    <script src="auth-core.js"></script>
+    <script src="app-bootstrap.js" defer></script>
+</head>
+<body data-page="about" data-script="about.js" data-context="Información, novedades y control de tus datos" data-protected>
+    <div class="app-frame"><div class="app-workspace">
+        <main class="page-content about-page">
+            <section class="about-hero">
+                <img src="icons/atlas-logo.svg" alt="Logo de ATLAS SO">
+                <div>
+                    <p class="page-eyebrow">ACERCA DE</p>
+                    <h1>ATLAS SO</h1>
+                    <p>Tu sistema personal para organizar lo importante sin mezclarlo ni complicarlo.</p>
+                    <span id="aboutVersion" class="about-version">Versión actual</span>
+                </div>
+            </section>
+
+            <section id="aboutResetStatus" class="info-callout" hidden aria-live="polite"></section>
+
+            <section class="about-grid">
+                <article class="panel about-card">
+                    <p class="section-kicker">TU ESPACIO</p>
+                    <h2 id="aboutWorkspace">Mi espacio</h2>
+                    <p id="aboutUser">Cuenta activa</p>
+                    <dl class="about-facts">
+                        <div><dt>Privacidad</dt><dd>Datos separados por espacio y usuario</dd></div>
+                        <div><dt>Moneda</dt><dd>Guaraní paraguayo</dd></div>
+                        <div><dt>Modo</dt><dd>Computadora y celular</dd></div>
+                    </dl>
+                </article>
+
+                <article class="panel about-card">
+                    <p class="section-kicker">TUS DATOS</p>
+                    <h2>Copia o empezá de cero</h2>
+                    <p>Podés guardar una copia cifrada antes de limpiar el espacio.</p>
+                    <div class="about-actions">
+                        <a class="secondary-button" href="app.html#backup">Crear copia de seguridad</a>
+                        <button id="openResetDialog" class="danger-button" type="button">Borrar todos mis datos</button>
+                    </div>
+                </article>
+            </section>
+
+            <section class="panel about-history">
+                <header><div><p class="section-kicker">HISTORIAL</p><h2>Qué cambió en ATLAS</h2></div></header>
+                <div class="about-timeline">
+                    <article><span>0.11</span><div><strong>Experiencia simple</strong><p>Inicio, Finanzas y RRHH reorganizados para mostrar primero lo básico, con mejor uso en celular.</p></div></article>
+                    <article><span>0.10</span><div><strong>Finanzas y patrimonio</strong><p>Base financiera mensual, deudas, cuotas, compras, ahorro, inversiones y control patrimonial.</p></div></article>
+                    <article><span>0.9</span><div><strong>Operación y seguridad</strong><p>Sincronización por usuario, recuperación de acceso y herramientas operativas de RRHH.</p></div></article>
+                </div>
+            </section>
+
+            <section class="panel about-principles">
+                <div><p class="section-kicker">PRINCIPIO</p><h2>Lo básico primero</h2></div>
+                <p>ATLAS debe responder tres preguntas rápidamente: qué tengo que hacer, qué tengo que pagar y qué necesita atención. Los controles complejos quedan disponibles sin invadir la vista diaria.</p>
+            </section>
+        </main>
+    </div></div>
+
+    <dialog id="resetWorkspaceDialog" class="reset-workspace-dialog">
+        <form id="resetWorkspaceForm">
+            <div class="dialog-heading"><div><p class="section-kicker">EMPEZAR DE CERO</p><h2>Borrar todos los datos</h2></div><button class="icon-button" type="button" data-close-reset aria-label="Cerrar">×</button></div>
+            <p>Se borrarán los registros de Finanzas, Salud, Estudios, Proyectos, Hábitos, Trabajo y RRHH del espacio actual. Tu cuenta seguirá activa.</p>
+            <label class="confirmation-check"><input id="resetWorkspaceAcknowledge" type="checkbox" required><span>Entiendo que este borrado no se puede deshacer sin una copia de seguridad.</span></label>
+            <label class="field"><span>Escribí <strong>BORRAR ATLAS</strong> para confirmar</span><input id="resetWorkspacePhrase" autocomplete="off" required></label>
+            <p id="resetWorkspaceProgress" class="backup-status" aria-live="polite"></p>
+            <aside id="resetSetupHelp" class="reset-setup-help" hidden><strong>Falta una configuración única</strong><p>Descargá el archivo, abrí el editor SQL de tu proyecto y ejecutalo una sola vez. Después este botón limpiará toda la aplicación.</p><div><a class="secondary-button" href="supabase/reset-workspace-data.sql" download>Descargar configuración</a><a class="primary-button" href="https://supabase.com/dashboard/project/dxqaftxgbfibkocthkvr/sql/new" target="_blank" rel="noopener">Abrir Supabase</a></div></aside>
+            <div class="dialog-actions"><button class="secondary-button" type="button" data-close-reset>Cancelar</button><button id="confirmWorkspaceReset" class="danger-button" type="submit" disabled>Borrar y dejar limpio</button></div>
+        </form>
+    </dialog>
+</body>
+</html>

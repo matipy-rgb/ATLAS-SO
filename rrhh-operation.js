@@ -4,7 +4,7 @@
     const A = window.Atlas;
     const C = window.AtlasHRContext;
     const Core = window.AtlasHRV09Core;
-    if (!A || !C || !Core) throw new Error("ATLAS RR. HH. v0.9 no pudo iniciar su modelo operativo.");
+    if (!A || !C || !Core) throw new Error("ATLAS RR. HH. no pudo iniciar su modelo operativo.");
 
     const q = selector => document.querySelector(selector);
     const esc = A.escapeHTML;
@@ -392,6 +392,35 @@
         return next;
     }
 
+    function toggleBranch(id) {
+        const item = branchById(id);
+        if (!item) return;
+        const active = item.active === false;
+        branches = branches.map(branch => branch.id === id ? { ...branch, active, updatedAt: now() } : branch);
+        save(KEYS.branches, branches, "branches");
+        appendAudit({
+            entityType: "branch", entityId: id, action: active ? "restore" : "archive",
+            reason: active ? "Reactivación de sucursal" : "Archivo de sucursal sin borrar historial",
+            clientId: item.clientId, branchId: id, changes: Core.diff(item, { ...item, active }, ["active"])
+        });
+    }
+
+    function toggleCatalog(kind, id) {
+        const key = kind === "area" ? KEYS.areas : KEYS.positions;
+        const list = kind === "area" ? areas : positions;
+        const item = list.find(record => record.id === id);
+        if (!item) return;
+        const active = item.active === false;
+        const next = list.map(record => record.id === id ? { ...record, active, updatedAt: now() } : record);
+        if (kind === "area") areas = next; else positions = next;
+        save(key, next, kind);
+        appendAudit({
+            entityType: kind, entityId: id, action: active ? "restore" : "archive",
+            reason: active ? "Reactivación de catálogo" : "Archivo de catálogo sin borrar historial",
+            changes: Core.diff(item, { ...item, active }, ["active"])
+        });
+    }
+
     function clientOptions(selected = "") {
         return `<option value="">Seleccionar cliente</option>${C.company.clients.filter(item => item.active !== false).map(item => `<option value="${esc(item.id)}" ${item.id === selected ? "selected" : ""}>${esc(item.name)}</option>`).join("")}`;
     }
@@ -432,9 +461,9 @@
         if (!q("#hrBranchList")) return;
         q("#hrBranchClient").innerHTML = clientOptions(q("#hrBranchClient").value || (C.isGeneral ? "" : C.active.clientId));
         const visibleBranches = C.isGeneral ? branches : branches.filter(item => item.clientId === C.active.clientId);
-        q("#hrBranchList").innerHTML = visibleBranches.length ? visibleBranches.map(item => `<article class="hr-structure-card"><div><small>${esc(C.clientById(item.clientId)?.name || "Cliente")}</small><strong>${esc(item.name)}</strong><span>${esc([item.code, item.city, item.address].filter(Boolean).join(" · ") || "Sin detalle")}</span></div><button data-edit-branch="${esc(item.id)}" type="button">Editar</button></article>`).join("") : '<div class="empty-state">No hay sucursales en este alcance.</div>';
-        q("#hrAreaList").innerHTML = areas.length ? areas.map(item => `<span>${esc(item.name)} <button data-edit-area="${esc(item.id)}" type="button" aria-label="Editar área">✎</button></span>`).join("") : '<small>Sin áreas.</small>';
-        q("#hrPositionList").innerHTML = positions.length ? positions.map(item => `<span>${esc(item.name)} <button data-edit-position="${esc(item.id)}" type="button" aria-label="Editar cargo">✎</button></span>`).join("") : '<small>Sin cargos.</small>';
+        q("#hrBranchList").innerHTML = visibleBranches.length ? visibleBranches.map(item => `<article class="hr-structure-card ${item.active === false ? "archived" : ""}"><div><small>${esc(C.clientById(item.clientId)?.name || "Cliente")}${item.active === false ? " · Archivada" : ""}</small><strong>${esc(item.name)}</strong><span>${esc([item.code, item.city, item.address].filter(Boolean).join(" · ") || "Sin detalle")}</span></div><span class="hr-structure-actions"><button data-edit-branch="${esc(item.id)}" type="button">Editar</button><button data-toggle-branch="${esc(item.id)}" type="button">${item.active === false ? "Reactivar" : "Archivar"}</button></span></article>`).join("") : '<div class="empty-state">No hay sucursales en este alcance.</div>';
+        q("#hrAreaList").innerHTML = areas.length ? areas.map(item => `<span class="${item.active === false ? "archived" : ""}">${esc(item.name)}${item.active === false ? " · archivada" : ""} <button data-edit-area="${esc(item.id)}" type="button" aria-label="Editar área">✎</button><button data-toggle-area="${esc(item.id)}" type="button">${item.active === false ? "Reactivar" : "Archivar"}</button></span>`).join("") : '<small>Sin áreas.</small>';
+        q("#hrPositionList").innerHTML = positions.length ? positions.map(item => `<span class="${item.active === false ? "archived" : ""}">${esc(item.name)}${item.active === false ? " · archivado" : ""} <button data-edit-position="${esc(item.id)}" type="button" aria-label="Editar cargo">✎</button><button data-toggle-position="${esc(item.id)}" type="button">${item.active === false ? "Reactivar" : "Archivar"}</button></span>`).join("") : '<small>Sin cargos.</small>';
     }
 
     function assignmentLabel(item) {
@@ -613,6 +642,14 @@
         } catch (error) { A.notify(error.message, "error"); }
     });
     q("#hrBranchList")?.addEventListener("click", event => {
+        const toggle = event.target.closest("[data-toggle-branch]");
+        if (toggle) {
+            const item = branchById(toggle.dataset.toggleBranch);
+            if (item && window.confirm(item.active === false ? "¿Reactivar esta sucursal?" : "¿Archivar esta sucursal? El historial y las asignaciones anteriores se conservarán.")) {
+                toggleBranch(item.id); renderAll(); A.notify(item.active === false ? "Sucursal reactivada." : "Sucursal archivada.");
+            }
+            return;
+        }
         const button = event.target.closest("[data-edit-branch]");
         const item = button && branchById(button.dataset.editBranch);
         if (!item) return;
@@ -620,10 +657,26 @@
         q("#hrBranchCode").value = item.code; q("#hrBranchCity").value = item.city; q("#hrBranchAddress").value = item.address;
     });
     q("#hrAreaList")?.addEventListener("click", event => {
+        const toggle = event.target.closest("[data-toggle-area]");
+        if (toggle) {
+            const item = areaById(toggle.dataset.toggleArea);
+            if (item && window.confirm(item.active === false ? "¿Reactivar esta área?" : "¿Archivar esta área sin borrar su historial?")) {
+                toggleCatalog("area", item.id); renderAll(); A.notify(item.active === false ? "Área reactivada." : "Área archivada.");
+            }
+            return;
+        }
         const item = areaById(event.target.closest("[data-edit-area]")?.dataset.editArea);
         if (item) { q("#hrAreaId").value = item.id; q("#hrAreaName").value = item.name; }
     });
     q("#hrPositionList")?.addEventListener("click", event => {
+        const toggle = event.target.closest("[data-toggle-position]");
+        if (toggle) {
+            const item = positionById(toggle.dataset.togglePosition);
+            if (item && window.confirm(item.active === false ? "¿Reactivar este cargo?" : "¿Archivar este cargo sin borrar su historial?")) {
+                toggleCatalog("position", item.id); renderAll(); A.notify(item.active === false ? "Cargo reactivado." : "Cargo archivado.");
+            }
+            return;
+        }
         const item = positionById(event.target.closest("[data-edit-position]")?.dataset.editPosition);
         if (item) { q("#hrPositionId").value = item.id; q("#hrPositionName").value = item.name; }
     });

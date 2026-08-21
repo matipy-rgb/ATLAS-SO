@@ -439,7 +439,35 @@ async function testFinance() {
 
     click(window, '#accountsList [data-entity="accounts"][data-action="archive"]');
     await wait(10);
-    assert.match(document.querySelector("#accountsList").textContent, /Reactivar/);
+    assert.match(document.querySelector("#accountsList").textContent, /Restaurar/);
+    click(window, '#accountsList [data-entity="accounts"][data-action="restore"]');
+    await wait(10);
+
+    const activeMonth = document.querySelector("#financeMonth").value;
+    click(window, '[data-quick-action="purchase"]');
+    document.querySelector("#purchaseAmount").value = "75000";
+    document.querySelector("#purchaseDescription").value = "Compra al contado de prueba";
+    document.querySelector("#purchaseDate").value = `${activeMonth}-05`;
+    submit(window, "#purchaseForm");
+    await wait(25);
+    assert.match(document.querySelector("#movementsList").textContent, /Compra al contado de prueba/);
+
+    click(window, '[data-quick-action="purchase"]');
+    document.querySelector("#purchaseAmount").value = "1000001";
+    document.querySelector("#purchaseDescription").value = "Celular financiado";
+    document.querySelector("#purchaseDate").value = `${activeMonth}-06`;
+    document.querySelector("#purchaseMode").value = "financed";
+    document.querySelector("#purchaseMode").dispatchEvent(new window.Event("change", { bubbles: true }));
+    document.querySelector("#purchaseCounterparty").value = "Comercio de prueba";
+    document.querySelector("#purchaseInstallments").value = "12";
+    document.querySelector("#purchaseFirstDue").value = `${window.AtlasFinanceDomain.addMonths(activeMonth, 1)}-10`;
+    submit(window, "#purchaseForm");
+    await wait(100);
+    assert.match(document.querySelector("#summaryDebtTotal").textContent, /1[.\s]?000[.\s]?001/);
+    document.querySelector("#commitmentStateFilter").value = "";
+    document.querySelector("#commitmentStateFilter").dispatchEvent(new window.Event("change", { bubbles: true }));
+    assert.equal(document.querySelectorAll("#commitmentsList .commitment-card").length, 12);
+    assert.match(document.querySelector("#commitmentsList").textContent, /0\/12 pagadas/);
 
     assert.deepEqual(data.get("atlasTransactions"), legacyTransactions, "La migración v0.10 no debe alterar el origen de movimientos");
     assert.deepEqual(data.get("atlasObligations"), legacyObligations, "La migración v0.10 no debe alterar el origen de obligaciones");
@@ -610,7 +638,7 @@ async function testStaticSafety() {
     assert.ok(!bootstrap.includes("<p>${String(error.message"), "El error de arranque no debe inyectar HTML");
     assert.match(schema, /can_manage_workspace/);
     assert.match(privacy, /marcaciones de Recursos Humanos/i);
-    assert.equal(JSON.parse(packageSource).version, "0.10.0");
+    assert.equal(JSON.parse(packageSource).version, "0.11.0");
 }
 
 await testHealth();

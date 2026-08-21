@@ -33,6 +33,8 @@ assert.equal(Core.safeInteger("125000"), 125000);
 assert.equal(Core.safeInteger("1.5"), null);
 assert.equal(Core.positiveMoney(0), null);
 assert.equal(Core.positiveMoney(Core.MAX_PYG + 1), null);
+assert.deepEqual([...Core.splitMoney(100, 3)], [34, 33, 33]);
+assert.equal(Core.splitMoney(1000001, 12).reduce((sum, amount) => sum + amount, 0), 1000001);
 assert.equal(Core.isISODate("2026-02-29"), false);
 assert.equal(Core.personalContextId(options.workspaceId), Core.personalContextId(options.workspaceId));
 assert.notEqual(Core.personalContextId(options.workspaceId), options.workspaceId);
@@ -249,7 +251,15 @@ const repository = new FinanceRepository({
 await repository.initialize();
 let snapshot = await repository.snapshot();
 assert.equal(snapshot.contexts.filter(item => item.kind === "personal").length, 1);
-assert.equal(snapshot.categories.length, 8);
+assert.equal(snapshot.categories.length, 0, "Un espacio nuevo no debe imponer categorías.");
+assert.equal(snapshot.paymentMethods.length, 0, "Un espacio nuevo no debe imponer medios de pago.");
+const temporaryCategories = await Promise.all(["Casa", "Comida"].map(name => repository.save("categories", {
+    context_id: snapshot.contexts.find(item => item.kind === "personal").id,
+    name,
+    flow_type: "expense"
+})));
+await repository.archiveMany("categories", temporaryCategories.map(item => item.id), true);
+assert.ok((await repository.list("categories")).every(item => item.status === "archived"), "La limpieza completa debe archivar las categorías en una sola operación local.");
 const savedBusiness = await repository.save("contexts", business);
 const savedAccount = await repository.save("accounts", {
     context_id: savedBusiness.id,
@@ -514,7 +524,7 @@ const [html, css, sql, bootstrap, worker, dashboard, domain, financeJs, fixtureH
 const htmlDom = new JSDOM(html);
 const document = htmlDom.window.document;
 assert.equal(document.querySelectorAll(".finance-bottom-nav button").length, 5);
-assert.deepEqual(Array.from(document.querySelectorAll(".finance-bottom-nav button"), item => item.lastChild.textContent.trim()), ["Inicio", "Movimientos", "Nuevo", "Cuentas", "Más"]);
+assert.deepEqual(Array.from(document.querySelectorAll(".finance-bottom-nav button"), item => item.lastChild.textContent.trim()), ["Inicio", "Movimientos", "Nuevo", "Pagos", "Más"]);
 assert.equal(htmlDom.window.document.querySelectorAll("[data-finance-view]").length, 6);
 const ids = Array.from(document.querySelectorAll("[id]"), item => item.id);
 assert.equal(new Set(ids).size, ids.length, "Finanzas no debe repetir identificadores HTML");

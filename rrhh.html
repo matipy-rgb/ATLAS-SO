@@ -8,14 +8,14 @@
     <meta name="theme-color" content="#0b1220">
     <title>Recursos Humanos | ATLAS SO</title>
     <link rel="manifest" href="manifest.webmanifest">
-    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="icon" href="icons/atlas-logo.svg">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="module.css">
     <link rel="stylesheet" href="rrhh.css">
+    <link rel="stylesheet" href="experience-v011.css">
     <script src="vendor/supabase.js"></script>
     <script src="atlas-config.js"></script>
     <script src="auth-core.js"></script>
-    <script src="vendor/tesseract.min.js" defer></script>
     <script src="vendor/xlsx.full.min.js" defer></script>
     <script src="app-bootstrap.js" defer></script>
 </head>
@@ -23,19 +23,19 @@
     data-page="rrhh"
     data-script="rrhh-context.js"
     data-extra-script="rrhh-v09-core.js,rrhh-operation.js,rrhh-calc.js,rrhh-storage.js,rrhh.js,rrhh-super.js,rrhh-import.js,rrhh-bulk-import.js,rrhh-contracts.js,rrhh-ips.js"
-    data-context="Administración integral y privada del personal"
+    data-context="Tu equipo, claro y al día"
     data-protected>
     <div class="app-frame"><div class="app-workspace">
         <main class="page-content">
             <section class="page-hero">
                 <div>
-                    <p class="page-eyebrow">RECURSOS HUMANOS</p>
-                    <h1>Gestión completa de personas y horas</h1>
-                    <p>Empresa, clientes, nómina, horarios, marcaciones, cálculos, contratos y cumplimiento sin mezclar identidades.</p>
+                    <p class="page-eyebrow">TU EQUIPO HOY</p>
+                    <h1>Lo importante de tus personas, primero</h1>
+                    <p>Ausencias, pendientes y próximos pasos en una vista simple. La configuración queda separada.</p>
                 </div>
                 <div class="page-hero-actions">
                     <button id="openAbsenceDialog" class="secondary-button" type="button">＋ Novedad</button>
-                    <button id="openEmployeeDialog" class="primary-button" type="button">＋ Funcionario</button>
+                    <button id="openEmployeeDialog" class="primary-button" type="button">＋ Persona</button>
                 </div>
             </section>
 
@@ -44,35 +44,30 @@
                     <img id="hrContextLogo" class="hr-context-logo" alt="" hidden>
                     <span id="hrContextMark" class="hr-context-mark">AS</span>
                     <div>
-                        <small>EMPRESA Y VISTA ACTUAL</small>
+                        <small>ESPACIO ACTUAL</small>
                         <strong id="hrContextTitle">Mi empresa · Nómina general</strong>
                         <span id="hrContextCaption">Vista consolidada de la empresa</span>
                     </div>
                 </div>
                 <div class="hr-context-actions">
-                    <button id="hrChangeCompany" class="secondary-button" type="button">Cambiar empresa</button>
-                    <button id="hrChangeClient" class="secondary-button" type="button">Cambiar cliente</button>
-                    <button id="hrChangeBranch" class="secondary-button" type="button">Todas las sucursales</button>
+                    <button id="hrChangeCompany" class="secondary-button" type="button">Empresa</button>
+                    <button id="hrChangeClient" class="secondary-button" type="button">Cliente</button>
+                    <button id="hrChangeBranch" class="secondary-button" type="button">Sucursal</button>
                     <button id="hrManageCompanies" class="icon-button" type="button" title="Administrar identidades" aria-label="Administrar empresas y clientes">✎</button>
                 </div>
             </section>
 
             <nav class="hr-module-nav" aria-label="Módulos de Recursos Humanos">
-                <button class="active" data-hr-tab="overview" type="button">Panel</button>
-                <button data-hr-tab="people" type="button">Funcionarios</button>
-                <button data-hr-tab="operation" type="button">Operación</button>
-                <button data-hr-tab="imports" type="button">Importaciones</button>
-                <button data-hr-tab="schedules" type="button">Horarios</button>
-                <button data-hr-tab="calculations" type="button">Cálculo de horas</button>
-                <button data-hr-tab="news" type="button">Novedades</button>
-                <button data-hr-tab="contracts" type="button">Contratos</button>
-                <button data-hr-tab="compliance" type="button">Checklist laboral</button>
-                <button data-hr-tab="ips" type="button">CSV IPS</button>
+                <button class="active" data-hr-tab="overview" type="button"><span>⌂</span>Inicio</button>
+                <button data-hr-tab="people" type="button"><span>○</span>Personas</button>
+                <button data-hr-tab="schedules" type="button"><span>◷</span>Asistencia</button>
+                <button data-hr-tab="news" type="button"><span>!</span>Novedades</button>
+                <button data-hr-tab="advanced" type="button"><span>•••</span>Más</button>
             </nav>
 
             <section class="summary-grid" aria-label="Resumen de Recursos Humanos">
-                <article class="summary-item"><span>Activos</span><strong id="hrPeopleCount">0</strong><small id="hrPeopleCaption">Sin funcionarios</small></article>
-                <article class="summary-item warning"><span>Inactivos del mes</span><strong id="hrInactiveMonthCount">0</strong><small>Con movimiento en el periodo</small></article>
+                <article class="summary-item"><span>Personas activas</span><strong id="hrPeopleCount">0</strong><small id="hrPeopleCaption">Sin personas</small></article>
+                <article class="summary-item warning"><span>Cambios del mes</span><strong id="hrInactiveMonthCount">0</strong><small>Altas y bajas para revisar</small></article>
                 <article class="summary-item purple"><span>Ausentes hoy</span><strong id="hrActiveCount">0</strong><small id="hrActiveCaption">Sin ausencias activas</small></article>
                 <article class="summary-item negative"><span>Reintegros pendientes</span><strong id="hrOverdueCount">0</strong><small id="hrNextReturn">Sin pendientes</small></article>
             </section>
@@ -103,13 +98,25 @@
                 </article>
             </section>
             <section class="panel hr-super-panel" data-hr-panel="overview">
-                <header class="panel-header"><div><p class="section-kicker">CONTROL ACCIONABLE v0.9</p><h2>Estado de la operación</h2><p>Cada indicador abre el módulo donde se resuelve el pendiente.</p></div></header>
+                <header class="panel-header"><div><p class="section-kicker">CONTROL ACCIONABLE</p><h2>Estado de la operación</h2><p>Cada indicador abre el módulo donde se resuelve el pendiente.</p></div></header>
                 <div id="hrOperationalMetrics" class="hr-operational-metrics"></div>
+            </section>
+
+            <section class="panel hr-super-panel hr-advanced-hub" data-hr-panel="advanced" hidden>
+                <header class="panel-header"><div><p class="section-kicker">ADMINISTRACIÓN AVANZADA</p><h2>Herramientas de RR. HH.</h2><p>La operación diaria queda limpia. Entrá acá cuando necesites configurar, importar, calcular o auditar.</p></div></header>
+                <div class="hr-advanced-grid">
+                    <button type="button" data-hr-tab="operation" data-hr-target="operation"><span>⌘</span><strong>Estructura y reglas</strong><small>Sucursales, cargos, parámetros y auditoría</small><i>→</i></button>
+                    <button type="button" data-hr-tab="imports" data-hr-target="imports"><span>⇧</span><strong>Importaciones</strong><small>Funcionarios, marcaciones y archivos masivos</small><i>→</i></button>
+                    <button type="button" data-hr-tab="calculations" data-hr-target="calculations"><span>∑</span><strong>Cálculo de horas</strong><small>Control mensual y exportación</small><i>→</i></button>
+                    <button type="button" data-hr-tab="contracts" data-hr-target="contracts"><span>▤</span><strong>Contratos</strong><small>Documentos y antecedentes</small><i>→</i></button>
+                    <button type="button" data-hr-tab="compliance" data-hr-target="compliance"><span>✓</span><strong>Control laboral</strong><small>Checklist de altas y bajas</small><i>→</i></button>
+                    <button type="button" data-hr-tab="ips" data-hr-target="ips"><span>IP</span><strong>Archivo IPS</strong><small>Captura REOP y CSV</small><i>→</i></button>
+                </div>
             </section>
 
             <section class="panel hr-super-panel" data-hr-panel="people" hidden>
                 <header class="panel-header">
-                    <div><p class="section-kicker">GESTIÓN DE FUNCIONARIOS</p><h2>Funcionarios</h2><p id="hrPeopleListCaption">0 registros</p></div>
+                    <div><p class="section-kicker">PERSONAS</p><h2>Tu equipo</h2><p id="hrPeopleListCaption">0 registros</p></div>
                     <div class="hr-filter-row">
                         <input id="hrPeopleSearch" type="search" placeholder="Buscar nombre, CI, reloj o cargo">
                         <select id="hrPeopleStatus"><option value="active">Activos</option><option value="inactive-month">Inactivos del mes</option><option value="inactive">Inactivos</option><option value="all">Todos</option></select>
@@ -120,7 +127,7 @@
                     <label class="secondary-button hr-file-button">Importar Excel<input id="hrPeopleExcel" type="file" accept=".xlsx,.xls,.xlsm" hidden></label>
                     <button id="hrExportPeople" class="secondary-button" type="button">Exportar nómina</button>
                     <button id="hrToggleCompact" class="secondary-button" type="button" aria-pressed="false">Vista compacta</button>
-                    <button id="openEmployeeDialogInline" class="primary-button" type="button">＋ Funcionario</button>
+                    <button id="openEmployeeDialogInline" class="primary-button" type="button">＋ Persona</button>
                 </div>
                 <div id="hrPeopleBulkBar" class="hr-bulk-bar" hidden><strong id="hrPeopleSelectedCount">0 seleccionados</strong><button id="hrCopySelectedPeople" class="secondary-button" type="button">Copiar filas</button><button id="hrClearSelectedPeople" class="secondary-button" type="button">Limpiar selección</button></div>
                 <div id="hrImportResult" class="hr-import-result" hidden>
@@ -365,38 +372,51 @@
         </main>
     </div></div>
 
+    <nav class="hr-bottom-nav" aria-label="Navegación móvil de Recursos Humanos">
+        <button class="active" data-hr-tab="overview" type="button"><span>⌂</span>Inicio</button>
+        <button data-hr-tab="people" type="button"><span>○</span>Personas</button>
+        <button class="hr-new-button" id="hrMobileNew" type="button"><span>＋</span>Nuevo</button>
+        <button data-hr-tab="schedules" type="button"><span>◷</span>Asistencia</button>
+        <button data-hr-tab="advanced" type="button"><span>•••</span>Más</button>
+    </nav>
+
     <dialog id="employeeDialog">
         <form id="employeeForm">
             <input id="employeeId" type="hidden">
-            <div class="dialog-heading"><div><p class="section-kicker">LEGAJO</p><h2 id="employeeDialogTitle">Nuevo funcionario</h2><p>Los campos alimentan nómina, cálculo y contratos.</p></div><button id="closeEmployeeDialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
-            <div class="form-grid">
-                <label class="field span-3"><span>Cédula</span><input id="employeeCI" inputmode="numeric" maxlength="20" required></label>
-                <label class="field span-6"><span>Apellidos y nombres</span><input id="employeeName" maxlength="120" required></label>
-                <label class="field span-3"><span>ID del reloj</span><input id="employeeClockId" maxlength="30"></label>
-                <label class="field span-3"><span>Cliente</span><select id="employeeClient" required></select></label>
-                <label class="field span-3"><span>Sucursal</span><select id="employeeBranch"></select></label>
-                <label class="field span-3"><span>Área</span><select id="employeeArea"></select></label>
-                <label class="field span-3"><span>Cargo</span><input id="employeePosition" maxlength="100"></label>
-                <label class="field span-4"><span>Centro de costo</span><input id="employeeCostCenter" maxlength="80"></label>
-                <label class="field span-4"><span>Vigencia de asignación</span><input id="employeeAssignmentFrom" type="date"></label>
-                <label class="field span-4"><span>Motivo del cambio</span><input id="employeeAssignmentReason" maxlength="180" placeholder="Obligatorio al trasladar"></label>
-                <label class="field span-3"><span>Ingreso</span><input id="employeeStartDate" type="date"></label>
-                <label class="field span-3"><span>Salida</span><input id="employeeEndDate" type="date"></label>
-                <label class="field span-3"><span>Estado</span><select id="employeeStatus"><option value="active">Activo</option><option value="inactive">Inactivo</option></select></label>
-                <label class="field span-3"><span>Modalidad</span><select id="employeeWorkerType"><option value="monthly">Mensualizado</option><option value="daily">Jornalero</option><option value="parttime">Tiempo parcial</option></select></label>
-                <label class="field span-3"><span>Remuneración nominal (Gs.)</span><input id="employeeSalary" type="number" min="0" value="0" placeholder="Ingresá el monto real"><small id="employeeSalaryHelp">Monto mensual acordado.</small></label>
-                <label class="field span-3"><span>Nacimiento</span><input id="employeeBirthDate" type="date"></label>
-                <label class="field span-3"><span>Sexo</span><select id="employeeSex"><option value="">Sin indicar</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select></label>
-                <label class="field span-3"><span>Estado civil</span><input id="employeeCivilStatus" maxlength="50"></label>
-                <label class="field span-4"><span>Nacionalidad</span><input id="employeeNationality" maxlength="60" value="Paraguaya"></label>
-                <label class="field span-4"><span>Profesión</span><input id="employeeProfession" maxlength="80"></label>
-                <label class="field span-4"><span>Ciudad</span><input id="employeeCity" maxlength="80"></label>
-                <label class="field span-6"><span>Dirección</span><input id="employeeAddress" maxlength="180"></label>
-                <label class="field span-3"><span>Teléfono</span><input id="employeePhone" maxlength="40"></label>
-                <label class="field span-3"><span>E-mail</span><input id="employeeEmail" type="email" maxlength="100"></label>
-                <label class="field span-12"><span>Motivo / observación de estado</span><textarea id="employeeStatusNote" rows="2" maxlength="300"></textarea></label>
+            <div class="dialog-heading"><div><p class="section-kicker">PERSONA</p><h2 id="employeeDialogTitle">Nueva persona</h2><p>Primero cargá lo esencial. El legajo completo es opcional.</p></div><button id="closeEmployeeDialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+            <div class="form-grid employee-basic-fields">
+                <label class="field span-4"><span>Cédula</span><input id="employeeCI" inputmode="numeric" maxlength="20" required></label>
+                <label class="field span-8"><span>Apellidos y nombres</span><input id="employeeName" maxlength="120" required></label>
+                <label class="field span-4"><span>Cliente</span><select id="employeeClient" required></select></label>
+                <label class="field span-4"><span>Sucursal</span><select id="employeeBranch"></select></label>
+                <label class="field span-4"><span>Cargo</span><input id="employeePosition" maxlength="100"></label>
+                <label class="field span-4"><span>Ingreso</span><input id="employeeStartDate" type="date"></label>
+                <label class="field span-4"><span>Estado</span><select id="employeeStatus"><option value="active">Activo</option><option value="inactive">Inactivo</option></select></label>
             </div>
-            <div class="dialog-actions"><button id="cancelEmployee" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar funcionario</button></div>
+            <details id="employeeAdvanced" class="employee-advanced">
+                <summary>Completar datos laborales y personales</summary>
+                <div class="form-grid">
+                    <label class="field span-3"><span>ID del reloj</span><input id="employeeClockId" maxlength="30"></label>
+                    <label class="field span-3"><span>Área</span><select id="employeeArea"></select></label>
+                    <label class="field span-3"><span>Centro de costo</span><input id="employeeCostCenter" maxlength="80"></label>
+                    <label class="field span-3"><span>Vigencia de asignación</span><input id="employeeAssignmentFrom" type="date"></label>
+                    <label class="field span-8"><span>Motivo del cambio</span><input id="employeeAssignmentReason" maxlength="180" placeholder="Obligatorio al trasladar"></label>
+                    <label class="field span-4"><span>Salida</span><input id="employeeEndDate" type="date"></label>
+                    <label class="field span-4"><span>Modalidad</span><select id="employeeWorkerType"><option value="monthly">Mensualizado</option><option value="daily">Jornalero</option><option value="parttime">Tiempo parcial</option></select></label>
+                    <label class="field span-4"><span>Remuneración nominal (Gs.)</span><input id="employeeSalary" type="number" min="0" value="0" placeholder="Ingresá el monto real"><small id="employeeSalaryHelp">Monto mensual acordado.</small></label>
+                    <label class="field span-4"><span>Nacimiento</span><input id="employeeBirthDate" type="date"></label>
+                    <label class="field span-4"><span>Sexo</span><select id="employeeSex"><option value="">Sin indicar</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select></label>
+                    <label class="field span-4"><span>Estado civil</span><input id="employeeCivilStatus" maxlength="50"></label>
+                    <label class="field span-4"><span>Nacionalidad</span><input id="employeeNationality" maxlength="60" value="Paraguaya"></label>
+                    <label class="field span-4"><span>Profesión</span><input id="employeeProfession" maxlength="80"></label>
+                    <label class="field span-4"><span>Ciudad</span><input id="employeeCity" maxlength="80"></label>
+                    <label class="field span-6"><span>Dirección</span><input id="employeeAddress" maxlength="180"></label>
+                    <label class="field span-3"><span>Teléfono</span><input id="employeePhone" maxlength="40"></label>
+                    <label class="field span-3"><span>E-mail</span><input id="employeeEmail" type="email" maxlength="100"></label>
+                    <label class="field span-12"><span>Motivo / observación de estado</span><textarea id="employeeStatusNote" rows="2" maxlength="300"></textarea></label>
+                </div>
+            </details>
+            <div class="dialog-actions"><button id="cancelEmployee" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar persona</button></div>
         </form>
     </dialog>
 
@@ -477,7 +497,7 @@
                     <label class="field span-12" data-identity-for="client"><span>Modelo contractual</span><select id="hrIdentityContract"><option value="">Sin modelo asignado</option><option value="amancer">Contrato AMANCER</option><option value="bdp">Contrato BDP</option><option value="arcor">Contrato ARCOR</option><option value="polo">Contrato POLO</option><option value="geomax">Contrato GEOMAX</option></select></label>
                 </div>
             </div>
-            <div class="dialog-actions"><button id="hrIdentityCancel" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar cambios</button></div>
+            <div class="dialog-actions"><button id="hrIdentityDelete" class="danger-button" type="button" hidden>Eliminar cliente</button><span class="dialog-action-spacer"></span><button id="hrIdentityCancel" class="secondary-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar cambios</button></div>
         </form>
     </dialog>
 </body>

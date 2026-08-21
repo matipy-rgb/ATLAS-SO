@@ -415,6 +415,8 @@
         document.querySelector("#hrIdentityWorkplace").value = type === "client" ? item?.workplace || "" : "";
         document.querySelector("#hrIdentityCostCenter").value = type === "client" ? item?.costCenter || "" : "";
         document.querySelector("#hrIdentityContract").value = type === "client" ? item?.contractTemplateId || "" : "";
+        const deleteButton = document.querySelector("#hrIdentityDelete");
+        if (deleteButton) deleteButton.hidden = type !== "client" || !id;
         document.querySelectorAll("[data-identity-for]").forEach(field => {
             field.hidden = !field.dataset.identityFor.split(" ").includes(type);
         });
@@ -541,6 +543,42 @@
         renderContextBar();
         renderContextDialog();
         A.notify("Identidad actualizada.");
+    });
+
+    document.querySelector("#hrIdentityDelete")?.addEventListener("click", async () => {
+        const dialog = document.querySelector("#hrIdentityDialog");
+        const company = companies.find(item => item.id === dialog.dataset.companyId) || currentCompany();
+        const client = company.clients.find(item => item.id === dialog.dataset.id);
+        if (!client) return;
+        if (!window.confirm(`¿Eliminar ${client.name}? También se borrarán sus sucursales, asignaciones, novedades y marcaciones asociadas. Esta acción no se puede deshacer.`)) return;
+        const button = document.querySelector("#hrIdentityDelete");
+        button.disabled = true;
+        button.textContent = "Eliminando…";
+        try {
+            await window.AtlasHRStorage?.removeClient?.(company.id, client.id);
+            COMPANY_KEYS.forEach(key => {
+                const dataKey = companyKey(key, company.id);
+                const records = originalReadArray(dataKey);
+                const filtered = records.filter(item => String(item?.clientId || item?.client_id || "") !== client.id);
+                if (filtered.length !== records.length) originalWriteJSON(dataKey, filtered);
+            });
+            company.clients = company.clients.filter(item => item.id !== client.id);
+            if (active.companyId === company.id && active.clientId === client.id) {
+                active = { companyId: company.id, clientId: GENERAL_ID, branchId: GENERAL_ID };
+            }
+            saveMeta();
+            dialog.close();
+            document.querySelector("#hrContextDialog")?.close();
+            renderContextBar();
+            renderContextDialog();
+            A.notify("Cliente y datos asociados eliminados.");
+            window.dispatchEvent(new CustomEvent("atlas:data-changed", { detail: { key: "atlasHRWorkspaces" } }));
+        } catch (error) {
+            A.notify(String(error.message || "No se pudo eliminar el cliente."), "error");
+        } finally {
+            button.disabled = false;
+            button.textContent = "Eliminar cliente";
+        }
     });
 
     document.querySelector("#hrIdentityDialog [data-close]")?.addEventListener("click", () => document.querySelector("#hrIdentityDialog").close());

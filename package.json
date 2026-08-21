@@ -1,6 +1,6 @@
 {
     "name": "atlas-so",
-    "version": "0.10.0",
+    "version": "0.11.0",
     "private": true,
     "description": "ATLAS SO · todo lo importante en un solo lugar",
     "scripts": {
@@ -9,7 +9,7 @@
         "mobile:init": "npm run mobile:prepare && npx cap add android",
         "mobile:sync": "npm run mobile:prepare && npx cap sync android",
         "mobile:open": "npx cap open android",
-        "check": "node scripts/check-project.mjs && node scripts/test-auth-recovery.mjs && node scripts/test-v05.mjs && node scripts/test-offline-sync.mjs && node scripts/test-spreadsheet.mjs && node scripts/test-rrhh-v07.mjs && node scripts/test-functional-audit.mjs && node scripts/test-security-privacy-sync.mjs && node scripts/test-rrhh-v09.mjs && node scripts/test-finance-v010.mjs && node scripts/test-no-sensitive-artifacts.mjs"
+        "check": "node scripts/check-project.mjs && node scripts/test-auth-recovery.mjs && node scripts/test-v05.mjs && node scripts/test-offline-sync.mjs && node scripts/test-spreadsheet.mjs && node scripts/test-rrhh-v07.mjs && node scripts/test-functional-audit.mjs && node scripts/test-security-privacy-sync.mjs && node scripts/test-rrhh-v09.mjs && node scripts/test-finance-v010.mjs && node scripts/test-experience-v011.mjs && node scripts/test-clean-slate.mjs && node scripts/test-no-sensitive-artifacts.mjs"
     },
     "dependencies": {
         "@capacitor/android": "8.4.2",

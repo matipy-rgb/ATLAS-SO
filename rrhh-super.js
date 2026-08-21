@@ -154,6 +154,15 @@
         const button = event.target.closest("[data-hr-tab]");
         if (button) activateTab(button.dataset.hrTab);
     });
+    q(".hr-bottom-nav")?.addEventListener("click", event => {
+        const button = event.target.closest("[data-hr-tab]");
+        if (button) activateTab(button.dataset.hrTab);
+    });
+    q(".hr-advanced-hub")?.addEventListener("click", event => {
+        const button = event.target.closest("[data-hr-target]");
+        if (button) activateTab(button.dataset.hrTarget);
+    });
+    q("#hrMobileNew")?.addEventListener("click", () => q("#openEmployeeDialog")?.click());
 
     function selectedDays() {
         return Array.from(q("#hrScheduleDays").querySelectorAll("input:checked"), input => Number(input.value));
@@ -875,7 +884,7 @@
     renderCompliance();
     loadAttendance().catch(console.error);
     const requested = location.hash.slice(1);
-    if (q(`[data-hr-tab="${CSS.escape(requested)}"]`)) activateTab(requested);
+    if (q(`[data-hr-panel="${CSS.escape(requested)}"]`)) activateTab(requested);
     window.addEventListener("atlas:hr-data-changed", () => { renderEmployeeOptions(); renderAssignments(); renderCompliance(); });
 
     window.AtlasHRSchedules = {

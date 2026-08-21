@@ -143,7 +143,7 @@ assert.match(dashboard, /atlasHRAssignments/);
 assert.match(sql, /enable row level security|hr_attendance_records/i);
 assert.match(sql, /branch_id/);
 assert.match(serviceWorker, /rrhh-v09-core\.js/);
-assert.equal(JSON.parse(packageSource).version, "0.10.0");
+assert.equal(JSON.parse(packageSource).version, "0.11.0");
 
 console.log("ATLAS SO v0.9.0: aislamiento, asignaciones, importación idempotente y volumen verificados.", {
     syntheticPeople: people.length,

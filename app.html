@@ -8,17 +8,16 @@
     <meta name="theme-color" content="#0b1220">
     <title>Mi día | ATLAS SO</title>
     <link rel="manifest" href="manifest.webmanifest">
-    <link rel="icon" href="icons/atlas-192.png">
+    <link rel="icon" href="icons/atlas-logo.svg">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="experience-v011.css">
     <script src="vendor/supabase.js"></script>
     <script src="atlas-config.js"></script>
     <script src="auth-core.js"></script>
-    <script src="finance-core.js" defer></script>
-    <script src="finance-storage.js" defer></script>
     <script src="app-bootstrap.js" defer></script>
 </head>
-<body data-page="dashboard" data-script="dashboard.js" data-context="Tu día, tus prioridades y tu avance" data-protected>
+<body data-page="dashboard" data-script="dashboard.js" data-context="Lo importante, sin ruido" data-protected>
     <div class="app-frame">
         <div class="app-workspace">
             <main class="page-content dashboard-page">
@@ -26,30 +25,30 @@
                     <div class="today-hero-copy">
                         <p id="todayLabel" class="page-eyebrow">HOY</p>
                         <h1 id="dashboardGreeting">Hola.</h1>
-                        <p id="dashboardHeadline">Armando tu panorama del día.</p>
+                        <p id="dashboardHeadline">Preparando lo que necesita tu atención.</p>
                     </div>
                     <div class="today-score" aria-label="Progreso de hoy">
                         <div class="score-ring" id="scoreRing">
                             <strong id="dailyScore">0%</strong>
-                            <span>del día</span>
+                            <span>resuelto</span>
                         </div>
                     </div>
                 </section>
 
                 <section class="quick-action-strip" aria-label="Acciones rápidas">
                     <button type="button" data-atlas-capture="task"><span>✓</span><strong>Tarea</strong><small>Algo por hacer</small></button>
-                    <button type="button" data-atlas-capture="expense"><span>₲</span><strong>Movimiento</strong><small>Ingreso o gasto</small></button>
+                    <button type="button" data-atlas-capture="expense"><span>₲</span><strong>Dinero</strong><small>Ingreso o gasto</small></button>
                     <button type="button" data-atlas-capture="study"><span>▣</span><strong>Estudio</strong><small>Examen o entrega</small></button>
                     <button type="button" data-atlas-capture="health"><span>＋</span><strong>Salud</strong><small>Medir el día</small></button>
-                    <button type="button" data-atlas-capture="note"><span>✎</span><strong>Nota</strong><small>Capturar una idea</small></button>
+                    <button type="button" data-atlas-capture="note"><span>✎</span><strong>Nota</strong><small>Guardar una idea</small></button>
                 </section>
 
                 <section class="dashboard-primary-grid">
                     <article class="panel focus-panel">
                         <header class="simple-panel-header">
                             <div>
-                                <p class="section-kicker">TU PRIORIDAD</p>
-                                <h2>Una cosa importante</h2>
+                                <p class="section-kicker">ENFOQUE</p>
+                                <h2>Tu prioridad de hoy</h2>
                             </div>
                             <button id="editDailyFocus" class="text-button" type="button">Editar</button>
                         </header>
@@ -59,7 +58,7 @@
                     <article class="panel next-panel">
                         <header class="simple-panel-header">
                             <div>
-                                <p class="section-kicker">AGENDA UNIFICADA</p>
+                                <p class="section-kicker">NECESITA TU ATENCIÓN</p>
                                 <h2>Lo próximo</h2>
                             </div>
                             <span id="agendaCount" class="status-badge tag-info">0 pendientes</span>
@@ -71,14 +70,16 @@
                 <section class="life-section">
                     <div class="section-title-row">
                         <div>
-                            <p class="section-kicker">TU ESPACIO</p>
-                            <h2>Todo lo importante, sin buscar</h2>
+                            <p class="section-kicker">TUS ÁREAS</p>
+                            <h2>Entrá directo a lo que necesitás</h2>
                         </div>
-                        <p>Entrá a un área para ver el detalle.</p>
+                        <p>El detalle aparece solo cuando lo pedís.</p>
                     </div>
                     <div id="moduleOverview" class="module-overview"></div>
                 </section>
 
+                <details class="dashboard-tools">
+                    <summary><span><small>ORGANIZACIÓN PERSONAL</small><strong>Tareas, ritmo, sugerencias y notas</strong></span><i>Ver herramientas</i></summary>
                 <section class="dashboard-secondary-grid">
                     <article class="panel tasks-panel" id="tasks">
                         <header class="panel-header">
@@ -133,6 +134,7 @@
                         </article>
                     </aside>
                 </section>
+                </details>
             </main>
         </div>
     </div>

@@ -47,15 +47,11 @@ h1, h2, h3, strong { letter-spacing: -.035em; }
 }
 
 .landing-brand-mark {
-    display: grid;
     width: 40px;
     height: 40px;
-    place-items: center;
     border-radius: 12px;
-    background: linear-gradient(145deg, #1d4ed8, #0891b2);
     box-shadow: 0 11px 25px rgba(37, 99, 235, .24);
-    color: #fff;
-    font-weight: 950;
+    object-fit: contain;
 }
 
 .landing-brand strong,
@@ -207,7 +203,8 @@ h1, h2, h3, strong { letter-spacing: -.035em; }
 }
 
 .preview-top i { width: 70px; height: 8px; margin-left: auto; border-radius: 99px; background: #e7edf5; }
-.preview-logo { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 9px; background: var(--blue); color: #fff; font-weight: 900; }
+.preview-logo { display: grid; width: 29px; height: 29px; place-items: center; }
+.preview-logo img { display: block; width: 29px; height: 29px; border-radius: 9px; }
 .preview-body { padding: 22px; }
 .preview-greeting { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; border-radius: 17px; background: linear-gradient(120deg, #eef5ff, #fff); }
 .preview-greeting small, .preview-greeting strong, .preview-greeting span { display: block; }

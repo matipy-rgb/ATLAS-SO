@@ -164,6 +164,21 @@
         return size;
     }
 
+    function loadTesseract() {
+        if (window.Tesseract) return Promise.resolve(window.Tesseract);
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[src="vendor/tesseract.min.js"]');
+            const script = existing || document.createElement("script");
+            const finish = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error("El lector de imágenes no se cargó."));
+            script.addEventListener("load", finish, { once: true });
+            script.addEventListener("error", () => reject(new Error("No se pudo cargar el lector de imágenes.")), { once: true });
+            if (!existing) {
+                script.src = "vendor/tesseract.min.js";
+                document.head.appendChild(script);
+            }
+        });
+    }
+
     async function readScreenshot(file) {
         if (!file || !file.type.startsWith("image/")) return A.notify("Subí una captura en formato de imagen.", "error");
         if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return A.notify("Usá una imagen PNG, JPG o WebP.", "error");
@@ -173,7 +188,7 @@
         progressBar.style.width = "2%";
         progressText.textContent = "Preparando el lector…";
         try {
-            if (!window.Tesseract) throw new Error("El lector de imágenes no se cargó.");
+            await loadTesseract();
             if (!worker) {
                 worker = await window.Tesseract.createWorker("spa", 1, {
                     workerPath: "vendor/tesseract-worker.min.js",

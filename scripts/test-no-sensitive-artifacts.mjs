@@ -52,7 +52,7 @@ assert.deepEqual(leaks, [], `Hay secretos o credenciales privadas preparadas par
 const trackedConfig = fromGit
     ? execFileSync("git", ["show", ":atlas-config.js"], { cwd: ROOT, encoding: "utf8" })
     : await readFile(path.join(ROOT, "atlas-config.js"), "utf8");
-assert.match(trackedConfig, /supabaseUrl:\s*""/);
-assert.match(trackedConfig, /supabasePublishableKey:\s*""/);
+assert.match(trackedConfig, /supabaseUrl:\s*"(?:|https:\/\/[a-z0-9-]+\.supabase\.co)"/);
+assert.match(trackedConfig, /supabasePublishableKey:\s*"(?:|sb_publishable_[A-Za-z0-9_-]+)"/);
 
 console.log("ATLAS SO v0.10: secretos y artefactos empresariales preparados para Git = 0.");

@@ -44,8 +44,8 @@ const checks = [
     [authPage.includes('|| "app.html"'), "El acceso no redirige al nuevo inicio."],
     [styles.includes("[hidden]"), "Los formularios ocultos necesitan una regla explícita."],
     [manifest.start_url === "./app.html", "La PWA no inicia en app.html."],
-    [serviceWorker.includes('CACHE_NAME = "atlas-so-v0.10-finance-complete"'), "La caché no corresponde a v0.10."],
-    [packageJson.version === "0.10.0", "package.json no corresponde a v0.10."]
+    [serviceWorker.includes('CACHE_NAME = "atlas-so-shell-2026-08-20-4"'), "La caché instalable no corresponde a la experiencia actual."],
+    [packageJson.version === "0.11.0", "package.json no corresponde a v0.11."]
 ];
 
 const failures = checks.filter(([passed]) => !passed).map(([, message]) => message);

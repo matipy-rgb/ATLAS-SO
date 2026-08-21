@@ -226,14 +226,17 @@
             renderBulkBar();
             return;
         }
-        const indicator = field => sortField === field ? (sortDirection > 0 ? " ↑" : " ↓") : "";
-        q("#hrEmployeeList").innerHTML = `<table class="hr-simple-table hr-people-table"><thead><tr><th><input data-select-page type="checkbox" aria-label="Seleccionar página" ${slice.every(item => selectedPeople.has(item.id)) ? "checked" : ""}></th><th><button data-sort-people="fullName" type="button">Funcionario${indicator("fullName")}</button></th><th><button data-sort-people="ci" type="button">Cédula${indicator("ci")}</button></th><th>Reloj</th><th><button data-sort-people="client" type="button">Cliente${indicator("client")}</button></th><th><button data-sort-people="branch" type="button">Sucursal${indicator("branch")}</button></th><th><button data-sort-people="position" type="button">Cargo${indicator("position")}</button></th><th><button data-sort-people="startDate" type="button">Ingreso${indicator("startDate")}</button></th><th><button data-sort-people="status" type="button">Estado${indicator("status")}</button></th><th></th></tr></thead><tbody>${slice.map(item => `
-            <tr class="${item.status === "active" ? "" : "hr-row-inactive"}">
-                <td><input data-select-person="${esc(item.id)}" type="checkbox" aria-label="Seleccionar ${esc(item.fullName)}" ${selectedPeople.has(item.id) ? "checked" : ""}></td><td><strong>${esc(item.fullName)}</strong></td><td>${esc(item.ci || "—")}</td><td>${esc(item.clockId || "—")}</td>
-                <td>${esc(clientName(item))}</td><td>${esc(branchName(item))}</td><td>${esc(item.position || window.AtlasHROperation?.positionById(item.positionId)?.name || "—")}</td><td>${esc(item.startDate || "—")}</td>
-                <td><span class="hr-person-status ${esc(item.status)}">${esc(statusLabel(item.status))}</span></td>
-                <td><button data-person-edit="${esc(item.id)}" type="button">Editar</button></td>
-            </tr>`).join("")}</tbody></table>`;
+        q("#hrEmployeeList").innerHTML = `<div class="hr-people-card-grid">${slice.map(item => {
+            const initials = String(item.fullName || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
+            const position = item.position || window.AtlasHROperation?.positionById(item.positionId)?.name || "Sin cargo";
+            return `<article class="hr-person-card ${item.status === "active" ? "" : "hr-row-inactive"}">
+                <label class="hr-person-select"><input data-select-person="${esc(item.id)}" type="checkbox" aria-label="Seleccionar ${esc(item.fullName)}" ${selectedPeople.has(item.id) ? "checked" : ""}></label>
+                <span class="hr-person-avatar">${esc(initials)}</span>
+                <span class="hr-person-copy"><strong>${esc(item.fullName)}</strong><small>${esc(position)} · ${esc(branchName(item))}</small><i>CI ${esc(item.ci || "sin registrar")} · ${esc(clientName(item))}</i></span>
+                <span class="hr-person-status ${esc(item.status)}">${esc(statusLabel(item.status))}</span>
+                <button class="hr-person-edit" data-person-edit="${esc(item.id)}" type="button">Ver y editar</button>
+            </article>`;
+        }).join("")}</div>`;
         renderBulkBar();
     }
 
@@ -301,7 +304,8 @@
         setField("#employeePhone", item?.phone);
         setField("#employeeEmail", item?.email);
         setField("#employeeStatusNote", item?.statusNote);
-        q("#employeeDialogTitle").textContent = item ? "Editar funcionario" : "Nuevo funcionario";
+        q("#employeeDialogTitle").textContent = item ? "Editar persona" : "Nueva persona";
+        q("#employeeAdvanced").open = Boolean(item);
         q("#employeeDialog").showModal();
         q("#employeeCI").focus();
     }
